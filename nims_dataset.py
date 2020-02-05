@@ -11,7 +11,9 @@ import pwd
 __all__ = ['NIMSDataset', 'ToTensor']
 
 class NIMSDataset(Dataset):
-    def __init__(self, window_size, target_num=1, train=True, transform=None, root_dir=None):
+    def __init__(self, model, window_size, target_num, train=True,
+                 transform=None, root_dir=None):
+        self.model = model
         self.window_size = window_size
         self.target_num = target_num
         self.train = train
@@ -55,6 +57,8 @@ class NIMSDataset(Dataset):
 
         images = self._merge_window_data(images_window_path)
         target = self._merge_window_data(target_window_path)
+        if self.model == 'unet':
+            target = self._to_pixel_wise_label(target)
 
         if self.transform:
             images = self.transform(images)
@@ -85,8 +89,51 @@ class NIMSDataset(Dataset):
         # Therefore, we change dimension order to match CDHW format.
         results = np.transpose(results, (1, 0, 2, 3))
 
+        # We change each tensor to CWH format when the model is UNet
+        if self.model == 'unet':
+            assert self.window_size == 1
+            results = results.squeeze(0)
+
         return results
+
+    def _to_pixel_wise_label(self, target):
+        """
+        Based on value in each target pixel,
+        change target tensor to pixel-wise label value
+
+        <Parameters>
+        target [np.ndarray]: CHW format, C must be 1
+
+        <Return>
+        results [np.ndarray]: CHW format, C must be 1
+        """
+        assert target.shape[0] == 1
+        assert self.target_num == 1
+
+        target = target.squeeze(0)
+        target_label = np.zeros([target.shape[0], target.shape[1]])
+
+        for lat in range(target.shape[0]):
+            for lon in range(target.shape[1]):
+                value = target[lat][lon]
+
+                if value >= 0 and value < 0.1:
+                    target_label[lat, lon] = 0
+                elif value >= 0.1 and value < 1.0:
+                    target_label[lat, lon] = 1
+                elif value >= 1.0 and value < 2.5:
+                    target_label[lat, lon] = 2
+                elif value >= 2.5:
+                    target_label[lat, lon] = 3
+                else:
+                    raise InvalidTargetValue("Invalid target value:", value)
+
+        return target_label
 
 class ToTensor(object):
     def __call__(self, images):
         return torch.from_numpy(images)
+
+class InvalidTargetValue(Exception):
+    def __init__(self, *args, **kwargs):
+        Exception.__init__(*args, **kwargs)
