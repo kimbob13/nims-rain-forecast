@@ -1,6 +1,5 @@
 import torch
 from torch.utils.data import Dataset
-from torchvision.transforms import Compose
 
 import numpy as np
 import xarray as xr
@@ -36,6 +35,12 @@ class NIMSDataset(Dataset):
         root, dirs, _ = next(os.walk(self.root_dir, topdown=True))
 
         data_dirs = [os.path.join(root, d) for d in sorted(dirs)]
+
+        # Use 2018 data as test set
+        if self.train:
+            data_dirs = data_dirs[:-365]
+        else:
+            data_dirs = data_dirs[-365:]
 
         data_path_list = []
         for data_dir in data_dirs:
@@ -118,22 +123,19 @@ class NIMSDataset(Dataset):
                 value = target[lat][lon]
 
                 if value >= 0 and value < 0.1:
-                    target_label[lat, lon] = 0
+                    target_label[lat][lon] = 0
                 elif value >= 0.1 and value < 1.0:
-                    target_label[lat, lon] = 1
+                    target_label[lat][lon] = 1
                 elif value >= 1.0 and value < 2.5:
-                    target_label[lat, lon] = 2
+                    target_label[lat][lon] = 2
                 elif value >= 2.5:
-                    target_label[lat, lon] = 3
+                    target_label[lat][lon] = 3
                 else:
-                    raise InvalidTargetValue("Invalid target value:", value)
+                    #print('Invalid target value:', value)
+                    target_label[lat][lon] = 0
 
         return target_label
 
 class ToTensor(object):
     def __call__(self, images):
         return torch.from_numpy(images)
-
-class InvalidTargetValue(Exception):
-    def __init__(self, *args, **kwargs):
-        Exception.__init__(*args, **kwargs)

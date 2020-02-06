@@ -1,16 +1,13 @@
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from torchsummary import summary
-
-import numpy as np
 
 from model.stconvs2s import STConvS2S
 from model.unet_model import UNet
 from nims_dataset import NIMSDataset, ToTensor
 from nims_loss import RMSELoss, NIMSCrossEntropyLoss
+from nims_trainer import NIMSTrainer
 
-from tqdm import tqdm
 import setproctitle
 
 import os
@@ -22,7 +19,7 @@ def parse_args():
     parser.add_argument('--device', default='0' , type=str, help='which device to use')
     parser.add_argument('--debug', help='turn on debugging print', action='store_true')
 
-    parser.add_argument('--model', default='stconvs2s', type=str, help='which model to use (stsconv2s, unet)')
+    parser.add_argument('--model', default='stconvs2s', type=str, help='which model to use (stconvs2s, unet)')
     parser.add_argument('--window_size', default=1, type=int, help='# of input sequences in time')
     parser.add_argument('--target_num', default=1, type=int, help='# of output sequences to evaluate')
 
@@ -38,8 +35,8 @@ def parse_args():
     return args
 
 def set_experiment_name(args):
-    if args.model == 'stsconv2d':
-        experiment_name = 'nims_stconv_{}_tn{}_ep{}_bs{}_{}' \
+    if args.model == 'stconvs2s':
+        experiment_name = 'nims_stconv_ws{}_tn{}_ep{}_bs{}_{}' \
                           .format(args.window_size, args.target_num,
                                   args.num_epochs, args.batch_size,
                                   args.optimizer)
@@ -53,33 +50,49 @@ def set_experiment_name(args):
 
     setproctitle.setproctitle(experiment_name)
 
-    return experiment_name
-
 if __name__ == '__main__':
     args = parse_args()
     os.environ['CUDA_VISIBLE_DEVICES'] = args.device
     device = torch.device('cuda:0')
 
     if args.model == 'stconvs2s':
-        nims_dataset = NIMSDataset(window_size=args.window_size,
-                                   target_num=args.target_num, transform=ToTensor())
-        sample, _ = nims_dataset[0]
+        nims_train_dataset = NIMSDataset(model=args.model,
+                                         window_size=args.window_size,
+                                         target_num=args.target_num,
+                                         train=True,
+                                         transform=ToTensor())
+        nims_test_dataset  = NIMSDataset(model=args.model,
+                                         window_size=args.window_size,
+                                         target_num=args.target_num,
+                                         train=False,
+                                         transform=ToTensor())
+
+        sample, _ = nims_train_dataset[0]
         if args.debug:
             print('[{}] one images sample type: {}, shape: {}'
                   .format(args.model, type(sample), sample.shape))
 
-        model = STConvS2S(model=args.model,
-                          channels=sample.shape[0],
+        model = STConvS2S(channels=sample.shape[0],
                           dropout_rate=args.dropout_rate,
                           upsample=args.upsample)
         criterion = RMSELoss()
 
+        num_lat = sample.shape[2] # the number of latitudes (253)
+        num_lon = sample.shape[3] # the number of longitudes (149)
+
     elif args.model == 'unet':
-        nims_dataset = NIMSDataset(model=args.model,
-                                   window_size=1,
-                                   target_num=args.target_num,
-                                   transform=ToTensor())
-        sample, _ = nims_dataset[0]
+        nims_train_dataset = NIMSDataset(model=args.model,
+                                         window_size=1,
+                                         target_num=1,
+                                         train=True,
+                                         transform=ToTensor())
+        nims_test_dataset  = NIMSDataset(model=args.model,
+                                         window_size=1,
+                                         target_num=1,
+                                         train=False,
+                                         transform=ToTensor())
+
+        sample, _ = nims_train_dataset[0]
         if args.debug:
             print('[{}] one images sample type: {}, shape: {}'
                   .format(args.model, type(sample), sample.shape))
@@ -90,12 +103,15 @@ if __name__ == '__main__':
         num_lat = sample.shape[1] # the number of latitudes (253)
         num_lon = sample.shape[2] # the number of longitudes (149)
 
-    model.to(device)
     if args.debug:
+        model.to(device)
         summary(model, input_size=sample.shape)
 
-    nims_dataloader = DataLoader(nims_dataset, batch_size=args.batch_size,
-                                 shuffle=False, num_workers=0)
+    train_loader = DataLoader(nims_train_dataset, batch_size=args.batch_size,
+                              shuffle=True, num_workers=5)
+    test_loader  = DataLoader(nims_test_dataset, batch_size=args.batch_size,
+                              shuffle=False, num_workers=5)
+
     if args.optimizer == 'sgd':
         optimizer = optim.SGD(model.parameters(), lr=0.1, momentum=0.99,
                               weight_decay=5e-4, nesterov=True)
@@ -105,55 +121,12 @@ if __name__ == '__main__':
         optimizer = optim.RMSprop(model.parameters(), lr=0.001,
                                   alpha=0.9, eps=1e-6)
 
-    experiment_name = set_experiment_name(args)
+    set_experiment_name(args)
 
-    for epoch in range(1, args.num_epochs + 1):
-        epoch_loss = 0.0
-        if args.model == 'unet':
-            running_correct = 0
-
-        for images, target in tqdm(nims_dataloader):
-            if args.debug:
-                if args.model == 'stconvs2s':
-                    target_nonzero = np.nonzero(target.numpy().squeeze(0)
-                                                .squeeze(0).squeeze(0))
-                    lat = target_nonzero[0][0]
-                    lon = target_nonzero[1][0]
-                    print('lat: {}, lon: {}'.format(lat, lon))
-
-
-            images= images.to(device)
-            if args.model == 'stconvs2s':
-                output = model(images)[:, :, :args.target_num, :, :]
-            elif args.model == 'unet':
-                output = model(images)
-                target = target.type(torch.LongTensor)
-
-            if args.debug:
-                if args.model == 'stconvs2s':
-                    print('- output: {}\n- target: {}'
-                          .format(output[0][0][0][lat][lon],
-                                  target[0][0][0][lat][lon]))
-
-            target = target.to(device)
-            if args.model == 'stconvs2s':
-                loss = criterion(output, target)
-            elif args.model == 'unet':
-                loss, correct = criterion(output, target)
-                running_correct += correct
-            
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            epoch_loss += loss.item()
-
-        if args.model == 'stconv2s':
-            print('Epoch [{}]: loss = {}'
-                  .format(epoch, epoch_loss / len(nims_dataset)))
-        if args.model == 'unet':
-            running_correct = running_correct.double()
-            total_num = len(nims_dataset) * num_lat * num_lon
-            print('Epoch [{}]: loss = {}, accuracy = {:.3f}%'
-                  .format(epoch, epoch_loss,
-                          (running_correct / total_num).item() * 100))
+    # Start training
+    nims_trainer = NIMSTrainer(model, criterion, optimizer, device,
+                               train_loader, test_loader,
+                               len(nims_train_dataset), len(nims_test_dataset),
+                               num_lat, num_lon, args)
+    nims_trainer.train()
+    nims_trainer.test()
