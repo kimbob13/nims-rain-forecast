@@ -9,17 +9,32 @@ import pwd
 
 __all__ = ['NIMSDataset', 'ToTensor']
 
+START_YEAR = 2009
+END_YEAR = 2018
+NORMAL_YEAR_DAY = 365
+
 class NIMSDataset(Dataset):
-    def __init__(self, model, window_size, target_num, train=True,
-                 transform=None, root_dir=None):
+    def __init__(self, model, window_size, target_num, train_year=(2009, 2017),
+                 train=True, transform=None, root_dir=None, debug=False):
         self.model = model
         self.window_size = window_size
         self.target_num = target_num
+
+        self.start_train_year = train_year[0]       # start year for training
+        self.end_train_year = train_year[1]         # end year for training
+        self.test_year = self.end_train_year + 1    # year for testing
+
         self.train = train
         self.transform = transform
 
+        self.debug = debug
+
         if root_dir == None:
             self.root_dir = self.__set_default_root_dir()
+
+        assert self.start_train_year <= self.end_train_year
+        assert self.start_train_year >= START_YEAR
+        assert self.end_train_year <= END_YEAR - 1
 
         self.data_path_list = self.__set_data_path_list()
 
@@ -36,11 +51,42 @@ class NIMSDataset(Dataset):
 
         data_dirs = [os.path.join(root, d) for d in sorted(dirs)]
 
-        # Use 2018 data as test set
+        # Get proper data directory for specified train and test year
         if self.train:
-            data_dirs = data_dirs[:-365]
+            start_day = (self.start_train_year - START_YEAR) * NORMAL_YEAR_DAY
+            end_day = -((END_YEAR - self.end_train_year) * NORMAL_YEAR_DAY)
+
+            if self.start_train_year > 2012 and self.start_train_year <= 2016:
+                start_day += 1
+            elif self.start_train_year > 2016:
+                start_day += 2
+
+            if self.end_train_year >= 2012 and self.end_train_year < 2016:
+                end_day -= 1
+            elif self.end_train_year < 2012:
+                end_day -= 2
+
+            data_dirs = data_dirs[start_day:end_day]
+
+            if self.debug:
+                print('train start: {}, end: {}'.format(data_dirs[0], data_dirs[-1]))
         else:
-            data_dirs = data_dirs[-365:]
+            start_day = (self.test_year - START_YEAR) * NORMAL_YEAR_DAY
+
+            if self.test_year > 2012 and self.test_year <= 2016:
+                start_day += 1
+            elif self.test_year > 2016:
+                start_day += 2
+
+            if self.test_year in (2012, 2016):
+                end_day = start_day + 366
+            else:
+                end_day = start_day + 365
+
+            data_dirs = data_dirs[start_day:end_day]
+
+            if self.debug:
+                print('test start: {}, end: {}'.format(data_dirs[0], data_dirs[-1]))
 
         data_path_list = []
         for data_dir in data_dirs:

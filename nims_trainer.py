@@ -39,14 +39,16 @@ class NIMSTrainer:
                       .format(epoch, epoch_loss / self.train_len))
 
             elif self.model_type == 'unet':
-                epoch_loss, running_correct = \
+                epoch_loss, running_correct, running_f1_score = \
                         self._unet_epoch(self.train_loader, train=True)
 
                 running_correct = running_correct.double()
                 total_num = self.train_len * self.num_lat * self.num_lon
-                print('Epoch [{}]: loss = {}, accuracy = {:.3f}%'
-                      .format(epoch, epoch_loss,
-                              (running_correct / total_num).item() * 100))
+                print('=' * 25, 'Epoch [{}]'.format(epoch), '=' * 25)
+                print('loss = {:.10f}, accuracy = {:.3f}%, f1 score = {:.10f}'
+                      .format(epoch_loss / self.train_len,
+                              (running_correct / total_num).item() * 100,
+                              running_f1_score / self.train_len))
 
     def test(self):
         if self.model_type == 'stconvs2s':
@@ -55,14 +57,15 @@ class NIMSTrainer:
             print('Test loss = {}'.format(test_loss / self.test_len))
 
         elif self.model_type == 'unet':
-            test_loss, test_correct = \
+            test_loss, test_correct, test_f1_score = \
                     self._unet_epoch(self.test_loader, train=False)
 
             test_correct = test_correct.double()
             total_num = self.test_len * self.num_lat * self.num_lon
-            print('Test loss = {}, accuracy = {:3f}%'
-                  .format(test_loss, 
-                          (test_correct / total_num).item() * 100))
+            print('Test loss = {:.10f}, accuracy = {:3f}%, f1_score = {:.10f}'
+                  .format(test_loss / self.test_len, 
+                          (test_correct / total_num).item() * 100,
+                          test_f1_score / self.test_len))
 
     def _stconvs2s_epoch(self, data_loader, train):
         epoch_loss = 0.0
@@ -98,14 +101,16 @@ class NIMSTrainer:
     def _unet_epoch(self, data_loader, train):
         epoch_loss = 0.0
         running_correct = 0
+        running_f1_score = 0.0
 
         for images, target in tqdm(data_loader):
             images = images.to(self.device)
             target = target.type(torch.LongTensor).to(self.device)
 
             output = self.model(images)
-            loss, correct = self.criterion(output, target)
+            loss, correct, f1_score = self.criterion(output, target)
             running_correct += correct
+            running_f1_score += f1_score
 
             if train:
                 self.optimizer.zero_grad()
@@ -114,4 +119,4 @@ class NIMSTrainer:
 
             epoch_loss += loss.item()
 
-        return epoch_loss, running_correct
+        return epoch_loss, running_correct, running_f1_score

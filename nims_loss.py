@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from sklearn.metrics import f1_score
 
 __all__ = ['RMSELoss', 'NIMSCrossEntropyLoss']
 
@@ -26,8 +27,18 @@ class NIMSCrossEntropyLoss(nn.Module):
 
         return correct
 
+    def _get_f1_score(self, preds, targets):
+        _, pred_labels = preds.topk(1, dim=1, largest=True, sorted=True)
+        pred_labels = pred_labels.squeeze(1).flatten().detach().cpu().numpy()
+        targets = targets.flatten().detach().cpu().numpy()
+
+        _f1_score = f1_score(targets, pred_labels, average='macro')
+
+        return _f1_score
+
     def forward(self, preds, targets):
         correct = self._get_num_correct(preds, targets)
+        f1_score = self._get_f1_score(preds, targets)
         #print('[cross_entropy] pred_labels:', pred_labels.shape)
         #print('[cross_entropy] targets:', targets.shape)
         #print('[cross_entropy] correct: {}, totalnum: {}'
@@ -41,4 +52,4 @@ class NIMSCrossEntropyLoss(nn.Module):
 
                 loss += self.cross_entropy(pred, target)
 
-        return loss, correct
+        return loss, correct, f1_score
