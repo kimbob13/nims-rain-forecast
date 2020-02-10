@@ -13,12 +13,15 @@ START_YEAR = 2009
 END_YEAR = 2018
 NORMAL_YEAR_DAY = 365
 
+
 class NIMSDataset(Dataset):
-    def __init__(self, model, window_size, target_num, train_year=(2009, 2017),
-                 train=True, transform=None, root_dir=None, debug=False):
+    def __init__(self, model, window_size, target_num, variables,
+                 train_year=(2009, 2017), train=True, transform=None,
+                 root_dir=None, debug=False):
         self.model = model
         self.window_size = window_size
         self.target_num = target_num
+        self.variables = variables
 
         self.start_train_year = train_year[0]       # start year for training
         self.end_train_year = train_year[1]         # end year for training
@@ -32,12 +35,13 @@ class NIMSDataset(Dataset):
         if root_dir == None:
             self.root_dir = self.__set_default_root_dir()
 
+        self.data_path_list = self.__set_data_path_list()
+
+        assert len(self.variables) <= 14
         assert self.start_train_year <= self.end_train_year
         assert self.start_train_year >= START_YEAR
         assert self.end_train_year <= END_YEAR - 1
-
-        self.data_path_list = self.__set_data_path_list()
-
+        
     def __set_default_root_dir(self):
         for p in pwd.getpwall():
             if p[0].startswith('osilab'):
@@ -107,7 +111,7 @@ class NIMSDataset(Dataset):
         target_window_path = self.data_path_list[target_start_idx:target_end_idx]
 
         images = self._merge_window_data(images_window_path)
-        target = self._merge_window_data(target_window_path)
+        target = self._merge_window_data(target_window_path, target=True)
         if self.model == 'unet':
             target = self._to_pixel_wise_label(target)
 
@@ -117,35 +121,110 @@ class NIMSDataset(Dataset):
 
         return images, target
 
-    def _merge_window_data(self, window_path):
+    def _merge_window_data(self, window_path, target=False):
         """
         Merge data in current window into single numpy array
 
         <Parameters>
         window_path [list[str]]: list of file path in current window
+        target [bool]: whether merged data is for target.
+                       target data only use rain data
 
         <Return>
-        results [np.ndarray]: result array in CDHW format
+        results [np.ndarray]
+            - model == stconvs2s: result array in CDHW format
+            - model == unet: result array in CHW format
         """
         for i, data_path in enumerate(window_path):
             one_hour_dataset = xr.open_dataset(data_path)
-            one_hour_rain_data = np.expand_dims(one_hour_dataset.rain.values, axis=0)
-            if i == 0:
-                results = one_hour_rain_data
+
+            if target:
+                # Use rain value as target
+                one_hour_data = self._read_variable_value(one_hour_dataset, 0)
             else:
-                results = np.concatenate([results, one_hour_rain_data], axis=0)
+                for var_idx in self.variables:
+                    if var_idx == 0:
+                        one_hour_data = \
+                            self._read_variable_value(one_hour_dataset,
+                                                      var_idx)
+                    else:
+                        one_var_data = \
+                            self._read_variable_value(one_hour_dataset,
+                                                      var_idx)
+                        one_hour_data = np.concatenate([one_hour_data,
+                                                        one_var_data],
+                                                       axis=0)
 
-        # window_size serves as first dimension of each image,
-        # and each image has one channel.
-        # Therefore, we change dimension order to match CDHW format.
-        results = np.transpose(results, (1, 0, 2, 3))
+            one_hour_data = np.expand_dims(one_hour_data, axis=0)
 
-        # We change each tensor to CWH format when the model is UNet
-        if self.model == 'unet':
+            if i == 0:
+                results = one_hour_data
+            else:
+                results = np.concatenate([results, one_hour_data], axis=0)
+
+        if self.model == 'stconvs2s':
+            # window_size serves as first dimension of each image,
+            # and each image has one channel.
+            # Therefore, we change dimension order to match CDHW format.
+            results = np.transpose(results, (1, 0, 2, 3))
+
+        elif self.model == 'unet':
+            # We change each tensor to CWH format when the model is UNet
             assert self.window_size == 1
             results = results.squeeze(0)
 
         return results
+
+    def _read_variable_value(self, one_hour_dataset, var_idx):
+        """
+        Read proper variable based on var_idx.
+        For example, if var_idx == 0, it should read 'rain' data,
+        and if var_idx == 4, it should read 'hel' data.
+
+        Variable List:
+        [0] : rain [1] : cape [2] : cin  [3] : swe [4]: hel
+        [5] : ct   [6] : vt   [7] : tt   [8] : si  [9]: ki
+        [10]: li   [11]: ti   [12]: ssi  [13]: pw
+
+        <Parameters>
+        one_hour_dataset [xarray dataset]: dataset for one hour to extract data
+        var_idx [int]: index for variables list
+
+        <Return>
+        one_var_data [np.ndarray]: numpy array of value (CHW format)
+        """
+        assert var_idx >= 0 and var_idx <= 13
+
+        if var_idx == 0:
+            one_var_data = one_hour_dataset.rain.values
+        elif var_idx == 1:
+            one_var_data = one_hour_dataset.cape.values
+        elif var_idx == 2:
+            one_var_data = one_hour_dataset.cin.values
+        elif var_idx == 3:
+            one_var_data = one_hour_dataset.swe.values
+        elif var_idx == 4:
+            one_var_data = one_hour_dataset.hel.values
+        elif var_idx == 5:
+            one_var_data = one_hour_dataset.ct.values
+        elif var_idx == 6:
+            one_var_data = one_hour_dataset.vt.values
+        elif var_idx == 7:
+            one_var_data = one_hour_dataset.tt.values
+        elif var_idx == 8:
+            one_var_data = one_hour_dataset.si.values
+        elif var_idx == 9:
+            one_var_data = one_hour_dataset.ki.values
+        elif var_idx == 10:
+            one_var_data = one_hour_dataset.li.values
+        elif var_idx == 11:
+            one_var_data = one_hour_dataset.ti.values
+        elif var_idx == 12:
+            one_var_data = one_hour_dataset.ssi.values
+        elif var_idx == 13:
+            one_var_data = one_hour_dataset.pw.values
+
+        return one_var_data
 
     def _to_pixel_wise_label(self, target):
         """
@@ -156,7 +235,7 @@ class NIMSDataset(Dataset):
         target [np.ndarray]: CHW format, C must be 1
 
         <Return>
-        results [np.ndarray]: CHW format, C must be 1
+        results [np.ndarray]: HW format
         """
         assert target.shape[0] == 1
         assert self.target_num == 1

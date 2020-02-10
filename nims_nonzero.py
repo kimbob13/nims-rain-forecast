@@ -38,13 +38,17 @@ def parse_date(date_argv):
 
     if year not in valid_year:
         print('Invalid year, year must be between 2009 and 2018')
+        sys.exit()
     if month not in valid_month:
         print('Invalid month, month must be between 1 and 12')
+        sys.exit()
     if day not in valid_day:
         print('Invalid day, day must be between {} and {}'
                .format(valid_day[0], valid_day[-1]))
+        sys.exit()
     if hour not in valid_hour:
         print('Invalid hour, hour must be between 0 and 23')
+        sys.exit()
 
     return '{}{:02}{:02}{:02}'.format(year, month, day, hour)
 
@@ -60,12 +64,14 @@ def get_data_path(date):
     return data_path
 
 if __name__ == '__main__':
+    # Command: nims_nonzero.py <year> <month> <day> <hour> <# of nonzero>
     assert len(sys.argv) == 6
 
     date = parse_date(sys.argv[1:5])
     print('date: {}'.format(date))
 
     dataset = xr.open_dataset(get_data_path(date))
+    print('variables:\n{}'.format(dataset.var))
     rain_data = dataset.rain.values.squeeze(0)
 
     num_searching_nonzero = int(sys.argv[5])
