@@ -34,6 +34,8 @@ class NIMSDataset(Dataset):
 
         if root_dir == None:
             self.root_dir = self.__set_default_root_dir()
+        else:
+            self.root_dir = root_dir
 
         self.data_path_list = self.__set_data_path_list()
 
@@ -97,6 +99,11 @@ class NIMSDataset(Dataset):
             curr_data_path_list = [os.path.join(data_dir, f) \
                                    for f in sorted(os.listdir(data_dir))]
             data_path_list += curr_data_path_list
+
+        if self.debug:
+            print('[{}] first day: {}, last day: {}'
+                  .format('train' if self.train else 'test',
+                          data_path_list[0], data_path_list[-1]))
 
         return data_path_list
 

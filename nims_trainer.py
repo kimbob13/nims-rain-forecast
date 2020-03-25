@@ -39,12 +39,12 @@ class NIMSTrainer:
                       .format(epoch, epoch_loss / self.train_len))
 
             elif self.model_type == 'unet':
+                print('=' * 25, 'Epoch [{}]'.format(epoch), '=' * 25)
                 epoch_loss, running_correct, running_f1_score = \
                         self._unet_epoch(self.train_loader, train=True)
 
                 running_correct = running_correct.double()
                 total_num = self.train_len * self.num_lat * self.num_lon
-                print('=' * 25, 'Epoch [{}]'.format(epoch), '=' * 25)
                 print('loss = {:.10f}, accuracy = {:.3f}%, f1 score = {:.10f}'
                       .format(epoch_loss / self.train_len,
                               (running_correct / total_num).item() * 100,

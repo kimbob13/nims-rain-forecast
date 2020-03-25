@@ -33,16 +33,17 @@ class NIMSCrossEntropyLoss(nn.Module):
         targets = targets.flatten().detach().cpu().numpy()
 
         _f1_score = f1_score(targets, pred_labels, average='macro')
+        #print('[_get_f1_score] f1 score: {}'.format(_f1_score))
 
         return _f1_score
 
     def forward(self, preds, targets):
         correct = self._get_num_correct(preds, targets)
         f1_score = self._get_f1_score(preds, targets)
-        #print('[cross_entropy] pred_labels:', pred_labels.shape)
-        #print('[cross_entropy] targets:', targets.shape)
+        #print('[cross_entropy] preds shape:', preds.shape)
+        #print('[cross_entropy] targets shape:', targets.shape)
         #print('[cross_entropy] correct: {}, totalnum: {}'
-        #      .format(correct, pred_labels.shape[0] * pred_labels.shape[1] * pred_labels.shape[2]))
+        #      .format(correct, preds.shape[0] * preds.shape[2] * preds.shape[3]))
 
         loss = 0.0
         for lat in range(preds.shape[2]):
@@ -50,6 +51,17 @@ class NIMSCrossEntropyLoss(nn.Module):
                 pred = preds[:, :, lat, lon]     # (N, 4)
                 target = targets[:, lat, lon]    # (N)
 
-                loss += self.cross_entropy(pred, target)
+                #print('[cross_entropy] pred: {}, target: {}'.format(pred.shape, target.shape))
+                #print('[cross_entropy] pred [:, 0]: {}'.format(pred[:, 0]))
+                #print('[cross_entropy] target: {}'.format(target))
+                #import sys; sys.exit()
+
+                pixel_loss = self.cross_entropy(pred, target)
+                if torch.isnan(pixel_loss):
+                    print('[cross_entropy] nan loss: lat = {}, lon = {}'.format(lat, lon))
+
+                loss += pixel_loss
+
+        #print('[cross_entropy] loss: {}'.format(loss.item()))
 
         return loss, correct, f1_score
