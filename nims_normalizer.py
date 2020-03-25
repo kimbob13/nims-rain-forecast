@@ -236,14 +236,16 @@ if __name__ == '__main__':
 
     print('train len: {}, test len: {}'.format(len(nims_train_data_path), len(nims_test_data_path)))
 
-    #train_mean = calculation(partial_mean, nims_train_data_path)
-    #train_variance = calculation(partial_variance, nims_train_data_path,
-    #                             total_mean=train_mean)
+    # [Train] Mean / Variance
+    train_mean = calculation(partial_mean, nims_train_data_path)
+    train_variance = calculation(partial_variance, nims_train_data_path,
+                                 total_mean=train_mean)
 
-    #train_stdv = {}
-    #for var_idx in train_variance:
-    #    train_stdv[var_idx] = math.sqrt(train_variance[var_idx])
+    train_stdv = {}
+    for var_idx in train_variance:
+        train_stdv[var_idx] = math.sqrt(train_variance[var_idx])
 
+    # [Test] Mean / Variance
     test_mean = calculation(partial_mean, nims_test_data_path)
     test_variance = calculation(partial_variance, nims_test_data_path,
                                 total_mean=test_mean)
@@ -252,19 +254,22 @@ if __name__ == '__main__':
     for var_idx in test_variance:
         test_stdv[var_idx] = math.sqrt(test_variance[var_idx])
 
-    #print_stat(train_mean, data_type='train', stat_type='mean')
-    #print_stat(train_variance, data_type='train', stat_type='variance')
+    # Print stat
+    print()
+    print_stat(train_mean, data_type='train', stat_type='mean')
+    print_stat(train_variance, data_type='train', stat_type='variance')
     print_stat(test_mean, data_type='test', stat_type='mean')
     print_stat(test_variance, data_type='test', stat_type='variance')
 
-    #with open('mean_var/train_mean.pickle', 'wb') as f:
-    #    pickle.dump(train_mean, f)
+    # Save dictionary to the file
+    with open('mean_var/train_mean.pickle', 'wb') as f:
+        pickle.dump(train_mean, f)
 
-    #with open('mean_var/train_variance.pickle', 'wb') as f:
-    #    pickle.dump(train_variance, f)
+    with open('mean_var/train_variance.pickle', 'wb') as f:
+        pickle.dump(train_variance, f)
 
-    #with open('mean_var/train_stdv.pickle', 'wb') as f:
-    #    pickle.dump(train_stdv, f)
+    with open('mean_var/train_stdv.pickle', 'wb') as f:
+        pickle.dump(train_stdv, f)
 
     with open('mean_var/test_mean.pickle', 'wb') as f:
         pickle.dump(test_mean, f)
