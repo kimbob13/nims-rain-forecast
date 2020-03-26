@@ -8,8 +8,12 @@ from nims_dataset import NIMSDataset, ToTensor
 from nims_loss import RMSELoss, NIMSCrossEntropyLoss
 from nims_trainer import NIMSTrainer
 
-import setproctitle
 from torchsummary import summary
+try:
+    import setproctitle
+except:
+    pass
+
 
 import os
 import argparse
@@ -96,7 +100,10 @@ def set_experiment_name(args):
     if args.debug:
         experiment_name += '_debug'
 
-    setproctitle.setproctitle(experiment_name)
+    try:
+        setproctitle.setproctitle(experiment_name)
+    except:
+        pass
 
 if __name__ == '__main__':
     args = parse_args()
