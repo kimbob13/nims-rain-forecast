@@ -144,7 +144,7 @@ if __name__ == '__main__':
 
     elif args.model == 'unet':
         nims_train_dataset = NIMSDataset(model=args.model,
-                                         window_size=1,
+                                         window_size=args.window_size,
                                          target_num=1,
                                          variables=variables,
                                          train_year=(args.start_train_year,
@@ -154,7 +154,7 @@ if __name__ == '__main__':
                                          debug=args.debug)
         
         nims_test_dataset  = NIMSDataset(model=args.model,
-                                         window_size=1,
+                                         window_size=args.window_size,
                                          target_num=1,
                                          variables=variables,
                                          train_year=(args.start_train_year,
@@ -191,6 +191,8 @@ if __name__ == '__main__':
     elif args.optimizer == 'rmsprop':
         optimizer = optim.RMSprop(model.parameters(), lr=0.001,
                                   alpha=0.9, eps=1e-6)
+    elif args.optimizer == 'adadelta':
+        optimizer = optim.Adadelta(model.parameters())
 
     set_experiment_name(args)
 

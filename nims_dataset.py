@@ -177,8 +177,9 @@ class NIMSDataset(Dataset):
 
         elif self.model == 'unet':
             # We change each tensor to CWH format when the model is UNet
-            assert self.window_size == 1
-            results = results.squeeze(0)
+            # window_size is serves as channel in UNet
+            #assert self.window_size == 1
+            results = results.squeeze(1)
 
         return results
 
