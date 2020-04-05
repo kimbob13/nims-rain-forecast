@@ -22,6 +22,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='NIMS rainfall data prediction')
 
     parser.add_argument('--device', default='0' , type=str, help='which device to use')
+    parser.add_argument('--dataset_dir', type=str, help='root directory of dataset')
     parser.add_argument('--debug', help='turn on debugging print', action='store_true')
 
     parser.add_argument('--model', default='unet', type=str, help='which model to use (stconvs2s, unet)')
@@ -119,7 +120,9 @@ if __name__ == '__main__':
                                          variables=variables,
                                          train_year=(2009, 2017),
                                          train=True,
-                                         transform=ToTensor())
+                                         transform=ToTensor(),
+                                         root_dir=args.dataset_dir,
+                                         debug=args.debug)
 
         nims_test_dataset  = NIMSDataset(model=args.model,
                                          window_size=args.window_size,
@@ -127,7 +130,9 @@ if __name__ == '__main__':
                                          variables=variables,
                                          train_year=(2009, 2017),
                                          train=False,
-                                         transform=ToTensor())
+                                         transform=ToTensor(),
+                                         root_dir=args.dataset_dir,
+                                         debug=args.debug)
 
         sample, _ = nims_train_dataset[0]
         if args.debug:
@@ -151,6 +156,7 @@ if __name__ == '__main__':
                                                      args.end_train_year),
                                          train=True,
                                          transform=ToTensor(),
+                                         root_dir=args.dataset_dir,
                                          debug=args.debug)
         
         nims_test_dataset  = NIMSDataset(model=args.model,
@@ -161,6 +167,7 @@ if __name__ == '__main__':
                                                      args.end_train_year),
                                          train=False,
                                          transform=ToTensor(),
+                                         root_dir=args.dataset_dir,
                                          debug=args.debug)
 
         sample, _ = nims_train_dataset[0]
