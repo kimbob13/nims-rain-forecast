@@ -40,15 +40,15 @@ class NIMSTrainer:
 
             elif self.model_type == 'unet':
                 print('=' * 25, 'Epoch [{}]'.format(epoch), '=' * 25)
-                epoch_loss, running_correct, running_f1_score = \
+                epoch_loss, epoch_correct, epoch_f1_score = \
                         self._unet_epoch(self.train_loader, train=True)
 
-                running_correct = running_correct.double()
+                epoch_correct = epoch_correct.double()
                 total_num = self.train_len * self.num_lat * self.num_lon
                 print('loss = {:.10f}, accuracy = {:.3f}%, f1 score = {:.10f}'
                       .format(epoch_loss / self.train_len,
-                              (running_correct / total_num).item() * 100,
-                              running_f1_score / self.train_len))
+                              (epoch_correct / total_num).item() * 100,
+                              epoch_f1_score / self.train_len))
 
     def test(self):
         if self.model_type == 'stconvs2s':
@@ -100,8 +100,8 @@ class NIMSTrainer:
 
     def _unet_epoch(self, data_loader, train):
         epoch_loss = 0.0
-        running_correct = 0
-        running_f1_score = 0.0
+        epoch_correct = 0
+        epoch_f1_score = 0.0
 
         for images, target in tqdm(data_loader):
             images = images.to(self.device)
@@ -109,8 +109,8 @@ class NIMSTrainer:
 
             output = self.model(images)
             loss, correct, f1_score = self.criterion(output, target)
-            running_correct += correct
-            running_f1_score += f1_score
+            epoch_correct += correct
+            epoch_f1_score += f1_score
 
             if train:
                 self.optimizer.zero_grad()
@@ -119,4 +119,4 @@ class NIMSTrainer:
 
             epoch_loss += loss.item()
 
-        return epoch_loss, running_correct, running_f1_score
+        return epoch_loss, epoch_correct, epoch_f1_score

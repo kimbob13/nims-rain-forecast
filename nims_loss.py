@@ -57,8 +57,8 @@ class NIMSCrossEntropyLoss(nn.Module):
                 #import sys; sys.exit()
 
                 pixel_loss = self.cross_entropy(pred, target)
-                if torch.isnan(pixel_loss):
-                    print('[cross_entropy] nan loss: lat = {}, lon = {}'.format(lat, lon))
+                # if torch.isnan(pixel_loss):
+                #     print('[cross_entropy] nan loss: lat = {}, lon = {}'.format(lat, lon))
 
                 loss += pixel_loss
 
