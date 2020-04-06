@@ -93,10 +93,10 @@ def set_experiment_name(args):
                                   args.num_epochs, args.batch_size,
                                   args.optimizer)
     elif args.model == 'unet':
-        experiment_name = 'nims_unet_ep{}_bs{}_{}_{}_to_{}' \
-                          .format(args.num_epochs, args.batch_size,
-                                  args.optimizer, args.start_train_year,
-                                  args.end_train_year)
+        experiment_name = 'nims_unet_ws{}_ep{}_bs{}_{}_{}_{}' \
+                          .format(args.window_size, args.num_epochs,
+                                  args.batch_size, args.optimizer,
+                                  args.start_train_year, args.end_train_year)
 
     if args.debug:
         experiment_name += '_debug'
