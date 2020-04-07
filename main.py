@@ -23,6 +23,7 @@ def parse_args():
 
     parser.add_argument('--device', default='0' , type=str, help='which device to use')
     parser.add_argument('--dataset_dir', type=str, help='root directory of dataset')
+    parser.add_argument('--num_workers', default=12, type=int, help='# of workers for dataloader')
     parser.add_argument('--debug', help='turn on debugging print', action='store_true')
 
     parser.add_argument('--model', default='unet', type=str, help='which model to use (stconvs2s, unet)')
@@ -186,9 +187,9 @@ if __name__ == '__main__':
         summary(model, input_size=sample.shape)
 
     train_loader = DataLoader(nims_train_dataset, batch_size=args.batch_size,
-                              shuffle=True, num_workers=5)
+                              shuffle=True, num_workers=args.num_workers)
     test_loader  = DataLoader(nims_test_dataset, batch_size=args.batch_size,
-                              shuffle=False, num_workers=5)
+                              shuffle=False, num_workers=args.num_workers)
 
     if args.optimizer == 'sgd':
         optimizer = optim.SGD(model.parameters(), lr=0.1, momentum=0.99,

@@ -35,6 +35,8 @@ class UNet(nn.Module):
         self.up6 = Up(64, 32, bilinear)
         self.up7 = Up(32, 16, bilinear)
 
+        self.outc = OutConv(16 // factor, n_classes)
+
     def forward(self, x):
         x1 = self.inc(x)
 
@@ -55,5 +57,7 @@ class UNet(nn.Module):
         x = self.up5(x, x3)
         x = self.up6(x, x2)
         x = self.up7(x, x1)
-        
-        return x
+
+        logits = self.outc(x)
+
+        return logits
