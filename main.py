@@ -40,6 +40,7 @@ def parse_args():
     parser.add_argument('--num_epochs', default=10, type=int, help='# of training epochs')
     parser.add_argument('--batch_size', default=1, type=int, help='batch size')
     parser.add_argument('--optimizer', default='adam', type=str, help='which optimizer to use (rmsprop, adam, sgd)')
+    parser.add_argument('--lr', default=0.001, type=float, help='learning rate of optimizer')
 
     parser.add_argument('--dropout_rate', default=0.2, type=float, help='dropout rate')
     parser.add_argument('--upsample', help='whether to use upsample at the final layer of decoder', action='store_true')
@@ -192,15 +193,15 @@ if __name__ == '__main__':
                               shuffle=False, num_workers=args.num_workers)
 
     if args.optimizer == 'sgd':
-        optimizer = optim.SGD(model.parameters(), lr=0.1, momentum=0.99,
+        optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.99,
                               weight_decay=5e-4, nesterov=True)
     elif args.optimizer == 'adam':
-        optimizer = optim.Adam(model.parameters(), lr=0.001)
+        optimizer = optim.Adam(model.parameters(), lr=args.lr)
     elif args.optimizer == 'rmsprop':
-        optimizer = optim.RMSprop(model.parameters(), lr=0.001,
+        optimizer = optim.RMSprop(model.parameters(), lr=args.lr,
                                   alpha=0.9, eps=1e-6)
     elif args.optimizer == 'adadelta':
-        optimizer = optim.Adadelta(model.parameters())
+        optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
 
     set_experiment_name(args)
 
