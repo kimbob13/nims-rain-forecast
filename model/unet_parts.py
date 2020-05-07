@@ -98,14 +98,13 @@ class Down(nn.Module):
 
     def forward(self, x):
         out = self.conv(x)
-        to_upsample = out
 
         # Residual connection
         x = self.residual(x)
         out = torch.add(x, out)
 
-        return out, to_upsample
 
+        return out
 
 class Up(nn.Module):
     """Upscaling then double conv"""
@@ -120,7 +119,7 @@ class Up(nn.Module):
                                   mode='bilinear',
                                   align_corners=True)
             self.conv = DoubleConv(in_channels,
-                                   out_channels // 2,
+                                   out_channels,
                                    mid_channels=(in_channels // 2),
                                    down=False)
         else:
@@ -135,7 +134,7 @@ class Up(nn.Module):
             if bilinear:
                 self.residual.add_module("res_conv",
                                          nn.Conv2d(in_channels,
-                                                   out_channels // 2,
+                                                   out_channels,
                                                    kernel_size=1,
                                                    padding=0))
             else:
