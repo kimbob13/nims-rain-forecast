@@ -27,6 +27,7 @@ def parse_args():
     common.add_argument('--debug', help='turn on debugging print', action='store_true')
 
     unet = parser.add_argument_group('unet related')
+    unet.add_argument('--n_blocks', default=7, type=int, help='# of blocks in Down and Up phase')
     unet.add_argument('--start_channels', default=16, type=int, help='# of channels after first block of unet')
 
     nims = parser.add_argument_group('nims dataset related')
@@ -89,9 +90,10 @@ def set_experiment_name(args):
     <Parameters>
     args [argparse]: parsed argument
     """
-    experiment_name = 'nims_ws{}_ch{}_ep{}_bs{}_{}_{}_{}' \
-                      .format(args.window_size,
+    experiment_name = 'nims_nb{}_ch{}_ws{}_ep{}_bs{}_{}_{}_{}' \
+                      .format(args.n_blocks,
                               args.start_channels,
+                              args.window_size,
                               args.num_epochs,
                               args.batch_size,
                               args.optimizer,
@@ -111,8 +113,10 @@ if __name__ == '__main__':
     os.environ['CUDA_VISIBLE_DEVICES'] = args.device
     device = torch.device('cuda:0')
 
+    # Parse NIMS dataset variables
     variables = parse_variables(args.variables)
 
+    # Train and test dataset
     nims_train_dataset = NIMSDataset(window_size=args.window_size,
                                      target_num=args.target_num,
                                      variables=variables,
@@ -133,13 +137,16 @@ if __name__ == '__main__':
                                      root_dir=args.dataset_dir,
                                      debug=args.debug)
 
+    # Get a sample for getting shape of each tensor
     sample, _ = nims_train_dataset[0]
     if args.debug:
         print('[{}] one images sample shape: {}'
                 .format(args.model, sample.shape))
 
+    # Create a model and criterion
     model = UNet(n_channels=sample.shape[0],
                  n_classes=4,
+                 n_blocks=args.n_blocks,
                  start_channels=args.start_channels)
     criterion = NIMSCrossEntropyLoss()
 
@@ -150,11 +157,13 @@ if __name__ == '__main__':
         model.to(device)
         summary(model, input_size=sample.shape)
 
+    # Create dataloaders
     train_loader = DataLoader(nims_train_dataset, batch_size=args.batch_size,
                               shuffle=True, num_workers=args.num_workers)
     test_loader  = DataLoader(nims_test_dataset, batch_size=args.batch_size,
                               shuffle=False, num_workers=args.num_workers)
 
+    # Set the optimizer
     if args.optimizer == 'sgd':
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.99,
                               weight_decay=5e-4, nesterov=True)
@@ -166,6 +175,7 @@ if __name__ == '__main__':
     elif args.optimizer == 'adadelta':
         optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
 
+    # Set experiment name and use it as process name if possible
     set_experiment_name(args)
 
     # Start training
