@@ -8,34 +8,48 @@ from .unet_parts import *
 
 
 class UNet(nn.Module):
-    def __init__(self, n_channels, n_classes, bilinear=True):
+    def __init__(self, n_channels, n_classes,
+                 start_channels=16, bilinear=True):
         super(UNet, self).__init__()
-        self.n_channels = n_channels
-        self.n_classes = n_classes
-        self.bilinear = bilinear
 
-        self.inc = BasicConv(n_channels, 16)
+        self.inc = BasicConv(n_channels, start_channels)
 
-        self.down1 = Down(  16,   32)
-        self.down2 = Down(  32,   64)
-        self.down3 = Down(  64,  128)
-        self.down4 = Down( 128,  256)
-        self.down5 = Down( 256,  512)
-        self.down6 = Down( 512, 1024)
+        self.down1 = Down(start_channels, start_channels * (2 ** 1))
+        self.down2 = Down(start_channels * (2 ** 1), start_channels * (2 ** 2))
+        self.down3 = Down(start_channels * (2 ** 2), start_channels * (2 ** 3))
+        self.down4 = Down(start_channels * (2 ** 3), start_channels * (2 ** 4))
+        self.down5 = Down(start_channels * (2 ** 4), start_channels * (2 ** 5))
+        self.down6 = Down(start_channels * (2 ** 5), start_channels * (2 ** 6))
         factor = 2 if bilinear else 1
-        self.down7 = Down(1024, 2048 // factor)
+        self.down7 = Down(start_channels * (2 ** 6),
+                          start_channels * (2 ** 7) // factor)
 
-        self.brdige = BasicConv(2048 // factor, 2048 // factor)
+        self.brdige = BasicConv((start_channels * (2 ** 7)) // factor,
+                                (start_channels * (2 ** 7)) // factor)
 
-        self.up7 = Up(2048, 1024 // factor, bilinear)
-        self.up6 = Up(1024,  512 // factor, bilinear)
-        self.up5 = Up( 512,  256 // factor, bilinear)
-        self.up4 = Up( 256,  128 // factor, bilinear)
-        self.up3 = Up( 128,   64 // factor, bilinear)
-        self.up2 = Up(  64,   32 // factor, bilinear)
-        self.up1 = Up(  32,   16, bilinear)
+        self.up7 = Up(start_channels * (2 ** 7),
+                      start_channels * (2 ** 6) // factor,
+                      bilinear)
+        self.up6 = Up(start_channels * (2 ** 6),
+                      start_channels * (2 ** 5) // factor,
+                      bilinear)
+        self.up5 = Up(start_channels * (2 ** 5),
+                      start_channels * (2 ** 4) // factor,
+                      bilinear)
+        self.up4 = Up(start_channels * (2 ** 4),
+                      start_channels * (2 ** 3) // factor,
+                      bilinear)
+        self.up3 = Up(start_channels * (2 ** 3),
+                      start_channels * (2 ** 2) // factor,
+                      bilinear)
+        self.up2 = Up(start_channels * (2 ** 2),
+                      start_channels * (2 ** 1) // factor,
+                      bilinear)
+        self.up1 = Up(start_channels * (2 ** 1),
+                      start_channels,
+                      bilinear)
 
-        self.outc = OutConv(16, n_classes)
+        self.outc = OutConv(start_channels, n_classes)
 
     def forward(self, x):
         x0 = self.inc(x)

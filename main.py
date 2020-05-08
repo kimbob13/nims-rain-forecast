@@ -27,6 +27,7 @@ def parse_args():
     parser.add_argument('--debug', help='turn on debugging print', action='store_true')
 
     parser.add_argument('--model', default='unet', type=str, help='which model to use (stconvs2s, unet)')
+    parser.add_argument('--start_channels', default=16, type=int, help='# of channels after first block of unet')
     parser.add_argument('--window_size', default=1, type=int, help='# of input sequences in time')
     parser.add_argument('--target_num', default=1, type=int, help='# of output sequences to evaluate')
     parser.add_argument('--variables', nargs='+',
@@ -177,7 +178,9 @@ if __name__ == '__main__':
             print('[{}] one images sample shape: {}'
                   .format(args.model, sample.shape))
 
-        model = UNet(n_channels=sample.shape[0], n_classes=4)
+        model = UNet(n_channels=sample.shape[0],
+                     n_classes=4,
+                     start_channels=args.start_channels)
         criterion = NIMSCrossEntropyLoss()
 
         num_lat = sample.shape[1] # the number of latitudes (253)
