@@ -18,13 +18,15 @@ class UNet(nn.Module):
         self.down2 = Down(start_channels * (2 ** 1), start_channels * (2 ** 2))
         self.down3 = Down(start_channels * (2 ** 2), start_channels * (2 ** 3))
         self.down4 = Down(start_channels * (2 ** 3), start_channels * (2 ** 4))
-        self.down5 = Down(start_channels * (2 ** 4), start_channels * (2 ** 5))
-        self.down6 = Down(start_channels * (2 ** 5), start_channels * (2 ** 6))
         factor = 2 if bilinear else 1
+        self.down5 = Down(start_channels * (2 ** 4),
+                          start_channels * (2 ** 5))
+        self.down6 = Down(start_channels * (2 ** 5),
+                          start_channels * (2 ** 6))
         self.down7 = Down(start_channels * (2 ** 6),
                           start_channels * (2 ** 7) // factor)
 
-        self.brdige = BasicConv((start_channels * (2 ** 7)) // factor,
+        self.bridge = BasicConv((start_channels * (2 ** 7)) // factor,
                                 (start_channels * (2 ** 7)) // factor)
 
         self.up7 = Up(start_channels * (2 ** 7),
@@ -62,7 +64,7 @@ class UNet(nn.Module):
         x6 = self.down6(x5)
         x7 = self.down7(x6)
 
-        x = self.brdige(x7)
+        x = self.bridge(x7)
 
         x = self.up7(x, x6)
         x = self.up6(x, x5)

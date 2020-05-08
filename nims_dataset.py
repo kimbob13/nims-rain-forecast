@@ -15,10 +15,9 @@ NORMAL_YEAR_DAY = 365
 
 
 class NIMSDataset(Dataset):
-    def __init__(self, model, window_size, target_num, variables,
+    def __init__(self, window_size, target_num, variables,
                  train_year=(2009, 2017), train=True, transform=None,
                  root_dir=None, debug=False):
-        self.model = model
         self.window_size = window_size
         self.target_num = target_num
         self.variables = variables
@@ -119,8 +118,7 @@ class NIMSDataset(Dataset):
 
         images = self._merge_window_data(images_window_path)
         target = self._merge_window_data(target_window_path, target=True)
-        if self.model == 'unet':
-            target = self._to_pixel_wise_label(target)
+        target = self._to_pixel_wise_label(target)
 
         if self.transform:
             images = self.transform(images)
@@ -169,17 +167,10 @@ class NIMSDataset(Dataset):
             else:
                 results = np.concatenate([results, one_hour_data], axis=0)
 
-        if self.model == 'stconvs2s':
-            # window_size serves as first dimension of each image,
-            # and each image has one channel.
-            # Therefore, we change dimension order to match CDHW format.
-            results = np.transpose(results, (1, 0, 2, 3))
-
-        elif self.model == 'unet':
-            # We change each tensor to CWH format when the model is UNet
-            # window_size is serves as channel in UNet
-            #assert self.window_size == 1
-            results = results.squeeze(1)
+        # We change each tensor to CWH format when the model is UNet
+        # window_size is serves as channel in UNet
+        #assert self.window_size == 1
+        results = results.squeeze(1)
 
         return results
 

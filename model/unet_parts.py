@@ -94,7 +94,7 @@ class Down(nn.Module):
                                                out_channels,
                                                kernel_size=1,
                                                padding=0))
-            self.residual.add_module("res_maxpool", nn.MaxPool2d(2))
+        self.residual.add_module("res_maxpool", nn.MaxPool2d(2))
 
     def forward(self, x):
         out = self.conv(x)
@@ -102,7 +102,6 @@ class Down(nn.Module):
         # Residual connection
         x = self.residual(x)
         out = torch.add(x, out)
-
 
         return out
 

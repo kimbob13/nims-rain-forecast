@@ -2,7 +2,6 @@ import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
-from model.stconvs2s import STConvS2S
 from model.unet_model import UNet
 from nims_dataset import NIMSDataset, ToTensor
 from nims_loss import RMSELoss, NIMSCrossEntropyLoss
@@ -21,30 +20,30 @@ import argparse
 def parse_args():
     parser = argparse.ArgumentParser(description='NIMS rainfall data prediction')
 
-    parser.add_argument('--device', default='0' , type=str, help='which device to use')
-    parser.add_argument('--dataset_dir', type=str, help='root directory of dataset')
-    parser.add_argument('--num_workers', default=12, type=int, help='# of workers for dataloader')
-    parser.add_argument('--debug', help='turn on debugging print', action='store_true')
+    common = parser.add_argument_group('common')
+    common.add_argument('--device', default='0', type=str, help='which device to use')
+    common.add_argument('--dataset_dir', type=str, help='root directory of dataset')
+    common.add_argument('--num_workers', default=5, type=int, help='# of workers for dataloader')
+    common.add_argument('--debug', help='turn on debugging print', action='store_true')
 
-    parser.add_argument('--model', default='unet', type=str, help='which model to use (stconvs2s, unet)')
-    parser.add_argument('--start_channels', default=16, type=int, help='# of channels after first block of unet')
-    parser.add_argument('--window_size', default=1, type=int, help='# of input sequences in time')
-    parser.add_argument('--target_num', default=1, type=int, help='# of output sequences to evaluate')
-    parser.add_argument('--variables', nargs='+',
-                        help='which variables to use (rain, cape, etc.). \
-                              Can be single number which specify how many variables to use \
-                              or list of variables name')
+    unet = parser.add_argument_group('unet related')
+    unet.add_argument('--start_channels', default=16, type=int, help='# of channels after first block of unet')
 
-    parser.add_argument('--start_train_year', default=2009, type=int, help='start year for training')
-    parser.add_argument('--end_train_year', default=2017, type=int, help='end year for training')
+    nims = parser.add_argument_group('nims dataset related')
+    nims.add_argument('--window_size', default=1, type=int, help='# of input sequences in time')
+    nims.add_argument('--target_num', default=1, type=int, help='# of output sequences to evaluate')
+    nims.add_argument('--variables', nargs='+',
+                      help='which variables to use (rain, cape, etc.). \
+                            Can be single number which specify how many variables to use \
+                            or list of variables name')
+    nims.add_argument('--start_train_year', default=2009, type=int, help='start year for training')
+    nims.add_argument('--end_train_year', default=2017, type=int, help='end year for training')
 
-    parser.add_argument('--num_epochs', default=10, type=int, help='# of training epochs')
-    parser.add_argument('--batch_size', default=1, type=int, help='batch size')
-    parser.add_argument('--optimizer', default='adam', type=str, help='which optimizer to use (rmsprop, adam, sgd)')
-    parser.add_argument('--lr', default=0.001, type=float, help='learning rate of optimizer')
-
-    parser.add_argument('--dropout_rate', default=0.2, type=float, help='dropout rate')
-    parser.add_argument('--upsample', help='whether to use upsample at the final layer of decoder', action='store_true')
+    hyperparam = parser.add_argument_group('hyper-parameters')
+    hyperparam.add_argument('--num_epochs', default=10, type=int, help='# of training epochs')
+    hyperparam.add_argument('--batch_size', default=1, type=int, help='batch size')
+    hyperparam.add_argument('--optimizer', default='adam', type=str, help='which optimizer to use (rmsprop, adam, sgd)')
+    hyperparam.add_argument('--lr', default=0.001, type=float, help='learning rate of optimizer')
 
     args = parser.parse_args()
 
@@ -90,16 +89,14 @@ def set_experiment_name(args):
     <Parameters>
     args [argparse]: parsed argument
     """
-    if args.model == 'stconvs2s':
-        experiment_name = 'nims_stconv_ws{}_tn{}_ep{}_bs{}_{}' \
-                          .format(args.window_size, args.target_num,
-                                  args.num_epochs, args.batch_size,
-                                  args.optimizer)
-    elif args.model == 'unet':
-        experiment_name = 'nims_unet_ws{}_ep{}_bs{}_{}_{}_{}' \
-                          .format(args.window_size, args.num_epochs,
-                                  args.batch_size, args.optimizer,
-                                  args.start_train_year, args.end_train_year)
+    experiment_name = 'nims_ws{}_ch{}_ep{}_bs{}_{}_{}_{}' \
+                      .format(args.window_size,
+                              args.start_channels,
+                              args.num_epochs,
+                              args.batch_size,
+                              args.optimizer,
+                              args.start_train_year,
+                              args.end_train_year)
 
     if args.debug:
         experiment_name += '_debug'
@@ -116,75 +113,38 @@ if __name__ == '__main__':
 
     variables = parse_variables(args.variables)
 
-    if args.model == 'stconvs2s':
-        nims_train_dataset = NIMSDataset(model=args.model,
-                                         window_size=args.window_size,
-                                         target_num=args.target_num,
-                                         variables=variables,
-                                         train_year=(2009, 2017),
-                                         train=True,
-                                         transform=ToTensor(),
-                                         root_dir=args.dataset_dir,
-                                         debug=args.debug)
+    nims_train_dataset = NIMSDataset(window_size=args.window_size,
+                                     target_num=args.target_num,
+                                     variables=variables,
+                                     train_year=(args.start_train_year,
+                                                 args.end_train_year),
+                                     train=True,
+                                     transform=ToTensor(),
+                                     root_dir=args.dataset_dir,
+                                     debug=args.debug)
+    
+    nims_test_dataset  = NIMSDataset(window_size=args.window_size,
+                                     target_num=args.target_num,
+                                     variables=variables,
+                                     train_year=(args.start_train_year,
+                                                 args.end_train_year),
+                                     train=False,
+                                     transform=ToTensor(),
+                                     root_dir=args.dataset_dir,
+                                     debug=args.debug)
 
-        nims_test_dataset  = NIMSDataset(model=args.model,
-                                         window_size=args.window_size,
-                                         target_num=args.target_num,
-                                         variables=variables,
-                                         train_year=(2009, 2017),
-                                         train=False,
-                                         transform=ToTensor(),
-                                         root_dir=args.dataset_dir,
-                                         debug=args.debug)
+    sample, _ = nims_train_dataset[0]
+    if args.debug:
+        print('[{}] one images sample shape: {}'
+                .format(args.model, sample.shape))
 
-        sample, _ = nims_train_dataset[0]
-        if args.debug:
-            print('[{}] one images sample shape: {}'
-                  .format(args.model, sample.shape))
+    model = UNet(n_channels=sample.shape[0],
+                 n_classes=4,
+                 start_channels=args.start_channels)
+    criterion = NIMSCrossEntropyLoss()
 
-        model = STConvS2S(channels=sample.shape[0],
-                          dropout_rate=args.dropout_rate,
-                          upsample=args.upsample)
-        criterion = RMSELoss()
-
-        num_lat = sample.shape[2] # the number of latitudes (253)
-        num_lon = sample.shape[3] # the number of longitudes (149)
-
-    elif args.model == 'unet':
-        nims_train_dataset = NIMSDataset(model=args.model,
-                                         window_size=args.window_size,
-                                         target_num=1,
-                                         variables=variables,
-                                         train_year=(args.start_train_year,
-                                                     args.end_train_year),
-                                         train=True,
-                                         transform=ToTensor(),
-                                         root_dir=args.dataset_dir,
-                                         debug=args.debug)
-        
-        nims_test_dataset  = NIMSDataset(model=args.model,
-                                         window_size=args.window_size,
-                                         target_num=1,
-                                         variables=variables,
-                                         train_year=(args.start_train_year,
-                                                     args.end_train_year),
-                                         train=False,
-                                         transform=ToTensor(),
-                                         root_dir=args.dataset_dir,
-                                         debug=args.debug)
-
-        sample, _ = nims_train_dataset[0]
-        if args.debug:
-            print('[{}] one images sample shape: {}'
-                  .format(args.model, sample.shape))
-
-        model = UNet(n_channels=sample.shape[0],
-                     n_classes=4,
-                     start_channels=args.start_channels)
-        criterion = NIMSCrossEntropyLoss()
-
-        num_lat = sample.shape[1] # the number of latitudes (253)
-        num_lon = sample.shape[2] # the number of longitudes (149)
+    num_lat = sample.shape[1] # the number of latitudes (253)
+    num_lon = sample.shape[2] # the number of longitudes (149)
 
     if args.debug:
         model.to(device)
