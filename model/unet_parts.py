@@ -13,20 +13,23 @@ class BasicConv(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
 
-        self.basic_conv = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
-            nn.BatchNorm2d(out_channels),
-            nn.LeakyReLU(inplace=True),
-            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1)
-        )
+        # Main block
+        self.basic_conv = nn.Sequential()
+        self.basic_conv.add_module('basic_conv1',
+                                   nn.Conv2d(in_channels, out_channels,
+                                             kernel_size=3, padding=1))
+        self.basic_conv.add_module('basic_bn', nn.BatchNorm2d(out_channels))
+        self.basic_conv.add_module('basic_relu', nn.LeakyReLU(inplace=True))
+        self.basic_conv.add_module('basic_conv2',
+                                   nn.Conv2d(out_channels, out_channels,
+                                             kernel_size=3, padding=1))
 
+        # Residual block
         self.residual = nn.Sequential()
-        if in_channels != out_channels:
-            self.residual.add_module("res_conv",
-                                     nn.Conv2d(in_channels,
-                                               out_channels,
-                                               kernel_size=1,
-                                               padding=0))
+        self.residual.add_module("res_conv",
+                                 nn.Conv2d(in_channels, out_channels,
+                                           kernel_size=1, padding=0))
+        self.residual.add_module("res_bn", nn.BatchNorm2d(out_channels))
 
     def forward(self, x):
         out = self.basic_conv(x)
@@ -46,39 +49,62 @@ class DoubleConv(nn.Module):
                  mid_channels=None, down=True):
         super().__init__()
 
-        if not mid_channels:
-            mid_channels = out_channels
-
+        # Main block
         self.double_conv = nn.Sequential()
-        self.double_conv.add_module("bn1", nn.BatchNorm2d(in_channels))
-        self.double_conv.add_module("lrelu1", nn.LeakyReLU(inplace=True))
+        self.residual = nn.Sequential()
 
         if down:
-            self.double_conv.add_module("maxpool1", nn.MaxPool2d(2))
-            self.double_conv.add_module("bn2", nn.BatchNorm2d(in_channels))
-            self.double_conv.add_module("lrelu2", nn.LeakyReLU(inplace=True))
-            self.double_conv.add_module("conv2",
-                                        nn.Conv2d(in_channels,
-                                                  out_channels,
-                                                  kernel_size=3,
-                                                  padding=1))
+            self.double_conv.add_module("down_bn1",
+                                        nn.BatchNorm2d(in_channels))
+            self.double_conv.add_module("down_relu1",
+                                        nn.LeakyReLU(inplace=True))
+            self.double_conv.add_module("down_maxpool1", nn.MaxPool2d(2))
+            self.double_conv.add_module("down_bn2",
+                                        nn.BatchNorm2d(in_channels))
+            self.double_conv.add_module("down_relu2",
+                                        nn.LeakyReLU(inplace=True))
+            self.double_conv.add_module("down_conv2",
+                                        nn.Conv2d(in_channels, out_channels,
+                                                  kernel_size=3, padding=1))
+            self.residual.add_module("down_res_conv",
+                                    nn.Conv2d(in_channels, out_channels,
+                                            kernel_size=1, stride=1,
+                                            padding=0))
+            self.residual.add_module("down_res_maxpool", nn.MaxPool2d(2))
+            self.residual.add_module("down_res_bn",
+                                    nn.BatchNorm2d(out_channels))
         else:
-            self.double_conv.add_module("conv1",
-                                        nn.Conv2d(in_channels,
-                                                  mid_channels,
-                                                  kernel_size=3,
-                                                  padding=1))
-            self.double_conv.add_module("bn2", nn.BatchNorm2d(mid_channels))
-            self.double_conv.add_module("lrelu2", nn.LeakyReLU(inplace=True))
-            self.double_conv.add_module("conv2",
-                                        nn.Conv2d(mid_channels,
-                                                  out_channels,
-                                                  kernel_size=3,
-                                                  padding=1))
+            if not mid_channels:
+                mid_channels = out_channels
+
+            self.double_conv.add_module("up_bn1", nn.BatchNorm2d(in_channels))
+            self.double_conv.add_module("up_lrelu1",
+                                        nn.LeakyReLU(inplace=True))
+            self.double_conv.add_module("up_conv1",
+                                        nn.Conv2d(in_channels, mid_channels,
+                                                  kernel_size=3, padding=1))
+            self.double_conv.add_module("up_bn2",
+                                        nn.BatchNorm2d(mid_channels))
+            self.double_conv.add_module("up_lrelu2",
+                                        nn.LeakyReLU(inplace=True))
+            self.double_conv.add_module("up_conv2",
+                                        nn.Conv2d(mid_channels, out_channels,
+                                                  kernel_size=3, padding=1))
+            self.residual.add_module("up_res_conv",
+                                    nn.Conv2d(in_channels, out_channels,
+                                            kernel_size=1, padding=0))
+            self.residual.add_module("up_res_bn",
+                                    nn.BatchNorm2d(out_channels))
+
 
     def forward(self, x):
-        return self.double_conv(x)
+        out = self.double_conv(x)
 
+        # Residual connection
+        x = self.residual(x)
+        out = torch.add(x, out)
+
+        return out
 
 class Down(nn.Module):
     """Downscaling with maxpool then double conv"""
@@ -87,23 +113,8 @@ class Down(nn.Module):
         super().__init__()
         self.conv = DoubleConv(in_channels, out_channels, down=True)
 
-        self.residual = nn.Sequential()
-        if in_channels != out_channels:
-            self.residual.add_module("res_conv",
-                                     nn.Conv2d(in_channels,
-                                               out_channels,
-                                               kernel_size=1,
-                                               padding=0))
-        self.residual.add_module("res_maxpool", nn.MaxPool2d(2))
-
     def forward(self, x):
-        out = self.conv(x)
-
-        # Residual connection
-        x = self.residual(x)
-        out = torch.add(x, out)
-
-        return out
+        return self.conv(x)
 
 class Up(nn.Module):
     """Upscaling then double conv"""
@@ -117,31 +128,12 @@ class Up(nn.Module):
             self.up = nn.Upsample(scale_factor=2,
                                   mode='bilinear',
                                   align_corners=True)
-            self.conv = DoubleConv(in_channels,
-                                   out_channels,
-                                   mid_channels=(in_channels // 2),
-                                   down=False)
+            self.conv = DoubleConv(in_channels, out_channels,
+                                   mid_channels=(in_channels // 2), down=False)
         else:
-            self.up = nn.ConvTranspose2d(in_channels // 2,
-                                         in_channels // 2,
-                                         kernel_size=2,
-                                         stride=2)
+            self.up = nn.ConvTranspose2d(in_channels // 2, in_channels // 2,
+                                         kernel_size=2, stride=2)
             self.conv = DoubleConv(in_channels, out_channels, down=False)
-
-        self.residual = nn.Sequential()
-        if in_channels != out_channels:
-            if bilinear:
-                self.residual.add_module("res_conv",
-                                         nn.Conv2d(in_channels,
-                                                   out_channels,
-                                                   kernel_size=1,
-                                                   padding=0))
-            else:
-                self.residual.add_module("res_conv",
-                                         nn.Conv2d(in_channels,
-                                                   out_channels,
-                                                   kernel_size=1,
-                                                   padding=0))
 
     def forward(self, x1, x2):
         x1 = self.up(x1)
@@ -157,10 +149,6 @@ class Up(nn.Module):
         x = torch.cat([x2, x1], dim=1)
 
         out = self.conv(x)
-
-        # Residual connection
-        x = self.residual(x)
-        out = torch.add(x, out)
 
         return out
 

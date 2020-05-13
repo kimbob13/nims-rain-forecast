@@ -140,8 +140,7 @@ if __name__ == '__main__':
     # Get a sample for getting shape of each tensor
     sample, _ = nims_train_dataset[0]
     if args.debug:
-        print('[{}] one images sample shape: {}'
-                .format(args.model, sample.shape))
+        print('[unet] one images sample shape:', sample.shape)
 
     # Create a model and criterion
     model = UNet(n_channels=sample.shape[0],

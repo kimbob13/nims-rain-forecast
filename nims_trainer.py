@@ -37,10 +37,11 @@ class NIMSTrainer:
 
             epoch_correct = epoch_correct.double()
             total_num = self.train_len * self.num_lat * self.num_lon
-            print('loss = {:.10f}, accuracy = {:.3f}%, f1 score = {:.10f}'
+            print('loss = {:.10f}\naccuracy = {:.3f}%'
                     .format(epoch_loss / self.train_len,
-                            (epoch_correct / total_num).item() * 100,
-                            epoch_f1_score / self.train_len))
+                            (epoch_correct / total_num).item() * 100))
+            print('f1 score = {:.10f}'
+                  .format(epoch_f1_score / self.train_len))
 
     def test(self):
         test_loss, test_correct, test_f1_score = \
