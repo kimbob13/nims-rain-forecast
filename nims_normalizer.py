@@ -1,65 +1,15 @@
 import torch
 from torch.utils.data import DataLoader
 
+from nims_dataset import NIMSDataset
+from nims_variable import read_variable_value, get_variable_name
+
 import xarray as xr
 import numpy as np
 
 from multiprocessing import Process, Queue, cpu_count
 import pickle
 import math
-
-from nims_dataset import NIMSDataset
-
-def read_variable(dataset, var_idx):
-    """
-    Read proper variable based on var_idx.
-    For example, if var_idx == 0, it should read 'rain' data,
-    and if var_idx == 4, it should read 'hel' data.
-
-    Variable List:
-    [0] : rain [1] : cape [2] : cin  [3] : swe [4]: hel
-    [5] : ct   [6] : vt   [7] : tt   [8] : si  [9]: ki
-    [10]: li   [11]: ti   [12]: ssi  [13]: pw
-
-    <Parameters>
-    dataset [xarray dataset]: dataset for one hour to extract data
-    var_idx [int]: index for variables list
-
-    <Return>
-    one_var_data [np.ndarray]: numpy array of value (CHW format)
-    """
-    assert var_idx >= 0 and var_idx <= 13
-
-    if var_idx == 0:
-        one_var_data = dataset.rain.values
-    elif var_idx == 1:
-        one_var_data = dataset.cape.values
-    elif var_idx == 2:
-        one_var_data = dataset.cin.values
-    elif var_idx == 3:
-        one_var_data = dataset.swe.values
-    elif var_idx == 4:
-        one_var_data = dataset.hel.values
-    elif var_idx == 5:
-        one_var_data = dataset.ct.values
-    elif var_idx == 6:
-        one_var_data = dataset.vt.values
-    elif var_idx == 7:
-        one_var_data = dataset.tt.values
-    elif var_idx == 8:
-        one_var_data = dataset.si.values
-    elif var_idx == 9:
-        one_var_data = dataset.ki.values
-    elif var_idx == 10:
-        one_var_data = dataset.li.values
-    elif var_idx == 11:
-        one_var_data = dataset.ti.values
-    elif var_idx == 12:
-        one_var_data = dataset.ssi.values
-    elif var_idx == 13:
-        one_var_data = dataset.pw.values
-
-    return one_var_data
 
 def partial_mean(pid, partial_path, unused, queue):
     mean_dict = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0,
@@ -70,7 +20,7 @@ def partial_mean(pid, partial_path, unused, queue):
     for i, path in enumerate(partial_path):
         dataset = xr.open_dataset(path)
         for var_idx in mean_dict:
-            data = read_variable(dataset, var_idx)
+            data = read_variable_value(dataset, var_idx)
 
             one_hour_mean = np.mean(data, dtype=np.float64)
             #print('[PID {} - i: {}] var_idx: {} - mean: {}'.format(pid, i, var_idx, one_hour_mean))
@@ -97,7 +47,7 @@ def partial_variance(pid, partial_path, total_mean, queue):
     for i, path in enumerate(partial_path):
         dataset = xr.open_dataset(path)
         for var_idx in variance_dict:
-            data = read_variable(dataset, var_idx)
+            data = read_variable_value(dataset, var_idx)
 
             one_hour_bias_square= np.square((data - total_mean[var_idx]),
                                             dtype=np.float64)
@@ -165,44 +115,6 @@ def calculation(partial_func, data_path, total_mean=None):
 
     return total_mean
 
-def get_variable_name(var_idx):
-    """
-    Variable List:
-    [0] : rain [1] : cape [2] : cin  [3] : swe [4]: hel
-    [5] : ct   [6] : vt   [7] : tt   [8] : si  [9]: ki
-    [10]: li   [11]: ti   [12]: ssi  [13]: pw
-    """
-    assert var_idx >= 0 and var_idx <= 13
-
-    if var_idx == 0:
-        return 'rain'
-    elif var_idx == 1:
-        return 'cape'
-    elif var_idx == 2:
-        return 'cin'
-    elif var_idx == 3:
-        return 'swe'
-    elif var_idx == 4:
-        return 'hel'
-    elif var_idx == 5:
-        return 'ct'
-    elif var_idx == 6:
-        return 'vt'
-    elif var_idx == 7:
-        return 'tt'
-    elif var_idx == 8:
-        return 'si'
-    elif var_idx == 9:
-        return 'ki'
-    elif var_idx == 10:
-        return 'li'
-    elif var_idx == 11:
-        return 'ti'
-    elif var_idx == 12:
-        return 'ssi'
-    elif var_idx == 13:
-        return 'pw'
-
 
 def print_stat(result_dict, data_type='train', stat_type='mean'):
     print('=' * 25, '{} {} RESULT'.format(data_type, stat_type), '=' * 25)
@@ -215,23 +127,18 @@ def print_stat(result_dict, data_type='train', stat_type='mean'):
     print()
 
 if __name__ == '__main__':
-    root_dir = '/home/kimbob/jupyter/weather_prediction/NIMS'
-    nims_train_data_path = NIMSDataset(model='unet',
-                                       window_size=1,
+    nims_train_data_path = NIMSDataset(window_size=1,
                                        target_num=1,
                                        variables=list(range(14)),
                                        train_year=(2009, 2017),
                                        train=True,
-                                       root_dir=root_dir,
                                        debug=True).data_path_list
     
-    nims_test_data_path = NIMSDataset(model='unet',
-                                      window_size=1,
+    nims_test_data_path = NIMSDataset(window_size=1,
                                       target_num=1,
                                       variables=list(range(14)),
                                       train_year=(2009, 2017),
                                       train=False,
-                                      root_dir=root_dir,
                                       debug=True).data_path_list
 
     print('train len: {}, test len: {}'.format(len(nims_train_data_path), len(nims_test_data_path)))

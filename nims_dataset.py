@@ -1,6 +1,8 @@
 import torch
 from torch.utils.data import Dataset
 
+from nims_variable import read_variable_value
+
 import numpy as np
 import xarray as xr
 
@@ -36,12 +38,16 @@ class NIMSDataset(Dataset):
         else:
             self.root_dir = root_dir
 
-        self.data_path_list = self.__set_data_path_list()
+        self._data_path_list = self.__set_data_path_list()
 
         assert len(self.variables) <= 14
         assert self.start_train_year <= self.end_train_year
         assert self.start_train_year >= START_YEAR
         assert self.end_train_year <= END_YEAR - 1
+
+    @property
+    def data_path_list(self):
+        return self._data_path_list
         
     def __set_default_root_dir(self):
         for p in pwd.getpwall():
@@ -107,14 +113,14 @@ class NIMSDataset(Dataset):
         return data_path_list
 
     def __len__(self):
-        return len(self.data_path_list) - self.window_size
+        return len(self._data_path_list) - self.window_size
 
     def __getitem__(self, idx):
-        images_window_path = self.data_path_list[idx:idx + self.window_size]
+        images_window_path = self._data_path_list[idx:idx + self.window_size]
 
         target_start_idx = idx + self.window_size
         target_end_idx = target_start_idx + self.target_num
-        target_window_path = self.data_path_list[target_start_idx:target_end_idx]
+        target_window_path = self._data_path_list[target_start_idx:target_end_idx]
 
         images = self._merge_window_data(images_window_path)
         target = self._merge_window_data(target_window_path, target=True)
@@ -145,17 +151,15 @@ class NIMSDataset(Dataset):
 
             if target:
                 # Use rain value as target
-                one_hour_data = self._read_variable_value(one_hour_dataset, 0)
+                one_hour_data = read_variable_value(one_hour_dataset, 0)
             else:
                 for var_idx in self.variables:
                     if var_idx == 0:
-                        one_hour_data = \
-                            self._read_variable_value(one_hour_dataset,
-                                                      var_idx)
+                        one_hour_data = read_variable_value(one_hour_dataset,
+                                                            var_idx)
                     else:
-                        one_var_data = \
-                            self._read_variable_value(one_hour_dataset,
-                                                      var_idx)
+                        one_var_data = read_variable_value(one_hour_dataset,
+                                                           var_idx)
                         one_hour_data = np.concatenate([one_hour_data,
                                                         one_var_data],
                                                        axis=0)
@@ -173,57 +177,6 @@ class NIMSDataset(Dataset):
         results = results.squeeze(1)
 
         return results
-
-    def _read_variable_value(self, one_hour_dataset, var_idx):
-        """
-        Read proper variable based on var_idx.
-        For example, if var_idx == 0, it should read 'rain' data,
-        and if var_idx == 4, it should read 'hel' data.
-
-        Variable List:
-        [0] : rain [1] : cape [2] : cin  [3] : swe [4]: hel
-        [5] : ct   [6] : vt   [7] : tt   [8] : si  [9]: ki
-        [10]: li   [11]: ti   [12]: ssi  [13]: pw
-
-        <Parameters>
-        one_hour_dataset [xarray dataset]: dataset for one hour to extract data
-        var_idx [int]: index for variables list
-
-        <Return>
-        one_var_data [np.ndarray]: numpy array of value (CHW format)
-        """
-        assert var_idx >= 0 and var_idx <= 13
-
-        if var_idx == 0:
-            one_var_data = one_hour_dataset.rain.values
-        elif var_idx == 1:
-            one_var_data = one_hour_dataset.cape.values
-        elif var_idx == 2:
-            one_var_data = one_hour_dataset.cin.values
-        elif var_idx == 3:
-            one_var_data = one_hour_dataset.swe.values
-        elif var_idx == 4:
-            one_var_data = one_hour_dataset.hel.values
-        elif var_idx == 5:
-            one_var_data = one_hour_dataset.ct.values
-        elif var_idx == 6:
-            one_var_data = one_hour_dataset.vt.values
-        elif var_idx == 7:
-            one_var_data = one_hour_dataset.tt.values
-        elif var_idx == 8:
-            one_var_data = one_hour_dataset.si.values
-        elif var_idx == 9:
-            one_var_data = one_hour_dataset.ki.values
-        elif var_idx == 10:
-            one_var_data = one_hour_dataset.li.values
-        elif var_idx == 11:
-            one_var_data = one_hour_dataset.ti.values
-        elif var_idx == 12:
-            one_var_data = one_hour_dataset.ssi.values
-        elif var_idx == 13:
-            one_var_data = one_hour_dataset.pw.values
-
-        return one_var_data
 
     def _to_pixel_wise_label(self, target):
         """
@@ -254,6 +207,10 @@ class NIMSDataset(Dataset):
                     target_label[lat][lon] = 2
                 elif value >= 2.5:
                     target_label[lat][lon] = 3
+                # if value >= 0 and value < 0.1:
+                #     target_label[lat][lon] = 0
+                # elif value >= 0.1:
+                #     target_label[lat][lon] = 1
                 else:
                     #print('Invalid target value:', value)
                     target_label[lat][lon] = 0

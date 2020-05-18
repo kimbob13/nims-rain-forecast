@@ -6,6 +6,7 @@ from model.unet_model import UNet
 from nims_dataset import NIMSDataset, ToTensor
 from nims_loss import RMSELoss, NIMSCrossEntropyLoss
 from nims_trainer import NIMSTrainer
+from nims_variable import parse_variables
 
 from torchsummary import summary
 try:
@@ -49,39 +50,6 @@ def parse_args():
     args = parser.parse_args()
 
     return args
-
-def parse_variables(variables_args):
-    """
-    Return list of variables index
-
-    <Parameters>
-    variables_args
-        - [int]: How many variables to use.
-        - [list[str]]: List of variable names to use
-
-    <Return>
-    variables [list[int]]: List of variable index
-    """
-    variables_dict = {'rain':  0, 'cape':  1, 'cin':  2, 'swe':  3, 'hel': 4,
-                      'ct'  :  5, 'vt'  :  6, 'tt' :  7, 'si' :  8, 'ki' : 9,
-                      'li'  : 10, 'ti'  : 11, 'ssi': 12, 'pw' : 13}
-
-    if len(variables_args) == 1:
-        assert variables_args[0].isdigit()
-        variables = list(range(int(variables_args[0])))
-    else:
-        # List of variable names to use
-        variables = set()
-        if 'rain' not in variables_args:
-            print("You don't add rain variable. It is added by default")
-            variables.add(variables_dict['rain'])
-
-        for var_name in variables_args:
-            variables.add(variables_dict[var_name])
-
-        variables = sorted(list(variables))
-
-    return variables
 
 def set_experiment_name(args):
     """
