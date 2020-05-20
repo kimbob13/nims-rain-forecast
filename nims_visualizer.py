@@ -1,5 +1,7 @@
+import os
 import numpy as np
 import xarray as xr
+import seaborn as sns
 import matplotlib.pyplot as plt
 
 from nims_dataset import NIMSDataset
@@ -7,6 +9,38 @@ from nims_variable import *
 
 import argparse
 from multiprocessing import Process, Queue, cpu_count
+
+
+def plot_map(partial_path, date, variable, queue=None):
+    date_path = [p for p in partial_path if p.split('/')[-2]==date]
+    
+    one_day_value = np.array([])
+    
+    for i, path in enumerate(date_path):
+        one_hour = xr.open_dataset(path)
+        one_hour_value = read_variable_value(one_hour, variable)
+
+        one_day_value = one_hour_value if i==0 else np.concatenate((one_day_value, one_hour_value), axis=0)
+
+    fig, axes = plt.subplots(4, 6, sharex=True, sharey=True)
+    cbar_ax = fig.add_axes([.91, .3, .03, .4])
+
+    max_one_day_value = np.amax(one_day_value)
+    
+    for i, ax in enumerate(axes.flat):
+        plt.setp(ax.get_xticklabels(), visible=False)
+        plt.setp(ax.get_yticklabels(), visible=False)
+        ax.tick_params(axis='both', which='both', length=0)
+        sns.heatmap(one_day_value[i], ax=ax,
+                    cbar=i == 0, cmap="Blues",
+                    vmin=0, vmax=max_one_day_value/2., # vmax = 1 or max_one_day_value
+                    cbar_ax=None if i else cbar_ax)
+
+    fig.tight_layout(rect=[0, 0, .9, 1])
+    
+    # Save plot map
+    var_name = get_variable_name(variable)
+    fig.savefig('./plot/{}_{}_map.png'.format(date, var_name))
 
 def get_avg_and_max(partial_path, variables, queue=None):
     max_value_per_day = []
@@ -124,10 +158,14 @@ if __name__ == '__main__':
     parser.add_argument('--variables', type=str, default='rain',
                         help='which variables to use (rain, cape, etc.). \
                               must specify one variable name')
+    parser.add_argument('--date', type=str, default='20170626',
+                        help='when date to be plotted')
+    
     args = parser.parse_args()
     variables_args = [args.variables]
     variables = parse_variables(variables_args)
     assert len(variables) == 1
+    date = args.date
 
     nims_train_data_path = NIMSDataset(window_size=1,
                                        target_num=1,
@@ -135,7 +173,14 @@ if __name__ == '__main__':
                                        train_year=(2017, 2017),
                                        train=True,
                                        debug=False).data_path_list
-
+    
+    # Check plot directory
+    if not os.path.isdir('./plot'):
+        os.mkdir('./plot')
+        
+    # Plot variable map (one day)
+    plot_map(nims_train_data_path, date=date, variable=variables[0])
+    
     # Single core version
     #max_value_per_day, avg_value_per_day = get_avg_and_max(nims_train_data_path, variables)
 
