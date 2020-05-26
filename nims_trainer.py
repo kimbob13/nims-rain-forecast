@@ -37,11 +37,12 @@ class NIMSTrainer:
 
             epoch_correct = epoch_correct.double()
             total_num = self.train_len * self.num_lat * self.num_lon
-            print('loss = {:.10f}\naccuracy = {:.3f}%'
-                    .format(epoch_loss / self.train_len,
-                            (epoch_correct / total_num).item() * 100))
-            print('f1 score = {:.10f}'
-                  .format(epoch_f1_score / self.train_len))
+            print('[loss] {:.10f}    [accuracy] = {:.3f}%'
+                  .format(epoch_loss / self.train_len,
+                          (epoch_correct / total_num).item() * 100))
+            print('[f1 score (macro)] {:.10f}    [f1 score (micro)] {:.10f}'
+                  .format(epoch_f1_score[0] / self.train_len,
+                          epoch_f1_score[1] / self.train_len))
 
     def test(self):
         test_loss, test_correct, test_f1_score = \
@@ -57,16 +58,19 @@ class NIMSTrainer:
     def _unet_epoch(self, data_loader, train):
         epoch_loss = 0.0
         epoch_correct = 0
-        epoch_f1_score = 0.0
+        epoch_macro_f1_score = 0.0
+        epoch_micro_f1_score = 0.0
 
-        for images, target in tqdm(data_loader):
+        pbar = tqdm(data_loader)
+        for images, target in pbar:
             images = images.to(self.device)
             target = target.type(torch.LongTensor).to(self.device)
 
             output = self.model(images)
             loss, correct, f1_score = self.criterion(output, target)
             epoch_correct += correct
-            epoch_f1_score += f1_score
+            epoch_macro_f1_score += f1_score[0]
+            epoch_micro_f1_score += f1_score[1]
 
             if train:
                 self.optimizer.zero_grad()
@@ -74,5 +78,10 @@ class NIMSTrainer:
                 self.optimizer.step()
 
             epoch_loss += loss.item()
+
+            pbar.set_description("loss = %.3f, f1 (macro) = %.5f, f1 (micro) = %.5f" \
+                                  %(loss, f1_score[0], f1_score[1]))
+        
+        epoch_f1_score = (epoch_macro_f1_score, epoch_micro_f1_score)
 
         return epoch_loss, epoch_correct, epoch_f1_score

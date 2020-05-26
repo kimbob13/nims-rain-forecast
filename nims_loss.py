@@ -32,8 +32,16 @@ class NIMSCrossEntropyLoss(nn.Module):
         pred_labels = pred_labels.squeeze(1).flatten().detach().cpu().numpy()
         targets = targets.flatten().detach().cpu().numpy()
 
-        _f1_score = f1_score(targets, pred_labels, average='macro')
-        #print('[_get_f1_score] f1 score: {}'.format(_f1_score))
+        # Remove 0 class for f1 score evaluation
+        nonzero_target_idx = targets.nonzero()
+        pred_labels = pred_labels[nonzero_target_idx]
+        targets = targets[nonzero_target_idx]
+
+        _macro_f1_score = f1_score(targets, pred_labels, average='macro')
+        _micro_f1_score = f1_score(targets, pred_labels, average='micro')
+        #print('[_get_f1_score] macro f1: {}, micro f1: {}'.format(_macro_f1_score, _micro_f1_score))
+
+        _f1_score = (_macro_f1_score, _micro_f1_score)
 
         return _f1_score
 
