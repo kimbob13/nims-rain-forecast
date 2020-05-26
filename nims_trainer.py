@@ -32,41 +32,26 @@ class NIMSTrainer:
         for epoch in range(1, self.num_epochs + 1):
             # Run one epoch
             print('=' * 25, 'Epoch [{}]'.format(epoch), '=' * 25)
-            epoch_loss, epoch_correct, epoch_f1_score = \
-                    self._unet_epoch(self.train_loader, train=True)
+            epoch_loss = self._conv_lstm_epoch(self.train_loader, train=True)
 
-            epoch_correct = epoch_correct.double()
-            total_num = self.train_len * self.num_lat * self.num_lon
-            print('loss = {:.10f}\naccuracy = {:.3f}%'
-                    .format(epoch_loss / self.train_len,
-                            (epoch_correct / total_num).item() * 100))
-            print('f1 score = {:.10f}'
-                  .format(epoch_f1_score / self.train_len))
+            print('loss = {:.10f}'.format(epoch_loss / self.train_len))
 
     def test(self):
-        test_loss, test_correct, test_f1_score = \
-                self._unet_epoch(self.test_loader, train=False)
+        test_loss = self._conv_lstm_epoch(self.test_loader, train=False)
 
         test_correct = test_correct.double()
         total_num = self.test_len * self.num_lat * self.num_lon
-        print('Test loss = {:.10f}, accuracy = {:3f}%, f1_score = {:.10f}'
-                .format(test_loss / self.test_len, 
-                        (test_correct / total_num).item() * 100,
-                        test_f1_score / self.test_len))
+        print('Test loss = {:.10f}'.format(test_loss / self.test_len))
 
-    def _unet_epoch(self, data_loader, train):
+    def _conv_lstm_epoch(self, data_loader, train):
         epoch_loss = 0.0
-        epoch_correct = 0
-        epoch_f1_score = 0.0
 
         for images, target in tqdm(data_loader):
             images = images.to(self.device)
             target = target.type(torch.LongTensor).to(self.device)
 
             output = self.model(images)
-            loss, correct, f1_score = self.criterion(output, target)
-            epoch_correct += correct
-            epoch_f1_score += f1_score
+            loss = self.criterion(output[1][1], target)
 
             if train:
                 self.optimizer.zero_grad()
@@ -75,4 +60,4 @@ class NIMSTrainer:
 
             epoch_loss += loss.item()
 
-        return epoch_loss, epoch_correct, epoch_f1_score
+        return epoch_loss

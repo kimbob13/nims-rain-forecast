@@ -32,12 +32,22 @@ class NIMSCrossEntropyLoss(nn.Module):
         pred_labels = pred_labels.squeeze(1).flatten().detach().cpu().numpy()
         targets = targets.flatten().detach().cpu().numpy()
 
-        _f1_score = f1_score(targets, pred_labels, average='macro')
+        _f1_score = f1_score(targets, pred_labels, average='micro')
         #print('[_get_f1_score] f1 score: {}'.format(_f1_score))
 
         return _f1_score
 
     def forward(self, preds, targets):
+        """
+        <Parameters>
+        preds [torch.tensor]: NCHW format. N(batch size)
+        target [torch.tensor]: NHW format. N(batch size)
+
+        <Return>
+        loss [float]
+        correct [float]: % of correct prediction
+        f1_score [float]: micro f1 score
+        """
         correct = self._get_num_correct(preds, targets)
         f1_score = self._get_f1_score(preds, targets)
         #print('[cross_entropy] preds shape:', preds.shape)

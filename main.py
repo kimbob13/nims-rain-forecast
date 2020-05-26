@@ -2,7 +2,7 @@ import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
-from model.unet_model import UNet
+from model.conv_lstm import ConvLSTM
 from nims_dataset import NIMSDataset, ToTensor
 from nims_loss import RMSELoss, NIMSCrossEntropyLoss
 from nims_trainer import NIMSTrainer
@@ -111,11 +111,13 @@ if __name__ == '__main__':
         print('[unet] one images sample shape:', sample.shape)
 
     # Create a model and criterion
-    model = UNet(n_channels=sample.shape[0],
-                 n_classes=4,
-                 n_blocks=args.n_blocks,
-                 start_channels=args.start_channels)
-    criterion = NIMSCrossEntropyLoss()
+    model = ConvLSTM(input_channels=1,
+                     hidden_channels=[128, 64, 64],
+                     kernel_size=5,
+                     step=9,
+                     effective_step=[2, 4, 8],
+                     device=device)
+    criterion = RMSELoss()
 
     num_lat = sample.shape[1] # the number of latitudes (253)
     num_lon = sample.shape[2] # the number of longitudes (149)
@@ -123,6 +125,7 @@ if __name__ == '__main__':
     if args.debug:
         model.to(device)
         summary(model, input_size=sample.shape)
+        import sys; sys.exit()
 
     # Create dataloaders
     train_loader = DataLoader(nims_train_dataset, batch_size=args.batch_size,
