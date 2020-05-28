@@ -101,22 +101,6 @@ class ConvLSTM(nn.Module):
 
             outputs.append(x)
 
-            # for i in range(self.num_layers):
-            #     # all cells are initialized in the first sequence
-            #     name = 'cell{}'.format(i)
-            #     if seq == 0:
-            #         bsize, _, height, width = x.size()
-            #         (h, c) = getattr(self, name).init_hidden(batch_size=bsize, hidden=self.hidden_channels[i],
-            #                                                  shape=(height, width))
-            #         internal_state.append((h, c))
-
-            #     # do forward
-            #     (h, c) = internal_state[i]
-            #     x, new_c = getattr(self, name)(x, h, c)
-            #     internal_state[i] = (x, new_c)
-
-            # outputs.append(x)
-
         #print('outputs shape: {}, outputs len: {}\ninternal state len: {}'.format((torch.stack(outputs)).shape, len(outputs), len(internal_state)))
 
         return torch.stack(outputs), (x, new_c)
@@ -160,6 +144,10 @@ class EncoderForecaster(nn.Module):
             f_conv.add_module("f_relu{}".format(i + 1),
                               nn.ReLU(inplace=True))
             self.forecaster_conv.append(f_conv)
+
+    @property
+    def name(self):
+        return 'convlstm'
 
     def forward_one_conv(self, x, block_conv):
         seq_num, batch_size, input_channel, height, width = x.size()

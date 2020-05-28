@@ -1,7 +1,10 @@
 import torch
 
+from nims_logger import NIMSLogger
+
 from torchsummary import summary
 from tqdm import tqdm
+
 
 __all__ = ['NIMSTrainer']
 
@@ -25,46 +28,57 @@ class NIMSTrainer:
 
         self.num_lat = num_lat
         self.num_lon = num_lon
+        self.one_hour_pixel = num_lat * num_lon
 
         self.model.to(self.device)
+
+        if model.name == 'unet':
+            self.nims_logger = NIMSLogger(loss=True, correct=True,
+                                          macro_f1=True, micro_f1=True,
+                                          target_num=self.target_num,
+                                          batch_size=args.batch_size,
+                                          one_hour_pixel=self.one_hour_pixel)
+        elif model.name == 'convlstm':
+            self.nims_logger = NIMSLogger(loss=True, correct=False,
+                                          macro_f1=False, micro_f1=False,
+                                          target_num=self.target_num,
+                                          batch_size=args.batch_size,
+                                          one_hour_pixel=self.one_hour_pixel)
 
     def train(self):
         for epoch in range(1, self.num_epochs + 1):
             # Run one epoch
-            print('=' * 25, 'Epoch [{}]'.format(epoch), '=' * 25)
-            epoch_loss = self._conv_lstm_epoch(self.train_loader, train=True)
 
-            print('loss = {:.10f}'.format(epoch_loss / self.train_len))
+            print('=' * 25,
+                  'Epoch {} / {}'.format(epoch, self.num_epochs),
+                  '=' * 25)
+            self._epoch(self.train_loader, train=True)
+            self.nims_logger.print_stat(self.train_len)
 
     def test(self):
-        test_loss = self._conv_lstm_epoch(self.test_loader, train=False)
+        print('=' * 25, 'Test', '=' * 25)
+        self._epoch(self.test_loader, train=False)
+        self.nims_logger.print_stat(self.test_len)
 
-        test_correct = test_correct.double()
-        total_num = self.test_len * self.num_lat * self.num_lon
-        print('Test loss = {:.10f}'.format(test_loss / self.test_len))
-
-    def _conv_lstm_epoch(self, data_loader, train):
-        epoch_loss = 0.0
-
+    def _epoch(self, data_loader, train):
         pbar = tqdm(data_loader)
         for images, target in pbar:
-            images = images.unsqueeze(2).numpy().transpose([1, 0, 2, 3, 4])
-            images = (torch.from_numpy(images)).to(self.device)
-
-            target = target.unsqueeze(2).numpy().transpose([1, 0, 2, 3, 4])
-            target = (torch.from_numpy(target)).to(self.device)
-            #print('images: {}, target: {}'.format(images.shape, target.shape))
+            if self.model.name == 'unet':
+                images = images.to(self.device)
+                target = target.type(torch.LongTensor).to(self.device)
+            
+            elif self.model.name == 'convlstm':
+                # Dataloader for ConvLSTM outputs images and target shape as NSCHW format.
+                # We should change this to SNCHW format.
+                images = images.permute(1, 0, 2, 3, 4).to(self.device)
+                target = target.permute(1, 0, 2, 3, 4).to(self.device)
 
             output = self.model(images)
-            #print('output:', output.shape)
-            loss = self.criterion(output, target)
+            loss = self.criterion(output, target, logger=self.nims_logger)
 
             if train:
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
 
-            epoch_loss += loss.item()
-            pbar.set_description("loss = %.5f" %(loss))
-
-        return epoch_loss
+            pbar.set_description(self.nims_logger.latest_stat)
