@@ -3,8 +3,9 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 
 from model.unet_model import UNet
+from model.conv_lstm import EncoderForecaster
 from nims_dataset import NIMSDataset, ToTensor
-from nims_loss import RMSELoss, NIMSCrossEntropyLoss
+from nims_loss import MSELoss, NIMSCrossEntropyLoss
 from nims_trainer import NIMSTrainer
 from nims_variable import parse_variables
 
@@ -22,6 +23,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='NIMS rainfall data prediction')
 
     common = parser.add_argument_group('common')
+    common.add_argument('--model', default='unet', type=str, help='which model to use')
     common.add_argument('--device', default='0', type=str, help='which device to use')
     common.add_argument('--dataset_dir', type=str, help='root directory of dataset')
     common.add_argument('--num_workers', default=5, type=int, help='# of workers for dataloader')
@@ -58,15 +60,26 @@ def set_experiment_name(args):
     <Parameters>
     args [argparse]: parsed argument
     """
-    experiment_name = 'nims_nb{}_ch{}_ws{}_ep{}_bs{}_{}_{}_{}' \
-                      .format(args.n_blocks,
-                              args.start_channels,
-                              args.window_size,
-                              args.num_epochs,
-                              args.batch_size,
-                              args.optimizer,
-                              args.start_train_year,
-                              args.end_train_year)
+    train_year_range = str(args.start_train_year)[-2:] + \
+                       str(args.end_train_year)[-2:]
+
+    if args.model == 'unet':
+        experiment_name = 'nims_unet_nb{}_ch{}_ws{}_tn{}_bs{}_{}_{}' \
+                          .format(args.n_blocks,
+                                  args.start_channels,
+                                  args.window_size,
+                                  args.target_num,
+                                  args.batch_size,
+                                  args.optimizer,
+                                  train_year_range)
+
+    elif args.model == 'convlstm':
+        experiment_name = 'nims_convlstm_ws{}_tn{}_bs{}_{}_{}' \
+                          .format(args.window_size,
+                                  args.target_num,
+                                  args.batch_size,
+                                  args.optimizer,
+                                  train_year_range)
 
     if args.debug:
         experiment_name += '_debug'
@@ -85,7 +98,8 @@ if __name__ == '__main__':
     variables = parse_variables(args.variables)
 
     # Train and test dataset
-    nims_train_dataset = NIMSDataset(window_size=args.window_size,
+    nims_train_dataset = NIMSDataset(model=args.model,
+                                     window_size=args.window_size,
                                      target_num=args.target_num,
                                      variables=variables,
                                      train_year=(args.start_train_year,
@@ -95,7 +109,8 @@ if __name__ == '__main__':
                                      root_dir=args.dataset_dir,
                                      debug=args.debug)
     
-    nims_test_dataset  = NIMSDataset(window_size=args.window_size,
+    nims_test_dataset  = NIMSDataset(model=args.model,
+                                     window_size=args.window_size,
                                      target_num=args.target_num,
                                      variables=variables,
                                      train_year=(args.start_train_year,
@@ -111,11 +126,23 @@ if __name__ == '__main__':
         print('[unet] one images sample shape:', sample.shape)
 
     # Create a model and criterion
-    model = UNet(n_channels=sample.shape[0],
-                 n_classes=4,
-                 n_blocks=args.n_blocks,
-                 start_channels=args.start_channels)
-    criterion = NIMSCrossEntropyLoss()
+    if args.model == 'unet':
+        model = UNet(n_channels=sample.shape[0],
+                     n_classes=4,
+                     n_blocks=args.n_blocks,
+                     start_channels=args.start_channels,
+                     target_num=args.target_num)
+        criterion = NIMSCrossEntropyLoss()
+
+    elif args.model == 'convlstm':
+        assert args.window_size == args.target_num
+
+        model = EncoderForecaster(input_channels=1,
+                                  hidden_channels=[64, 128],
+                                  kernel_size=3,
+                                  seq_len=args.window_size,
+                                  device=device)
+        criterion = MSELoss()
 
     num_lat = sample.shape[1] # the number of latitudes (253)
     num_lon = sample.shape[2] # the number of longitudes (149)

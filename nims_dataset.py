@@ -14,12 +14,14 @@ __all__ = ['NIMSDataset', 'ToTensor']
 START_YEAR = 2009
 END_YEAR = 2018
 NORMAL_YEAR_DAY = 365
+LEAP_YEAR_DAY = 366
 
 
 class NIMSDataset(Dataset):
-    def __init__(self, window_size, target_num, variables,
+    def __init__(self, model, window_size, target_num, variables,
                  train_year=(2009, 2017), train=True, transform=None,
                  root_dir=None, debug=False):
+        self.model = model
         self.window_size = window_size
         self.target_num = target_num
         self.variables = variables
@@ -77,10 +79,6 @@ class NIMSDataset(Dataset):
             elif self.end_train_year < 2012:
                 end_day -= 2
 
-            data_dirs = data_dirs[start_day:end_day]
-
-            if self.debug:
-                print('train start: {}, end: {}'.format(data_dirs[0], data_dirs[-1]))
         else:
             start_day = (self.test_year - START_YEAR) * NORMAL_YEAR_DAY
 
@@ -90,15 +88,19 @@ class NIMSDataset(Dataset):
                 start_day += 2
 
             if self.test_year in (2012, 2016):
-                end_day = start_day + 366
+                end_day = start_day + LEAP_YEAR_DAY
             else:
-                end_day = start_day + 365
+                end_day = start_day + NORMAL_YEAR_DAY
 
-            data_dirs = data_dirs[start_day:end_day]
+        data_dirs = data_dirs[start_day:end_day]
 
-            if self.debug:
-                print('test start: {}, end: {}'.format(data_dirs[0], data_dirs[-1]))
+        if self.debug:
+            if self.train:
+                print('[NIMSDataset] train start: {}, end: {}'.format(data_dirs[0], data_dirs[-1]))
+            else:
+                print('[NIMSDataset] test start: {}, end: {}'.format(data_dirs[0], data_dirs[-1]))
 
+        # Build data path list
         data_path_list = []
         for data_dir in data_dirs:
             curr_data_path_list = [os.path.join(data_dir, f) \
@@ -106,25 +108,29 @@ class NIMSDataset(Dataset):
             data_path_list += curr_data_path_list
 
         if self.debug:
-            print('[{}] first day: {}, last day: {}'
-                  .format('train' if self.train else 'test',
+            print('[NIMSDataset] {} - first day: {}, last day: {}'
+                  .format('Train' if self.train else 'Test',
                           data_path_list[0], data_path_list[-1]))
 
         return data_path_list
 
     def __len__(self):
-        return len(self._data_path_list) - self.window_size
+        return len(self._data_path_list) - self.window_size - \
+               (self.target_num - 1)
 
     def __getitem__(self, idx):
+        # Get images (train data) window path
         images_window_path = self._data_path_list[idx:idx + self.window_size]
 
+        # Get target window path
         target_start_idx = idx + self.window_size
         target_end_idx = target_start_idx + self.target_num
         target_window_path = self._data_path_list[target_start_idx:target_end_idx]
 
         images = self._merge_window_data(images_window_path)
         target = self._merge_window_data(target_window_path, target=True)
-        target = self._to_pixel_wise_label(target)
+
+        images, target = self._to_model_specific_tensor(images, target)
 
         if self.transform:
             images = self.transform(images)
@@ -142,9 +148,7 @@ class NIMSDataset(Dataset):
                        target data only use rain data
 
         <Return>
-        results [np.ndarray]
-            - model == stconvs2s: result array in CDHW format
-            - model == unet: result array in CHW format
+        results [np.ndarray]: SCHW format
         """
         for i, data_path in enumerate(window_path):
             one_hour_dataset = xr.open_dataset(data_path)
@@ -171,49 +175,73 @@ class NIMSDataset(Dataset):
             else:
                 results = np.concatenate([results, one_hour_data], axis=0)
 
-        # We change each tensor to CWH format when the model is UNet
-        # window_size is serves as channel in UNet
-        #assert self.window_size == 1
-        results = results.squeeze(1)
-
         return results
+    
+    def _to_model_specific_tensor(self, images, target):
+        """
+        Change images and target tensor to model specific tensor
+        i.e. change the shape of images and target
+
+        <Parameters>
+        images [np.ndarray]: SCHW format (S: window size)
+        target [np.ndarray]: SCHW format (S: window size)
+
+        <Return>
+        model == unet:
+            images [np.ndarray]: SHW format
+            target [np.ndarray]: SHW format
+        model == convlstm
+            images [np.ndarray]: SCHW format
+            target [np.ndarray]: SCHW format
+        """
+        if self.model == 'unet':
+            # We change each tensor to CWH format when the model is UNet
+            # window_size is serves as channel in UNet
+            #assert self.window_size == 1
+            images = images.squeeze(1)
+            target = target.squeeze(1)
+            target = self._to_pixel_wise_label(target)
+
+        elif self.model == 'convlstm':
+            # Just return original images and target
+            pass
+
+        return images, target
 
     def _to_pixel_wise_label(self, target):
         """
         Based on value in each target pixel,
-        change target tensor to pixel-wise label value
+        change target tensor to pixel-wise label value.
+        Used for UNet model.
 
         <Parameters>
-        target [np.ndarray]: CHW format, C must be 1
+        target [np.ndarray]: SHW format (S: window size)
 
         <Return>
-        results [np.ndarray]: HW format
+        results [np.ndarray]: SHW format
         """
-        assert target.shape[0] == 1
-        assert self.target_num == 1
+        target_label = np.zeros([target.shape[0], target.shape[1], target.shape[2]])
 
-        target = target.squeeze(0)
-        target_label = np.zeros([target.shape[0], target.shape[1]])
+        for seq in range(target.shape[0]):
+            for lat in range(target.shape[1]):
+                for lon in range(target.shape[2]):
+                    value = target[seq][lat][lon]
 
-        for lat in range(target.shape[0]):
-            for lon in range(target.shape[1]):
-                value = target[lat][lon]
-
-                if value >= 0 and value < 0.1:
-                    target_label[lat][lon] = 0
-                elif value >= 0.1 and value < 1.0:
-                    target_label[lat][lon] = 1
-                elif value >= 1.0 and value < 2.5:
-                    target_label[lat][lon] = 2
-                elif value >= 2.5:
-                    target_label[lat][lon] = 3
-                # if value >= 0 and value < 0.1:
-                #     target_label[lat][lon] = 0
-                # elif value >= 0.1:
-                #     target_label[lat][lon] = 1
-                else:
-                    #print('Invalid target value:', value)
-                    target_label[lat][lon] = 0
+                    if value >= 0 and value < 0.1:
+                        target_label[seq][lat][lon] = 0
+                    elif value >= 0.1 and value < 1.0:
+                        target_label[seq][lat][lon] = 1
+                    elif value >= 1.0 and value < 2.5:
+                        target_label[seq][lat][lon] = 2
+                    elif value >= 2.5:
+                        target_label[seq][lat][lon] = 3
+                    # if value >= 0 and value < 0.1:
+                    #     target_label[seq][lat][lon] = 0
+                    # elif value >= 0.1:
+                    #     target_label[seq][lat][lon] = 1
+                    else:
+                        #print('Invalid target value:', value)
+                        target_label[seq][lat][lon] = 0
 
         return target_label
 
