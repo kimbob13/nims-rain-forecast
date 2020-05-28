@@ -48,9 +48,7 @@ class NIMSTrainer:
     def train(self):
         for epoch in range(1, self.num_epochs + 1):
             # Run one epoch
-
-            print('=' * 25,
-                  'Epoch {} / {}'.format(epoch, self.num_epochs),
+            print('=' * 25, 'Epoch {} / {}'.format(epoch, self.num_epochs),
                   '=' * 25)
             self._epoch(self.train_loader, train=True)
             self.nims_logger.print_stat(self.train_len)

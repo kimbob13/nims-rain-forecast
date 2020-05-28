@@ -10,8 +10,8 @@ from nims_loss import MSELoss, NIMSCrossEntropyLoss
 from nims_trainer import NIMSTrainer
 from nims_variable import parse_variables
 
-from torchsummary import summary
 try:
+    from torchsummary import summary
     import setproctitle
 except:
     pass
@@ -124,7 +124,7 @@ if __name__ == '__main__':
     # Get a sample for getting shape of each tensor
     sample, _ = nims_train_dataset[0]
     if args.debug:
-        print('[unet] one images sample shape:', sample.shape)
+        print('[main] one images sample shape:', sample.shape)
 
     # Create a model and criterion
     if args.model == 'unet':
@@ -135,18 +135,32 @@ if __name__ == '__main__':
                      target_num=args.target_num)
         criterion = NIMSCrossEntropyLoss()
 
+        num_lat = sample.shape[1] # the number of latitudes (253)
+        num_lon = sample.shape[2] # the number of longitudes (149)
+
     elif args.model == 'convlstm':
         assert args.window_size == args.target_num
 
-        model = EncoderForecaster(input_channels=1,
+        model = EncoderForecaster(input_channels=sample.shape[1],
                                   hidden_channels=[64, 128],
                                   kernel_size=3,
                                   seq_len=args.window_size,
                                   device=device)
         criterion = MSELoss()
 
-    num_lat = sample.shape[1] # the number of latitudes (253)
-    num_lon = sample.shape[2] # the number of longitudes (149)
+        num_lat = sample.shape[2] # the number of latitudes (253)
+        num_lon = sample.shape[3] # the number of longitudes (149)
+
+
+    if args.debug:
+        # XXX: Currently, torchsummary doesn't run on ConvLSTM
+        print('[main] num_lat: {}, num_lon: {}'.format(num_lat, num_lon))
+        if args.model == 'unet':
+            model.to(device)
+            try:
+                summary(model, input_size=sample.shape)
+            except:
+                print('If you want to see summary of model, install torchsummary')
 
     # Create dataloaders
     train_loader = DataLoader(nims_train_dataset, batch_size=args.batch_size,
