@@ -1,8 +1,9 @@
 import torch
+import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
-from model.conv_lstm import ConvLSTM
+from model.conv_lstm import EncoderForecaster
 from nims_dataset import NIMSDataset, ToTensor
 from nims_loss import RMSELoss, NIMSCrossEntropyLoss
 from nims_trainer import NIMSTrainer
@@ -22,6 +23,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='NIMS rainfall data prediction')
 
     common = parser.add_argument_group('common')
+    common.add_argument('--model', default='unet', type=str, help='which model to use')
     common.add_argument('--device', default='0', type=str, help='which device to use')
     common.add_argument('--dataset_dir', type=str, help='root directory of dataset')
     common.add_argument('--num_workers', default=5, type=int, help='# of workers for dataloader')
@@ -32,7 +34,7 @@ def parse_args():
     unet.add_argument('--start_channels', default=16, type=int, help='# of channels after first block of unet')
 
     nims = parser.add_argument_group('nims dataset related')
-    nims.add_argument('--window_size', default=1, type=int, help='# of input sequences in time')
+    nims.add_argument('--window_size', default=10, type=int, help='# of input sequences in time')
     nims.add_argument('--target_num', default=1, type=int, help='# of output sequences to evaluate')
     nims.add_argument('--variables', nargs='+',
                       help='which variables to use (rain, cape, etc.). \
@@ -85,7 +87,8 @@ if __name__ == '__main__':
     variables = parse_variables(args.variables)
 
     # Train and test dataset
-    nims_train_dataset = NIMSDataset(window_size=args.window_size,
+    nims_train_dataset = NIMSDataset(model=args.model,
+                                     window_size=args.window_size,
                                      target_num=args.target_num,
                                      variables=variables,
                                      train_year=(args.start_train_year,
@@ -95,7 +98,8 @@ if __name__ == '__main__':
                                      root_dir=args.dataset_dir,
                                      debug=args.debug)
     
-    nims_test_dataset  = NIMSDataset(window_size=args.window_size,
+    nims_test_dataset  = NIMSDataset(model=args.model,
+                                     window_size=args.window_size,
                                      target_num=args.target_num,
                                      variables=variables,
                                      train_year=(args.start_train_year,
@@ -111,21 +115,15 @@ if __name__ == '__main__':
         print('[unet] one images sample shape:', sample.shape)
 
     # Create a model and criterion
-    model = ConvLSTM(input_channels=1,
-                     hidden_channels=[128, 64, 64],
-                     kernel_size=5,
-                     step=9,
-                     effective_step=[2, 4, 8],
-                     device=device)
-    criterion = RMSELoss()
+    model = EncoderForecaster(input_channels=1,
+                              hidden_channels=[64, 128],
+                              kernel_size=3,
+                              seq_len=args.window_size,
+                              device=device)
+    criterion = nn.MSELoss()
 
     num_lat = sample.shape[1] # the number of latitudes (253)
     num_lon = sample.shape[2] # the number of longitudes (149)
-
-    if args.debug:
-        model.to(device)
-        summary(model, input_size=sample.shape)
-        import sys; sys.exit()
 
     # Create dataloaders
     train_loader = DataLoader(nims_train_dataset, batch_size=args.batch_size,

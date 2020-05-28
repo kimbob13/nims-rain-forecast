@@ -17,9 +17,10 @@ NORMAL_YEAR_DAY = 365
 
 
 class NIMSDataset(Dataset):
-    def __init__(self, window_size, target_num, variables,
+    def __init__(self, model, window_size, target_num, variables,
                  train_year=(2009, 2017), train=True, transform=None,
                  root_dir=None, debug=False):
+        self.model = model
         self.window_size = window_size
         self.target_num = target_num
         self.variables = variables
@@ -124,7 +125,8 @@ class NIMSDataset(Dataset):
 
         images = self._merge_window_data(images_window_path)
         target = self._merge_window_data(target_window_path, target=True)
-        target = self._to_pixel_wise_label(target)
+        if self.model == 'unet':
+            target = self._to_pixel_wise_label(target)
 
         if self.transform:
             images = self.transform(images)

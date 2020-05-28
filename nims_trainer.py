@@ -46,12 +46,18 @@ class NIMSTrainer:
     def _conv_lstm_epoch(self, data_loader, train):
         epoch_loss = 0.0
 
-        for images, target in tqdm(data_loader):
-            images = images.to(self.device)
-            target = target.type(torch.LongTensor).to(self.device)
+        pbar = tqdm(data_loader)
+        for images, target in pbar:
+            images = images.unsqueeze(2).numpy().transpose([1, 0, 2, 3, 4])
+            images = (torch.from_numpy(images)).to(self.device)
+
+            target = target.unsqueeze(2).numpy().transpose([1, 0, 2, 3, 4])
+            target = (torch.from_numpy(target)).to(self.device)
+            #print('images: {}, target: {}'.format(images.shape, target.shape))
 
             output = self.model(images)
-            loss = self.criterion(output[1][1], target)
+            #print('output:', output.shape)
+            loss = self.criterion(output, target)
 
             if train:
                 self.optimizer.zero_grad()
@@ -59,5 +65,6 @@ class NIMSTrainer:
                 self.optimizer.step()
 
             epoch_loss += loss.item()
+            pbar.set_description("loss = %.5f" %(loss))
 
         return epoch_loss
