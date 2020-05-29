@@ -78,7 +78,7 @@ class NIMSCrossEntropyLoss(nn.Module):
         assert preds.shape[0] == targets.shape[0]
 
         target_num = targets.shape[0]
-
+        loss = 0.0
         for target_idx in range(target_num):
             cur_pred = preds[target_idx, ...] # NCHW
             cur_target = targets[target_idx, ...] # NHW
@@ -91,7 +91,7 @@ class NIMSCrossEntropyLoss(nn.Module):
             # print('[cross_entropy] correct: {}, totalnum: {}'
             #      .format(correct, cur_pred.shape[0] * cur_pred.shape[2] * cur_pred.shape[3]))
 
-            loss = 0.0
+            cur_loss = 0.0
             for lat in range(cur_pred.shape[2]):
                 for lon in range(cur_pred.shape[3]):
                     pred = cur_pred[:, :, lat, lon]     # (N, C)
@@ -106,11 +106,13 @@ class NIMSCrossEntropyLoss(nn.Module):
                     # if torch.isnan(pixel_loss):
                     #     print('[cross_entropy] nan loss: lat = {}, lon = {}'.format(lat, lon))
 
-                    loss += pixel_loss
+                    cur_loss += pixel_loss
 
             if logger:
                 logger.update(target_idx, loss=loss.item(), correct=correct,
                               macro_f1=macro_f1, micro_f1=micro_f1)
+
+            loss += cur_loss
 
         #print('[cross_entropy] loss: {}'.format(loss.item()))
 
