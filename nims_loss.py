@@ -1,8 +1,10 @@
 import torch
 import torch.nn as nn
-from sklearn.metrics import f1_score
+import torch.nn.functional as F
 
-from collections import namedtuple
+import numpy as np
+from sklearn.metrics import f1_score
+from sklearn.utils.class_weight import compute_class_weight
 
 __all__ = ['MSELoss', 'RMSELoss', 'NIMSCrossEntropyLoss']
 
@@ -35,9 +37,11 @@ class RMSELoss(nn.Module):
         return loss
 
 class NIMSCrossEntropyLoss(nn.Module):
-    def __init__(self, reduction='mean'):
+    def __init__(self, device, num_classes=4, use_weights=False):
         super().__init__()
-        self.cross_entropy = nn.CrossEntropyLoss(reduction=reduction)
+        self.device = device
+        self.classes = np.arange(num_classes)
+        self.use_weights = use_weights
 
     def _get_num_correct(self, preds, targets):
         _, pred_labels = preds.topk(1, dim=1, largest=True, sorted=True)
@@ -65,6 +69,18 @@ class NIMSCrossEntropyLoss(nn.Module):
 
         return _macro_f1_score, _micro_f1_score
 
+    def _get_class_weights(self, targets):
+        targets = targets.flatten().detach().cpu().numpy()
+        targets_classes = np.unique(targets)
+        weights = compute_class_weight('balanced', targets_classes, targets) # shape: (C)
+
+        if len(self.classes) != len(targets_classes):
+            for label in self.classes:
+                if label not in targets_classes:
+                    weights = np.insert(weights, label, 0.0)
+
+        return torch.from_numpy(weights).type(torch.FloatTensor).to(self.device)
+
     def forward(self, preds, targets, logger=None):
         """
         <Parameter>
@@ -86,6 +102,10 @@ class NIMSCrossEntropyLoss(nn.Module):
             correct = self._get_num_correct(cur_pred, cur_target)
             macro_f1, micro_f1 = self._get_f1_score(cur_pred, cur_target)
 
+            class_weights = None
+            if self.use_weights:
+                class_weights = self._get_class_weights(cur_target)
+
             # print('[cross_entropy] cur_pred shape:', cur_pred.shape)
             # print('[cross_entropy] cur_target shape:', cur_target.shape)
             # print('[cross_entropy] correct: {}, totalnum: {}'
@@ -102,14 +122,14 @@ class NIMSCrossEntropyLoss(nn.Module):
                     #print('[cross_entropy] target: {}'.format(target))
                     #import sys; sys.exit()
 
-                    pixel_loss = self.cross_entropy(pred, target)
+                    pixel_loss = F.cross_entropy(pred, target, weight=class_weights)
                     # if torch.isnan(pixel_loss):
                     #     print('[cross_entropy] nan loss: lat = {}, lon = {}'.format(lat, lon))
 
                     cur_loss += pixel_loss
 
             if logger:
-                logger.update(target_idx, loss=loss.item(), correct=correct,
+                logger.update(target_idx, loss=cur_loss.item(), correct=correct,
                               macro_f1=macro_f1, micro_f1=micro_f1)
 
             loss += cur_loss

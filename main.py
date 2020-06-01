@@ -33,6 +33,7 @@ def parse_args():
     unet = parser.add_argument_group('unet related')
     unet.add_argument('--n_blocks', default=7, type=int, help='# of blocks in Down and Up phase')
     unet.add_argument('--start_channels', default=16, type=int, help='# of channels after first block of unet')
+    unet.add_argument('--cross_entropy_weight', default=False, help='use weight for cross entropy loss', action='store_true')
 
     nims = parser.add_argument_group('nims dataset related')
     nims.add_argument('--window_size', default=10, type=int, help='# of input sequences in time')
@@ -133,7 +134,8 @@ if __name__ == '__main__':
                      n_blocks=args.n_blocks,
                      start_channels=args.start_channels,
                      target_num=args.target_num)
-        criterion = NIMSCrossEntropyLoss()
+        criterion = NIMSCrossEntropyLoss(device, num_classes=4,
+                                         use_weights=args.cross_entropy_weight)
 
         num_lat = sample.shape[1] # the number of latitudes (253)
         num_lon = sample.shape[2] # the number of longitudes (149)
@@ -164,7 +166,7 @@ if __name__ == '__main__':
 
     # Create dataloaders
     train_loader = DataLoader(nims_train_dataset, batch_size=args.batch_size,
-                              shuffle=True, num_workers=args.num_workers)
+                              shuffle=False, num_workers=args.num_workers)
     test_loader  = DataLoader(nims_test_dataset, batch_size=args.batch_size,
                               shuffle=False, num_workers=args.num_workers)
 
