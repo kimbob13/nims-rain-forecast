@@ -1,5 +1,7 @@
+import os
 import numpy as np
 import xarray as xr
+import seaborn as sns
 import matplotlib.pyplot as plt
 
 from nims_dataset import NIMSDataset
@@ -7,6 +9,53 @@ from nims_variable import *
 
 import argparse
 from multiprocessing import Process, Queue, cpu_count
+
+from PIL import Image
+import matplotlib.image as mpimg
+
+def plot_map(partial_path, date, variable, queue=None):
+
+    back_img = mpimg.imread('back_tmp.png')
+
+    ##
+    date_path = [p for p in partial_path if p.split('/')[-2] == date]
+    if len(date_path) == 0:
+        print("[ERROR] You don't specify valid date to plot a map.")
+        return
+   
+    one_day_value = np.array([])
+    
+    for i, path in enumerate(date_path):
+        one_hour = xr.open_dataset(path)
+        one_hour_value = read_variable_value(one_hour, variable)
+
+        if i == 0:
+            one_day_value = one_hour_value
+        else:
+            one_day_value = np.concatenate((one_day_value, one_hour_value), axis=0)
+
+    fig, axes = plt.subplots(4, 6, sharex=True, sharey=True)
+    fig.suptitle('From {} +24h'.format(date))
+    
+    cbar_ax = fig.add_axes([.91, .3, .03, .4])
+    
+    max_one_day_value = np.amax(one_day_value)
+    for i, ax in enumerate(axes.flat):
+        plt.setp(ax.get_xticklabels(), visible=False)
+        plt.setp(ax.get_yticklabels(), visible=False)
+        ax.tick_params(axis='both', which='both', length=0)
+        hmap = sns.heatmap(one_day_value[i], ax=ax,
+                    cbar=i == 0, cmap="Blues",
+                    vmin=0, vmax=max_one_day_value, # vmax = 1 or max_one_day_value
+                    #robust=True
+                    cbar_ax= cbar_ax, alpha=0.5)
+        hmap.imshow(back_img, aspect=hmap.get_aspect(), extent=hmap.get_xlim()+hmap.get_ylim(), zorder=1)
+
+    #fig.tight_layout(rect=[0, 0, .9, 1])
+    
+    # Save plot map
+    var_name = get_variable_name(variable)
+    fig.savefig('./plot/{}_{}_map.png'.format(date, var_name))
 
 def get_avg_and_max(partial_path, variables, queue=None):
     max_value_per_day = []
@@ -120,14 +169,19 @@ def get_variable_bins(variables):
 
 if __name__ == '__main__':
     # Read variable argument
-    parser = argparse.ArgumentParser(description='NIMS rainfall data prediction')
+    parser = argparse.ArgumentParser(description='NIMS rainfall data visualizer')
+    parser.add_argument('--type', type=str, default='map', help='type of plot [map, hist]')
     parser.add_argument('--variables', type=str, default='rain',
                         help='which variables to use (rain, cape, etc.). \
                               must specify one variable name')
+    parser.add_argument('--date', type=str, default='20170626',
+                        help='when date to be plotted')
+    
     args = parser.parse_args()
     variables_args = [args.variables]
     variables = parse_variables(variables_args)
     assert len(variables) == 1
+    date = args.date
 
     nims_train_data_path = NIMSDataset(window_size=1,
                                        target_num=1,
@@ -135,20 +189,31 @@ if __name__ == '__main__':
                                        train_year=(2017, 2017),
                                        train=True,
                                        debug=False).data_path_list
+    
+    # Check plot directory
+    if not os.path.isdir('./plot'):
+        os.mkdir('./plot')
+    
+    #print(nims_train_data_path)
 
-    # Single core version
-    #max_value_per_day, avg_value_per_day = get_avg_and_max(nims_train_data_path, variables)
+    # Plot variable map (one day)
+    if args.type == 'map':
+        plot_map(nims_train_data_path, date=date, variable=variables[0])
+    
+    elif args.type == 'hist':
+        # Single core version
+        #max_value_per_day, avg_value_per_day = get_avg_and_max(nims_train_data_path, variables)
+        
+        # Mutli core version
+        max_value_per_day, avg_value_per_day = get_avg_and_max_mp(nims_train_data_path, variables)
 
-    # Mutli core version
-    max_value_per_day, avg_value_per_day = get_avg_and_max_mp(nims_train_data_path, variables)
+        # Get appropriate bins for variables
+        avg_bins, max_bins = get_variable_bins(variables)
 
-    # Get appropriate bins for variables
-    avg_bins, max_bins = get_variable_bins(variables)
+        # Average value
+        plot_histogram(avg_value_per_day, avg_bins, variables, 'avg')
 
-    # Average value
-    plot_histogram(avg_value_per_day, avg_bins, variables, 'avg')
-
-    # Maximum value
-    plot_histogram(max_value_per_day, max_bins, variables, 'max')
+        # Maximum value
+        plot_histogram(max_value_per_day, max_bins, variables, 'max')
 
     print('Finish')
