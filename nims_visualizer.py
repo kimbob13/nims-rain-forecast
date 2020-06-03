@@ -13,12 +13,27 @@ from multiprocessing import Process, Queue, cpu_count
 from PIL import Image
 import matplotlib.image as mpimg
 
-def plot_map(partial_path, date, variable, queue=None):
+def plot_map(partial_path, date, hour, variable, queue=None):
 
     back_img = mpimg.imread('back_tmp.png')
 
     ##
-    date_path = [p for p in partial_path if p.split('/')[-2] == date]
+    hour_start = int(hour)
+    date_path = []
+    date_last = ''
+    hour_last = ''
+    for i in range(24):
+        hour_cur = hour_start + i
+        date_cur = date
+        if hour_cur > 23:
+            hour_cur -= 24
+            date_cur = str(int(date) + 1)
+        hour_cur_str = str(hour_cur)
+        if hour_cur < 10:
+            hour_cur_str = '0' + hour_cur_str
+        date_path += [p for p in partial_path if p.split('_')[-1].split('.')[0]==(date_cur+hour_cur_str)]
+        date_last = date_cur #to show last date(hour) of data
+        hour_last = hour_cur_str
     if len(date_path) == 0:
         print("[ERROR] You don't specify valid date to plot a map.")
         return
@@ -35,7 +50,7 @@ def plot_map(partial_path, date, variable, queue=None):
             one_day_value = np.concatenate((one_day_value, one_hour_value), axis=0)
 
     fig, axes = plt.subplots(4, 6, sharex=True, sharey=True)
-    fig.suptitle('From {} +24h'.format(date))
+    fig.suptitle('From {} {}:00 ~ {} {}:00'.format(date, hour, date_last, hour_last))
     
     cbar_ax = fig.add_axes([.91, .3, .03, .4])
     
@@ -55,7 +70,7 @@ def plot_map(partial_path, date, variable, queue=None):
     
     # Save plot map
     var_name = get_variable_name(variable)
-    fig.savefig('./plot/{}_{}_map.png'.format(date, var_name))
+    fig.savefig('./plot/{}_{}_{}_map.png'.format(date, hour, var_name))
 
 def get_avg_and_max(partial_path, variables, queue=None):
     max_value_per_day = []
@@ -176,12 +191,15 @@ if __name__ == '__main__':
                               must specify one variable name')
     parser.add_argument('--date', type=str, default='20170626',
                         help='when date to be plotted')
+    parser.add_argument('--hour', type=str, default='00',
+                        help='from what time to be plotted')
     
     args = parser.parse_args()
     variables_args = [args.variables]
     variables = parse_variables(variables_args)
     assert len(variables) == 1
     date = args.date
+    hour = args.hour
 
     nims_train_data_path = NIMSDataset(window_size=1,
                                        target_num=1,
@@ -198,7 +216,7 @@ if __name__ == '__main__':
 
     # Plot variable map (one day)
     if args.type == 'map':
-        plot_map(nims_train_data_path, date=date, variable=variables[0])
+        plot_map(nims_train_data_path, date=date, hour=hour, variable=variables[0])
     
     elif args.type == 'hist':
         # Single core version
