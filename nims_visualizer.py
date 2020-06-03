@@ -18,7 +18,10 @@ def plot_map(partial_path, date, variable, queue=None):
     back_img = mpimg.imread('back_tmp.png')
 
     ##
-    date_path = [p for p in partial_path if p.split('/')[-2]==date]
+    date_path = [p for p in partial_path if p.split('/')[-2] == date]
+    if len(date_path) == 0:
+        print("[ERROR] You don't specify valid date to plot a map.")
+        return
    
     one_day_value = np.array([])
     
@@ -26,7 +29,10 @@ def plot_map(partial_path, date, variable, queue=None):
         one_hour = xr.open_dataset(path)
         one_hour_value = read_variable_value(one_hour, variable)
 
-        one_day_value = one_hour_value if i==0 else np.concatenate((one_day_value, one_hour_value), axis=0)
+        if i == 0:
+            one_day_value = one_hour_value
+        else:
+            one_day_value = np.concatenate((one_day_value, one_hour_value), axis=0)
 
     fig, axes = plt.subplots(4, 6, sharex=True, sharey=True)
     fig.suptitle('From {} +24h'.format(date))
@@ -40,7 +46,7 @@ def plot_map(partial_path, date, variable, queue=None):
         ax.tick_params(axis='both', which='both', length=0)
         hmap = sns.heatmap(one_day_value[i], ax=ax,
                     cbar=i == 0, cmap="Blues",
-                    vmin=0, vmax=max_one_day_value/2., # vmax = 1 or max_one_day_value
+                    vmin=0, vmax=max_one_day_value, # vmax = 1 or max_one_day_value
                     #robust=True
                     cbar_ax= cbar_ax, alpha=0.5)
         hmap.imshow(back_img, aspect=hmap.get_aspect(), extent=hmap.get_xlim()+hmap.get_ylim(), zorder=1)
@@ -163,7 +169,8 @@ def get_variable_bins(variables):
 
 if __name__ == '__main__':
     # Read variable argument
-    parser = argparse.ArgumentParser(description='NIMS rainfall data prediction')
+    parser = argparse.ArgumentParser(description='NIMS rainfall data visualizer')
+    parser.add_argument('--type', type=str, default='map', help='type of plot [map, hist]')
     parser.add_argument('--variables', type=str, default='rain',
                         help='which variables to use (rain, cape, etc.). \
                               must specify one variable name')
@@ -190,21 +197,23 @@ if __name__ == '__main__':
     #print(nims_train_data_path)
 
     # Plot variable map (one day)
-    plot_map(nims_train_data_path, date=date, variable=variables[0])
+    if args.type == 'map':
+        plot_map(nims_train_data_path, date=date, variable=variables[0])
     
-    # Single core version
-    #max_value_per_day, avg_value_per_day = get_avg_and_max(nims_train_data_path, variables)
+    elif args.type == 'hist':
+        # Single core version
+        #max_value_per_day, avg_value_per_day = get_avg_and_max(nims_train_data_path, variables)
+        
+        # Mutli core version
+        max_value_per_day, avg_value_per_day = get_avg_and_max_mp(nims_train_data_path, variables)
 
-    # Mutli core version
-    #max_value_per_day, avg_value_per_day = get_avg_and_max_mp(nims_train_data_path, variables)
+        # Get appropriate bins for variables
+        avg_bins, max_bins = get_variable_bins(variables)
 
-    # Get appropriate bins for variables
-    #avg_bins, max_bins = get_variable_bins(variables)
+        # Average value
+        plot_histogram(avg_value_per_day, avg_bins, variables, 'avg')
 
-    # Average value
-    #plot_histogram(avg_value_per_day, avg_bins, variables, 'avg')
-
-    # Maximum value
-    #plot_histogram(max_value_per_day, max_bins, variables, 'max')
+        # Maximum value
+        plot_histogram(max_value_per_day, max_bins, variables, 'max')
 
     print('Finish')
