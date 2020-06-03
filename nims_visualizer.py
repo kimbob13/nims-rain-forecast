@@ -10,10 +10,16 @@ from nims_variable import *
 import argparse
 from multiprocessing import Process, Queue, cpu_count
 
+from PIL import Image
+import matplotlib.image as mpimg
 
 def plot_map(partial_path, date, variable, queue=None):
+
+    back_img = mpimg.imread('back_tmp.png')
+
+    ##
     date_path = [p for p in partial_path if p.split('/')[-2]==date]
-    
+   
     one_day_value = np.array([])
     
     for i, path in enumerate(date_path):
@@ -23,20 +29,23 @@ def plot_map(partial_path, date, variable, queue=None):
         one_day_value = one_hour_value if i==0 else np.concatenate((one_day_value, one_hour_value), axis=0)
 
     fig, axes = plt.subplots(4, 6, sharex=True, sharey=True)
-    cbar_ax = fig.add_axes([.91, .3, .03, .4])
-
-    max_one_day_value = np.amax(one_day_value)
+    fig.suptitle('From {} +24h'.format(date))
     
+    cbar_ax = fig.add_axes([.91, .3, .03, .4])
+    
+    max_one_day_value = np.amax(one_day_value)
     for i, ax in enumerate(axes.flat):
         plt.setp(ax.get_xticklabels(), visible=False)
         plt.setp(ax.get_yticklabels(), visible=False)
         ax.tick_params(axis='both', which='both', length=0)
-        sns.heatmap(one_day_value[i], ax=ax,
+        hmap = sns.heatmap(one_day_value[i], ax=ax,
                     cbar=i == 0, cmap="Blues",
                     vmin=0, vmax=max_one_day_value/2., # vmax = 1 or max_one_day_value
-                    cbar_ax=None if i else cbar_ax)
+                    #robust=True
+                    cbar_ax= cbar_ax, alpha=0.5)
+        hmap.imshow(back_img, aspect=hmap.get_aspect(), extent=hmap.get_xlim()+hmap.get_ylim(), zorder=1)
 
-    fig.tight_layout(rect=[0, 0, .9, 1])
+    #fig.tight_layout(rect=[0, 0, .9, 1])
     
     # Save plot map
     var_name = get_variable_name(variable)
@@ -177,7 +186,9 @@ if __name__ == '__main__':
     # Check plot directory
     if not os.path.isdir('./plot'):
         os.mkdir('./plot')
-        
+    
+    #print(nims_train_data_path)
+
     # Plot variable map (one day)
     plot_map(nims_train_data_path, date=date, variable=variables[0])
     
@@ -185,15 +196,15 @@ if __name__ == '__main__':
     #max_value_per_day, avg_value_per_day = get_avg_and_max(nims_train_data_path, variables)
 
     # Mutli core version
-    max_value_per_day, avg_value_per_day = get_avg_and_max_mp(nims_train_data_path, variables)
+    #max_value_per_day, avg_value_per_day = get_avg_and_max_mp(nims_train_data_path, variables)
 
     # Get appropriate bins for variables
-    avg_bins, max_bins = get_variable_bins(variables)
+    #avg_bins, max_bins = get_variable_bins(variables)
 
     # Average value
-    plot_histogram(avg_value_per_day, avg_bins, variables, 'avg')
+    #plot_histogram(avg_value_per_day, avg_bins, variables, 'avg')
 
     # Maximum value
-    plot_histogram(max_value_per_day, max_bins, variables, 'max')
+    #plot_histogram(max_value_per_day, max_bins, variables, 'max')
 
     print('Finish')
