@@ -5,13 +5,14 @@ from nims_logger import NIMSLogger
 from torchsummary import summary
 from tqdm import tqdm
 
+import os
 
 __all__ = ['NIMSTrainer']
 
 class NIMSTrainer:
     def __init__(self, model, criterion, optimizer, device,
                  train_loader, test_loader, train_len, test_len,
-                 num_lat, num_lon, args):
+                 num_lat, num_lon, experiment_name, args):
         self.model = model
         self.criterion = criterion
         self.optimizer = optimizer
@@ -30,6 +31,8 @@ class NIMSTrainer:
         self.num_lon = num_lon
         self.one_hour_pixel = num_lat * num_lon
 
+        self.experiment_name = experiment_name
+
         self.model.to(self.device)
 
         if model.name == 'unet':
@@ -46,12 +49,21 @@ class NIMSTrainer:
                                           one_hour_pixel=self.one_hour_pixel)
 
     def train(self):
+        # Make directory for trained model if not
+        if not os.path.isdir('./trained_model'):
+            os.mkdir('./trained_model')
+
         for epoch in range(1, self.num_epochs + 1):
             # Run one epoch
             print('=' * 25, 'Epoch {} / {}'.format(epoch, self.num_epochs),
                   '=' * 25)
             self._epoch(self.train_loader, train=True)
             self.nims_logger.print_stat(self.train_len)
+
+        # Save model weight
+        weight_path = os.path.join('./trained_model',
+                                   self.experiment_name + '.pt')
+        torch.save(self.model.state_dict(), weight_path)
 
     def test(self):
         print('=' * 25, 'Test', '=' * 25)

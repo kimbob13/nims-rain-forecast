@@ -1,6 +1,7 @@
 # NIMS specific
 plot/
 *.png
+trained_model/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

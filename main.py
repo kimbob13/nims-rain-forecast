@@ -16,7 +16,6 @@ try:
 except:
     pass
 
-
 import os
 import argparse
 
@@ -28,6 +27,8 @@ def parse_args():
     common.add_argument('--device', default='0', type=str, help='which device to use')
     common.add_argument('--dataset_dir', type=str, help='root directory of dataset')
     common.add_argument('--num_workers', default=5, type=int, help='# of workers for dataloader')
+    common.add_argument('--test_only', default=False, action='store_true', help='Test only mode')
+    common.add_argument('--trained_model', default=None, type=str, help='weight file to use for testing')
     common.add_argument('--debug', help='turn on debugging print', action='store_true')
 
     unet = parser.add_argument_group('unet related')
@@ -35,15 +36,15 @@ def parse_args():
     unet.add_argument('--start_channels', default=16, type=int, help='# of channels after first block of unet')
     unet.add_argument('--cross_entropy_weight', default=False, help='use weight for cross entropy loss', action='store_true')
 
-    nims = parser.add_argument_group('nims dataset related')
-    nims.add_argument('--window_size', default=10, type=int, help='# of input sequences in time')
-    nims.add_argument('--target_num', default=1, type=int, help='# of output sequences to evaluate')
-    nims.add_argument('--variables', nargs='+',
-                      help='which variables to use (rain, cape, etc.). \
-                            Can be single number which specify how many variables to use \
-                            or list of variables name')
-    nims.add_argument('--start_train_year', default=2009, type=int, help='start year for training')
-    nims.add_argument('--end_train_year', default=2017, type=int, help='end year for training')
+    nims_dataset = parser.add_argument_group('nims dataset related')
+    nims_dataset.add_argument('--window_size', default=10, type=int, help='# of input sequences in time')
+    nims_dataset.add_argument('--target_num', default=1, type=int, help='# of output sequences to evaluate')
+    nims_dataset.add_argument('--variables', nargs='+',
+                              help='which variables to use (rain, cape, etc.). \
+                                    Can be single number which specify how many variables to use \
+                                    or list of variables name')
+    nims_dataset.add_argument('--start_train_year', default=2009, type=int, help='start year for training')
+    nims_dataset.add_argument('--end_train_year', default=2017, type=int, help='end year for training')
 
     hyperparam = parser.add_argument_group('hyper-parameters')
     hyperparam.add_argument('--num_epochs', default=10, type=int, help='# of training epochs')
@@ -91,6 +92,8 @@ def set_experiment_name(args):
     except:
         pass
 
+    return experiment_name
+
 if __name__ == '__main__':
     args = parse_args()
     os.environ['CUDA_VISIBLE_DEVICES'] = args.device
@@ -137,11 +140,19 @@ if __name__ == '__main__':
         criterion = NIMSCrossEntropyLoss(device, num_classes=4,
                                          use_weights=args.cross_entropy_weight)
 
+        if args.test_only:
+            assert args.trained_model, \
+                   'You must specify a trained model to run test only mode!'
+
+            weight_path = os.path.join('./trained_model', args.trained_model + '.pt')
+            model.load_state_dict(torch.load(weight_path))
+
         num_lat = sample.shape[1] # the number of latitudes (253)
         num_lon = sample.shape[2] # the number of longitudes (149)
 
     elif args.model == 'convlstm':
-        assert args.window_size == args.target_num
+        assert args.window_size == args.target_num, \
+               'window_size and target_num must be same for ConvLSTM'
 
         model = EncoderForecaster(input_channels=sample.shape[1],
                                   hidden_channels=[64, 128],
@@ -149,6 +160,13 @@ if __name__ == '__main__':
                                   seq_len=args.window_size,
                                   device=device)
         criterion = MSELoss()
+
+        if args.test_only:
+            assert args.trained_model, \
+                   'You must specify a trained model to run test only mode!'
+
+            weight_path = os.path.join('./trained_model', args.trained_model + '.pt')
+            model.load_state_dict(torch.load(weight_path))
 
         num_lat = sample.shape[2] # the number of latitudes (253)
         num_lon = sample.shape[3] # the number of longitudes (149)
@@ -183,12 +201,13 @@ if __name__ == '__main__':
         optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
 
     # Set experiment name and use it as process name if possible
-    set_experiment_name(args)
+    experiment_name = set_experiment_name(args)
 
     # Start training
     nims_trainer = NIMSTrainer(model, criterion, optimizer, device,
                                train_loader, test_loader,
                                len(nims_train_dataset), len(nims_test_dataset),
-                               num_lat, num_lon, args)
-    nims_trainer.train()
+                               num_lat, num_lon, experiment_name, args)
+    if not args.test_only:
+        nims_trainer.train()
     nims_trainer.test()

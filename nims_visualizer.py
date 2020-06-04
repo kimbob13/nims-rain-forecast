@@ -62,16 +62,16 @@ def get_avg_and_max(partial_path, variables, queue=None):
     avg_value_per_day = []
 
     for path in partial_path:
-        one_day = xr.open_dataset(path)
-        one_day_value = read_variable_value(one_day, variables[0])
+        one_hour = xr.open_dataset(path)
+        one_hour_value = read_variable_value(one_hour, variables[0])
 
-        max_one_day_value = np.amax(one_day_value)
-        max_value_per_day.append(max_one_day_value)
-        if max_one_day_value == 0:
+        max_one_hour_value = np.amax(one_hour_value)
+        max_value_per_day.append(max_one_hour_value)
+        if max_one_hour_value == 0:
             avg_value_per_day.append(0)
         else:
             # Average over nonzero data
-            avg_rain = np.mean(one_day_value[np.nonzero(one_day_value)])
+            avg_rain = np.mean(one_hour_value[np.nonzero(one_hour_value)])
             avg_value_per_day.append(avg_rain)
 
     if queue:

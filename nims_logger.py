@@ -61,8 +61,20 @@ class NIMSLogger:
             cur_stat_str = "[{:2d} hour] ".format(target_idx + 1)
             try:
                 cur_stat_str += "loss = {:.3f}".format(cur_target_stat.loss / dataset_len)
-                cur_stat_str += ", accuracy = {:.3f}%".format(cur_target_stat.correct / total_pixel)
+            except:
+                pass
+
+            try:
+                cur_stat_str += ", accuracy = {:.3f}%".format((cur_target_stat.correct / total_pixel) * 100)
+            except:
+                pass
+
+            try:
                 cur_stat_str += ", f1 (macro) = {:.5f}".format(cur_target_stat.macro_f1 / dataset_len)
+            except:
+                pass
+
+            try:
                 cur_stat_str += ", f1 (micro) = {:.5f}".format(cur_target_stat.micro_f1 / dataset_len)
             except:
                 pass
@@ -83,8 +95,20 @@ class NIMSLogger:
         stat_str = ""
         try:
             stat_str += "loss = {:.3f}".format(self._latest_stat[1].loss)
+        except:
+            pass
+
+        try:
             stat_str += ", accuracy = {:.3f}%".format(accuracy * 100)
+        except:
+            pass
+
+        try:
             stat_str += ", f1 (macro) = {:.5f}".format(self._latest_stat[1].macro_f1)
+        except:
+            pass
+        
+        try:
             stat_str += ", f1 (micro) = {:.5f}".format(self._latest_stat[1].micro_f1)
         except:
             pass
@@ -93,14 +117,22 @@ class NIMSLogger:
 
     def _clear_one_target_stat(self, _stat):
         try:
-            if _stat.loss:
-                _stat.loss = 0.0
-            if _stat.correct:
-                _stat.correct = 0
-            if _stat.macro_f1:
-                _stat.macro_f1 = 0.0
-            if _stat.micro_f1:
-                _stat.micro_f1 = 0.0
+            _stat.loss = 0.0
+        except:
+            pass
+
+        try:
+            _stat.correct = 0
+        except:
+            pass
+            
+        try:
+            _stat.macro_f1 = 0.0
+        except:
+            pass
+
+        try:
+            _stat.micro_f1 = 0.0
         except:
             pass
 
