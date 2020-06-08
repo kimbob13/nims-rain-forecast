@@ -35,18 +35,25 @@ class NIMSTrainer:
 
         self.model.to(self.device)
 
+        # Pass args argument to logger for monthly label stat in test only mode
+        self.args = None
+        if args.test_only:
+            self.args = args
+
         if model.name == 'unet':
             self.nims_logger = NIMSLogger(loss=True, correct=True,
                                           macro_f1=True, micro_f1=True,
                                           target_num=self.target_num,
                                           batch_size=args.batch_size,
-                                          one_hour_pixel=self.one_hour_pixel)
+                                          one_hour_pixel=self.one_hour_pixel,
+                                          args=self.args)
         elif model.name == 'convlstm':
             self.nims_logger = NIMSLogger(loss=True, correct=False,
                                           macro_f1=False, micro_f1=False,
                                           target_num=self.target_num,
                                           batch_size=args.batch_size,
-                                          one_hour_pixel=self.one_hour_pixel)
+                                          one_hour_pixel=self.one_hour_pixel,
+                                          args=None)
 
     def train(self):
         # Make directory for trained model if not

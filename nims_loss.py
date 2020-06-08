@@ -54,16 +54,16 @@ class NIMSCrossEntropyLoss(nn.Module):
     def _get_f1_score(self, preds, targets):
         _, pred_labels = preds.topk(1, dim=1, largest=True, sorted=True)
         pred_labels = pred_labels.squeeze(1).flatten().detach().cpu().numpy()
-        targets = targets.flatten().detach().cpu().numpy()
+        _targets = targets.flatten().detach().cpu().numpy()
 
         # Remove 0 class for micro f1 score evaluation.
         # However, by doing this, macro f1 score becomes nan,
         # so we just keep 0 class for macro f1 score evaluation.
-        nonzero_target_idx = targets.nonzero()
+        nonzero_target_idx = _targets.nonzero()
         nonzero_pred_labels = pred_labels[nonzero_target_idx]
-        nonzero_targets = targets[nonzero_target_idx]
+        nonzero_targets = _targets[nonzero_target_idx]
 
-        _macro_f1_score = f1_score(targets, pred_labels,
+        _macro_f1_score = f1_score(_targets, pred_labels,
                                    average='macro', zero_division=0)
         _micro_f1_score = f1_score(nonzero_targets, nonzero_pred_labels,
                                    average='micro', zero_division=0)
@@ -72,9 +72,9 @@ class NIMSCrossEntropyLoss(nn.Module):
         return _macro_f1_score, _micro_f1_score
 
     def _get_class_weights(self, targets):
-        targets = targets.flatten().detach().cpu().numpy()
-        targets_classes = np.unique(targets)
-        weights = compute_class_weight('balanced', targets_classes, targets) # shape: (C)
+        _targets = targets.flatten().detach().cpu().numpy()
+        targets_classes = np.unique(_targets)
+        weights = compute_class_weight('balanced', targets_classes, _targets) # shape: (C)
 
         if len(self.classes) != len(targets_classes):
             for label in self.classes:
@@ -132,7 +132,8 @@ class NIMSCrossEntropyLoss(nn.Module):
 
             if logger:
                 logger.update(target_idx, loss=cur_loss.item(), correct=correct,
-                              macro_f1=macro_f1, micro_f1=micro_f1)
+                              macro_f1=macro_f1, micro_f1=micro_f1,
+                              pred_tensor=cur_pred, target_tensor=cur_target)
 
             loss += cur_loss
 
