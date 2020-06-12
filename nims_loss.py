@@ -113,6 +113,7 @@ class NIMSCrossEntropyLoss(nn.Module):
             # print('[cross_entropy] correct: {}, totalnum: {}'
             #      .format(correct, cur_pred.shape[0] * cur_pred.shape[2] * cur_pred.shape[3]))
 
+            """
             cur_loss = 0.0
             for lat in range(cur_pred.shape[2]):
                 for lon in range(cur_pred.shape[3]):
@@ -129,7 +130,11 @@ class NIMSCrossEntropyLoss(nn.Module):
                     #     print('[cross_entropy] nan loss: lat = {}, lon = {}'.format(lat, lon))
 
                     cur_loss += pixel_loss
-
+            """
+            
+            cur_loss = F.cross_entropy(cur_pred, cur_target, weight=class_weights, reduction='none')
+            cur_loss = torch.sum(torch.mean(cur_loss, dim=0))
+                    
             if logger:
                 logger.update(target_idx, loss=cur_loss.item(), correct=correct,
                               macro_f1=macro_f1, micro_f1=micro_f1,
