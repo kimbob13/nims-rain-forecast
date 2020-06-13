@@ -37,11 +37,11 @@ class RMSELoss(nn.Module):
         return loss
 
 class NIMSCrossEntropyLoss(nn.Module):
-    def __init__(self, device, num_classes=4, use_weights=False):
+    def __init__(self, device, num_classes=4, no_weights=False):
         super().__init__()
         self.device = device
         self.classes = np.arange(num_classes)
-        self.use_weights = use_weights
+        self.no_weights = no_weights
 
     def _get_num_correct(self, preds, targets):
         _, pred_labels = preds.topk(1, dim=1, largest=True, sorted=True)
@@ -104,33 +104,15 @@ class NIMSCrossEntropyLoss(nn.Module):
             correct = self._get_num_correct(cur_pred, cur_target)
             macro_f1, micro_f1 = self._get_f1_score(cur_pred, cur_target)
 
-            class_weights = None
-            if self.use_weights:
+            if self.no_weights:
+                class_weights = None
+            else:
                 class_weights = self._get_class_weights(cur_target)
 
             # print('[cross_entropy] cur_pred shape:', cur_pred.shape)
             # print('[cross_entropy] cur_target shape:', cur_target.shape)
             # print('[cross_entropy] correct: {}, totalnum: {}'
             #      .format(correct, cur_pred.shape[0] * cur_pred.shape[2] * cur_pred.shape[3]))
-
-            """
-            cur_loss = 0.0
-            for lat in range(cur_pred.shape[2]):
-                for lon in range(cur_pred.shape[3]):
-                    pred = cur_pred[:, :, lat, lon]     # (N, C)
-                    target = cur_target[:, lat, lon]    # (N)
-
-                    #print('[cross_entropy] pred: {}, target: {}'.format(pred.shape, target.shape))
-                    #print('[cross_entropy] pred [:, 0]: {}'.format(pred[:, 0]))
-                    #print('[cross_entropy] target: {}'.format(target))
-                    #import sys; sys.exit()
-
-                    pixel_loss = F.cross_entropy(pred, target, weight=class_weights)
-                    # if torch.isnan(pixel_loss):
-                    #     print('[cross_entropy] nan loss: lat = {}, lon = {}'.format(lat, lon))
-
-                    cur_loss += pixel_loss
-            """
             
             cur_loss = F.cross_entropy(cur_pred, cur_target, weight=class_weights, reduction='none')
             cur_loss = torch.sum(torch.mean(cur_loss, dim=0))

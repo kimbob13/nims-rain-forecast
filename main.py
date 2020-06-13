@@ -1,10 +1,10 @@
 import torch
-import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
 from model.unet_model import UNet
 from model.conv_lstm import EncoderForecaster
+
 from nims_dataset import NIMSDataset, ToTensor
 from nims_loss import MSELoss, NIMSCrossEntropyLoss
 from nims_trainer import NIMSTrainer
@@ -19,22 +19,37 @@ except:
 import os
 import argparse
 
+def create_results_dir():
+    # Base results directory
+    results_dir = './results'
+    if not os.path.isdir(results_dir):
+        os.mkdir(results_dir)
+
+    # Create log directory if not
+    log_dir = os.path.join(results_dir, 'log')
+    if not os.path.isdir(log_dir):
+        os.mkdir(log_dir)
+
+    # Create trained_model directory if not
+    model_dir = os.path.join(results_dir, 'trained_model')
+    if not os.path.isdir(model_dir):
+        os.mkdir(model_dir)
+
 def parse_args():
     parser = argparse.ArgumentParser(description='NIMS rainfall data prediction')
 
     common = parser.add_argument_group('common')
     common.add_argument('--model', default='unet', type=str, help='which model to use')
-    common.add_argument('--device', default='0', type=str, help='which device to use')
     common.add_argument('--dataset_dir', type=str, help='root directory of dataset')
-    common.add_argument('--num_workers', default=5, type=int, help='# of workers for dataloader')
+    common.add_argument('--device', default='0', type=str, help='which device to use')
+    common.add_argument('--num_workers', default=3, type=int, help='# of workers for dataloader')
     common.add_argument('--test_only', default=False, action='store_true', help='Test only mode')
-    common.add_argument('--trained_model', default=None, type=str, help='weight file to use for testing')
     common.add_argument('--debug', help='turn on debugging print', action='store_true')
 
     unet = parser.add_argument_group('unet related')
-    unet.add_argument('--n_blocks', default=7, type=int, help='# of blocks in Down and Up phase')
-    unet.add_argument('--start_channels', default=16, type=int, help='# of channels after first block of unet')
-    unet.add_argument('--cross_entropy_weight', default=False, help='use weight for cross entropy loss', action='store_true')
+    unet.add_argument('--n_blocks', default=6, type=int, help='# of blocks in Down and Up phase')
+    unet.add_argument('--start_channels', default=64, type=int, help='# of channels after first block of unet')
+    unet.add_argument('--no_cross_entropy_weight', default=False, help='use weight for cross entropy loss', action='store_true')
 
     nims_dataset = parser.add_argument_group('nims dataset related')
     nims_dataset.add_argument('--window_size', default=10, type=int, help='# of input sequences in time')
@@ -47,7 +62,7 @@ def parse_args():
     nims_dataset.add_argument('--end_train_year', default=2017, type=int, help='end year for training')
 
     hyperparam = parser.add_argument_group('hyper-parameters')
-    hyperparam.add_argument('--num_epochs', default=10, type=int, help='# of training epochs')
+    hyperparam.add_argument('--num_epochs', default=50, type=int, help='# of training epochs')
     hyperparam.add_argument('--batch_size', default=1, type=int, help='batch size')
     hyperparam.add_argument('--optimizer', default='adam', type=str, help='which optimizer to use (rmsprop, adam, sgd)')
     hyperparam.add_argument('--lr', default=0.001, type=float, help='learning rate of optimizer')
@@ -67,19 +82,26 @@ def set_experiment_name(args):
                        str(args.end_train_year)[-2:]
 
     if args.model == 'unet':
-        experiment_name = 'nims_unet_nb{}_ch{}_ws{}_tn{}_bs{}_{}_{}' \
+        no_cross_entropy_weight = ''
+        if args.no_cross_entropy_weight:
+            no_cross_entropy_weight = 'noweight_'
+            
+        experiment_name = 'nims_unet_nb{}_ch{}_ws{}_tn{}_ep{}_bs{}_{}_{}{}' \
                           .format(args.n_blocks,
                                   args.start_channels,
                                   args.window_size,
                                   args.target_num,
+                                  args.num_epochs,
                                   args.batch_size,
                                   args.optimizer,
+                                  no_cross_entropy_weight,
                                   train_year_range)
 
     elif args.model == 'convlstm':
-        experiment_name = 'nims_convlstm_ws{}_tn{}_bs{}_{}_{}' \
+        experiment_name = 'nims_convlstm_ws{}_tn{}_ep{}_bs{}_{}_{}' \
                           .format(args.window_size,
                                   args.target_num,
+                                  args.num_epochs,
                                   args.batch_size,
                                   args.optimizer,
                                   train_year_range)
@@ -98,6 +120,9 @@ if __name__ == '__main__':
     args = parse_args()
     os.environ['CUDA_VISIBLE_DEVICES'] = args.device
     device = torch.device('cuda:0')
+
+    # Create necessary directory
+    create_results_dir()
 
     # Parse NIMS dataset variables
     variables = parse_variables(args.variables)
@@ -138,14 +163,7 @@ if __name__ == '__main__':
                      start_channels=args.start_channels,
                      target_num=args.target_num)
         criterion = NIMSCrossEntropyLoss(device, num_classes=4,
-                                         use_weights=args.cross_entropy_weight)
-
-        if args.test_only:
-            assert args.trained_model, \
-                   'You must specify a trained model to run test only mode!'
-
-            weight_path = os.path.join('./trained_model', args.trained_model + '.pt')
-            model.load_state_dict(torch.load(weight_path))
+                                         no_weights=args.no_cross_entropy_weight)
 
         num_lat = sample.shape[1] # the number of latitudes (253)
         num_lon = sample.shape[2] # the number of longitudes (149)
@@ -161,16 +179,8 @@ if __name__ == '__main__':
                                   device=device)
         criterion = MSELoss()
 
-        if args.test_only:
-            assert args.trained_model, \
-                   'You must specify a trained model to run test only mode!'
-
-            weight_path = os.path.join('./trained_model', args.trained_model + '.pt')
-            model.load_state_dict(torch.load(weight_path))
-
         num_lat = sample.shape[2] # the number of latitudes (253)
         num_lon = sample.shape[3] # the number of longitudes (149)
-
 
     if args.debug:
         # XXX: Currently, torchsummary doesn't run on ConvLSTM
@@ -184,9 +194,11 @@ if __name__ == '__main__':
 
     # Create dataloaders
     train_loader = DataLoader(nims_train_dataset, batch_size=args.batch_size,
-                              shuffle=False, num_workers=args.num_workers)
+                              shuffle=False, num_workers=args.num_workers,
+                              pin_memory=True)
     test_loader  = DataLoader(nims_test_dataset, batch_size=args.batch_size,
-                              shuffle=False, num_workers=args.num_workers)
+                              shuffle=False, num_workers=args.num_workers,
+                              pin_memory=True)
 
     # Set the optimizer
     if args.optimizer == 'sgd':
@@ -203,7 +215,12 @@ if __name__ == '__main__':
     # Set experiment name and use it as process name if possible
     experiment_name = set_experiment_name(args)
 
-    # Start training
+    # Load model weight when test only mode
+    if args.test_only:
+        weight_path = os.path.join('./results', 'trained_model', experiment_name + '.pt')
+        model.load_state_dict(torch.load(weight_path))
+
+    # Start training and testing
     nims_trainer = NIMSTrainer(model, criterion, optimizer, device,
                                train_loader, test_loader,
                                len(nims_train_dataset), len(nims_test_dataset),

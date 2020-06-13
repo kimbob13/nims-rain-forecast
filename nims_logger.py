@@ -1,35 +1,26 @@
 import numpy as np
 from datetime import datetime, timedelta
+import sys
+import os
 
 __all__ = ['NIMSLogger']
 
 class NIMSLogger:
     def __init__(self, loss, correct, macro_f1, micro_f1,
-                 target_num, batch_size, one_hour_pixel, args=None):
+                 target_num, batch_size, one_hour_pixel,
+                 experiment_name, args=None):
         """
         <Parameter>
         loss, correct, macro_f1, micro_f1 [bool]: whether to record each variable
         target_num [int]: # of hours to predict
+        batch_size [int]: self-explanatory
         one_hour_pixel [int]: # of total pixels in each one hour data
-        window_size [int]: window size for input images (needed for test only mode)
+        experiment_name [str]: self-explanatory
+        args [argparse]: parsed arguments from main
         """
         self._target_num = target_num
         self._one_hour_pixel = one_hour_pixel
         self._one_instance_pixel = batch_size * one_hour_pixel
-
-        # Store monthly stat for label-wise accuracy (test mode only)
-        self._test_only = False
-        if args:
-            self._month_name = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-            self._test_only = True
-            self._month_label_stat = dict()
-            self._cur_test_time = datetime(year=args.end_train_year + 1,
-                                           month=1,
-                                           day=1,
-                                           hour=args.window_size)
-
-            for target_idx in range(target_num):
-                self._month_label_stat[target_idx + 1] = dict()
 
         # Initialize one epoch stat dictionary
         self._one_epoch_stat = dict()
@@ -40,6 +31,22 @@ class NIMSLogger:
         self._latest_stat = dict()
         for target_idx in range(target_num):
             self._latest_stat[target_idx + 1] = OneTargetStat(loss, correct, macro_f1, micro_f1)
+
+        # Store monthly stat for label-wise accuracy (test mode only)
+        self._test_only = False
+        if args and args.test_only:
+            self._test_only = True
+            self._model_name = experiment_name
+
+            self._month_name = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+            self._month_label_stat = dict()
+            self._cur_test_time = datetime(year=args.end_train_year + 1,
+                                           month=1,
+                                           day=1,
+                                           hour=args.window_size)
+
+            for target_idx in range(target_num):
+                self._month_label_stat[target_idx + 1] = dict()
 
     def update(self, target_idx, loss=None, correct=None,
                macro_f1=None, micro_f1=None,
@@ -93,7 +100,7 @@ class NIMSLogger:
 
             cur_stat_str = "[{:2d} hour] ".format(target_idx + 1)
             try:
-                cur_stat_str += "loss = {:.3f}".format(cur_target_stat.loss / dataset_len)
+                cur_stat_str += "loss = {:.5f}".format(cur_target_stat.loss / dataset_len)
             except:
                 pass
 
@@ -113,28 +120,32 @@ class NIMSLogger:
                 pass
 
             print(cur_stat_str)
+            print()
             self._clear_one_target_stat(cur_target_stat)
 
         if self._test_only:
-            print()
-            print('=' * 25, 'Monthly label accuracy', '=' * 25)
-            for hour_after in self._month_label_stat:
-                print('-' * 10, '{} hour after'.format(hour_after), '-' * 10)
+            log_file = os.path.join('./results', 'log', 'test-{}.log'.format(self._model_name))
+            with open(log_file, 'w') as f:
+                sys.stdout = f
 
-                for month, label_stat in self._month_label_stat[hour_after].items():
-                    print('[{}]'.format(month))
+                print('=' * 25, 'Monthly label accuracy', '=' * 25)
+                for hour_after in self._month_label_stat:
+                    print('-' * 10, '{} hour after'.format(hour_after), '-' * 10)
 
-                    for label, stat in label_stat.items():
-                        count = stat['count']
-                        total = stat['total']
+                    for month, label_stat in self._month_label_stat[hour_after].items():
+                        print('[{}]'.format(month))
 
-                        if total == 0:
-                            accuracy = 'NO TARGET VALUE'
-                            print('\t(label {}): {}'.format(label, accuracy))
+                        for label, stat in label_stat.items():
+                            count = stat['count']
+                            total = stat['total']
 
-                        else:
-                            accuracy = (count / total) * 100
-                            print('\t(label {}): {:7.3f}%'.format(label, accuracy))
+                            if total == 0:
+                                accuracy = 'NO TARGET VALUE'
+                                print('\t(label {}): {} ({:10,d} / {:10,d})'.format(label, accuracy, count, total))
+
+                            else:
+                                accuracy = (count / total) * 100
+                                print('\t(label {}): {:7.3f}% ({:10,d} / {:10,d})'.format(label, accuracy, count, total))
 
     @property
     def latest_stat(self):
@@ -148,7 +159,7 @@ class NIMSLogger:
 
         stat_str = ""
         try:
-            stat_str += "loss = {:.3f}".format(self._latest_stat[1].loss)
+            stat_str += "loss = {:.5f}".format(self._latest_stat[1].loss)
         except:
             pass
 

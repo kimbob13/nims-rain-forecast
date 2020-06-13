@@ -35,31 +35,24 @@ class NIMSTrainer:
 
         self.model.to(self.device)
 
-        # Pass args argument to logger for monthly label stat in test only mode
-        self.args = None
-        if args.test_only:
-            self.args = args
-
         if model.name == 'unet':
             self.nims_logger = NIMSLogger(loss=True, correct=True,
                                           macro_f1=True, micro_f1=True,
                                           target_num=self.target_num,
                                           batch_size=args.batch_size,
                                           one_hour_pixel=self.one_hour_pixel,
-                                          args=self.args)
+                                          experiment_name=experiment_name,
+                                          args=args)
         elif model.name == 'convlstm':
             self.nims_logger = NIMSLogger(loss=True, correct=False,
                                           macro_f1=False, micro_f1=False,
                                           target_num=self.target_num,
                                           batch_size=args.batch_size,
                                           one_hour_pixel=self.one_hour_pixel,
+                                          experiment_name=experiment_name,
                                           args=None)
 
     def train(self):
-        # Make directory for trained model if not
-        if not os.path.isdir('./trained_model'):
-            os.mkdir('./trained_model')
-
         for epoch in range(1, self.num_epochs + 1):
             # Run one epoch
             print('=' * 25, 'Epoch {} / {}'.format(epoch, self.num_epochs),
@@ -68,7 +61,7 @@ class NIMSTrainer:
             self.nims_logger.print_stat(self.train_len)
 
         # Save model weight
-        weight_path = os.path.join('./trained_model',
+        weight_path = os.path.join('./results', 'trained_model',
                                    self.experiment_name + '.pt')
         torch.save(self.model.state_dict(), weight_path)
 

@@ -189,10 +189,11 @@ if __name__ == '__main__':
                                        train_year=(2017, 2017),
                                        train=True,
                                        debug=False).data_path_list
-    
-    # Check plot directory
-    if not os.path.isdir('./plot'):
-        os.mkdir('./plot')
+
+    # Create plot directory if not
+    plot_dir = os.path.join('./results', 'plot')
+    if not os.path.isdir(plot_dir):
+        os.mkdir(plot_dir)
     
     #print(nims_train_data_path)
 
