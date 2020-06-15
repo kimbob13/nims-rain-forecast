@@ -18,85 +18,82 @@ class NIMSLogger:
         experiment_name [str]: self-explanatory
         args [argparse]: parsed arguments from main
         """
-        self._target_num = target_num
-        self._one_hour_pixel = one_hour_pixel
-        self._one_instance_pixel = batch_size * one_hour_pixel
+        self.target_num = target_num
+        self.one_hour_pixel = one_hour_pixel
+        self.one_instance_pixel = batch_size * one_hour_pixel
 
         # Initialize one epoch stat dictionary
-        self._one_epoch_stat = dict()
+        self.one_epoch_stat = dict()
         for target_idx in range(target_num):
-            self._one_epoch_stat[target_idx + 1] = OneTargetStat(loss, correct, macro_f1, micro_f1)
+            self.one_epoch_stat[target_idx + 1] = OneTargetStat(loss, correct, macro_f1, micro_f1)
 
         # Used for one data instance stat
         self._latest_stat = dict()
         for target_idx in range(target_num):
             self._latest_stat[target_idx + 1] = OneTargetStat(loss, correct, macro_f1, micro_f1)
 
-        # Store monthly stat for label-wise accuracy (test mode only)
-        self._test_only = False
-        if args and args.test_only:
-            self._test_only = True
-            self._model_name = experiment_name
-
-            self._month_name = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-            self._month_label_stat = dict()
-            self._cur_test_time = datetime(year=args.end_train_year + 1,
-                                           month=1,
-                                           day=1,
-                                           hour=args.window_size)
+        # Store monthly stat for label-wise accuracy for classification model
+        if args:
+            self.experiment_name = experiment_name
+            self.month_name = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+            self.month_label_stat = dict()
+            self.cur_test_time = datetime(year=args.end_train_year + 1,
+                                          month=1,
+                                          day=1,
+                                          hour=args.window_size)
 
             for target_idx in range(target_num):
-                self._month_label_stat[target_idx + 1] = dict()
+                self.month_label_stat[target_idx + 1] = dict()
 
     def update(self, target_idx, loss=None, correct=None,
-               macro_f1=None, micro_f1=None,
+               macro_f1=None, micro_f1=None, test=False,
                pred_tensor=None, target_tensor=None):
-        assert (target_idx >= 0) and (target_idx < self._target_num)
+        assert (target_idx >= 0) and (target_idx < self.target_num)
 
         if loss:
             try:
-                self._one_epoch_stat[target_idx + 1].loss += loss
+                self.one_epoch_stat[target_idx + 1].loss += loss
                 self._latest_stat[target_idx + 1].loss = loss
             except:
                 print("You don't specify the loss to be logged")
         if correct:
             try:
-                self._one_epoch_stat[target_idx + 1].correct += correct
+                self.one_epoch_stat[target_idx + 1].correct += correct
                 self._latest_stat[target_idx + 1].correct = correct
             except:
                 print("You don't specify the coorect to be logged")
         if macro_f1:
             try:
-                self._one_epoch_stat[target_idx + 1].macro_f1 += macro_f1
+                self.one_epoch_stat[target_idx + 1].macro_f1 += macro_f1
                 self._latest_stat[target_idx + 1].macro_f1 = macro_f1
             except:
                 print("You don't specify the macro_f1 to be logged")
         if micro_f1:
             try:
-                self._one_epoch_stat[target_idx + 1].micro_f1 += micro_f1
+                self.one_epoch_stat[target_idx + 1].micro_f1 += micro_f1
                 self._latest_stat[target_idx + 1].micro_f1 = micro_f1
             except:
                 print("You don't specify the micro_f1 to be logged")
 
-        if self._test_only:
-            cur_target_time = self._cur_test_time + timedelta(hours=target_idx)
+        if test:
+            cur_target_time = self.cur_test_time + timedelta(hours=target_idx)
             cur_month = cur_target_time.month
 
-            month_name = self._month_name[cur_month - 1]
-            if month_name not in self._month_label_stat[target_idx + 1]:
-                self._month_label_stat[target_idx + 1][month_name] = {0: {'count': 0, 'total': 0},
-                                                                      1: {'count': 0, 'total': 0},
-                                                                      2: {'count': 0, 'total': 0},
-                                                                      3: {'count': 0, 'total': 0}}
+            month_name = self.month_name[cur_month - 1]
+            if month_name not in self.month_label_stat[target_idx + 1]:
+                self.month_label_stat[target_idx + 1][month_name] = {0: {'count': 0, 'total': 0},
+                                                                     1: {'count': 0, 'total': 0},
+                                                                     2: {'count': 0, 'total': 0},
+                                                                     3: {'count': 0, 'total': 0}}
 
             self._update_label_stat(target_idx, month_name, pred_tensor, target_tensor)
-            self._cur_test_time += timedelta(hours=1)
+            self.cur_test_time += timedelta(hours=1)
 
-    def print_stat(self, dataset_len):
-        total_pixel = dataset_len * self._one_hour_pixel
+    def print_stat(self, dataset_len, test=False):
+        total_pixel = dataset_len * self.one_hour_pixel
 
-        for target_idx in range(self._target_num):
-            cur_target_stat = self._one_epoch_stat[target_idx + 1]
+        for target_idx in range(self.target_num):
+            cur_target_stat = self.one_epoch_stat[target_idx + 1]
 
             cur_stat_str = "[{:2d} hour] ".format(target_idx + 1)
             try:
@@ -123,16 +120,16 @@ class NIMSLogger:
             print()
             self._clear_one_target_stat(cur_target_stat)
 
-        if self._test_only:
-            log_file = os.path.join('./results', 'log', 'test-{}.log'.format(self._model_name))
+        if test:
+            log_file = os.path.join('./results', 'log', 'test-{}.log'.format(self.experiment_name))
             with open(log_file, 'w') as f:
                 sys.stdout = f
 
                 print('=' * 25, 'Monthly label accuracy', '=' * 25)
-                for hour_after in self._month_label_stat:
+                for hour_after in self.month_label_stat:
                     print('-' * 10, '{} hour after'.format(hour_after), '-' * 10)
 
-                    for month, label_stat in self._month_label_stat[hour_after].items():
+                    for month, label_stat in self.month_label_stat[hour_after].items():
                         print('[{}]'.format(month))
 
                         for label, stat in label_stat.items():
@@ -152,7 +149,7 @@ class NIMSLogger:
         # TODO: Currently, only show one hour after.
         # Need to extend to multiple hours
         try:
-            accuracy = self._latest_stat[1].correct / self._one_instance_pixel
+            accuracy = self._latest_stat[1].correct / self.one_instance_pixel
             assert accuracy <= 1.0
         except:
             pass
@@ -192,8 +189,8 @@ class NIMSLogger:
             cur_label_target_idx = np.where(target == i)[0]
             cur_label_pred_idx = np.where(pred_label[cur_label_target_idx] == i)[0]
 
-            self._month_label_stat[target_idx + 1][month_name][i]['count'] += len(cur_label_pred_idx)
-            self._month_label_stat[target_idx + 1][month_name][i]['total'] += len(cur_label_target_idx)
+            self.month_label_stat[target_idx + 1][month_name][i]['count'] += len(cur_label_pred_idx)
+            self.month_label_stat[target_idx + 1][month_name][i]['total'] += len(cur_label_target_idx)
 
     def _clear_one_target_stat(self, _stat):
         try:

@@ -13,7 +13,7 @@ class MSELoss(nn.Module):
         super().__init__()
         self.mse = nn.MSELoss()
 
-    def forward(self, yhat, y, logger=None):
+    def forward(self, yhat, y, logger=None, test=False):
         #print('[mse_loss] yhat shape: {}, y shape: {}'.format(yhat.shape, y.shape))
         loss = self.mse(yhat, y)
         
@@ -83,7 +83,7 @@ class NIMSCrossEntropyLoss(nn.Module):
 
         return torch.from_numpy(weights).type(torch.FloatTensor).to(self.device)
 
-    def forward(self, preds, targets, logger=None):
+    def forward(self, preds, targets, logger=None, test=False):
         """
         <Parameter>
         preds [torch.tensor]: NS'CHW format (N: batch size, S': target num, C: class num)
@@ -119,7 +119,7 @@ class NIMSCrossEntropyLoss(nn.Module):
                     
             if logger:
                 logger.update(target_idx, loss=cur_loss.item(), correct=correct,
-                              macro_f1=macro_f1, micro_f1=micro_f1,
+                              macro_f1=macro_f1, micro_f1=micro_f1, test=test,
                               pred_tensor=cur_pred, target_tensor=cur_target)
 
             loss += cur_loss

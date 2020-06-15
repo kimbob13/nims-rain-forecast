@@ -42,7 +42,7 @@ def parse_args():
     common.add_argument('--model', default='unet', type=str, help='which model to use')
     common.add_argument('--dataset_dir', type=str, help='root directory of dataset')
     common.add_argument('--device', default='0', type=str, help='which device to use')
-    common.add_argument('--num_workers', default=3, type=int, help='# of workers for dataloader')
+    common.add_argument('--num_workers', default=6, type=int, help='# of workers for dataloader')
     common.add_argument('--test_only', default=False, action='store_true', help='Test only mode')
     common.add_argument('--debug', help='turn on debugging print', action='store_true')
 
@@ -86,7 +86,7 @@ def set_experiment_name(args):
         if args.no_cross_entropy_weight:
             no_cross_entropy_weight = 'noweight_'
             
-        experiment_name = 'nims_unet_nb{}_ch{}_ws{}_tn{}_ep{}_bs{}_{}_{}{}' \
+        experiment_name = 'nims_unet_nb{}_ch{}_ws{}_tn{}_ep{}_bs{}_{}{}_{}{}' \
                           .format(args.n_blocks,
                                   args.start_channels,
                                   args.window_size,
@@ -94,16 +94,18 @@ def set_experiment_name(args):
                                   args.num_epochs,
                                   args.batch_size,
                                   args.optimizer,
+                                  args.lr,
                                   no_cross_entropy_weight,
                                   train_year_range)
 
     elif args.model == 'convlstm':
-        experiment_name = 'nims_convlstm_ws{}_tn{}_ep{}_bs{}_{}_{}' \
+        experiment_name = 'nims_convlstm_ws{}_tn{}_ep{}_bs{}_{}{}_{}' \
                           .format(args.window_size,
                                   args.target_num,
                                   args.num_epochs,
                                   args.batch_size,
                                   args.optimizer,
+                                  args.lr,
                                   train_year_range)
 
     if args.debug:

@@ -1,10 +1,6 @@
 import torch
-
 from nims_logger import NIMSLogger
-
-from torchsummary import summary
 from tqdm import tqdm
-
 import os
 
 __all__ = ['NIMSTrainer']
@@ -27,10 +23,7 @@ class NIMSTrainer:
         self.target_num = args.target_num
         self.debug = args.debug
 
-        self.num_lat = num_lat
-        self.num_lon = num_lon
         self.one_hour_pixel = num_lat * num_lon
-
         self.experiment_name = experiment_name
 
         self.model.to(self.device)
@@ -68,7 +61,7 @@ class NIMSTrainer:
     def test(self):
         print('=' * 25, 'Test', '=' * 25)
         self._epoch(self.test_loader, train=False)
-        self.nims_logger.print_stat(self.test_len)
+        self.nims_logger.print_stat(self.test_len, test=True)
 
     def _epoch(self, data_loader, train):
         pbar = tqdm(data_loader)
@@ -84,7 +77,8 @@ class NIMSTrainer:
                 target = target.permute(1, 0, 2, 3, 4).to(self.device)
 
             output = self.model(images)
-            loss = self.criterion(output, target, logger=self.nims_logger)
+            loss = self.criterion(output, target, logger=self.nims_logger,
+                                  test=(not train))
 
             if train:
                 self.optimizer.zero_grad()
