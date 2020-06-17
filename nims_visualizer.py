@@ -55,7 +55,8 @@ def plot_map(partial_path, date, variable, queue=None):
     
     # Save plot map
     var_name = get_variable_name(variable)
-    fig.savefig('./plot/{}_{}_map.png'.format(date, var_name))
+    plot_dir = os.path.join('./results', 'plot')
+    fig.savefig(os.path.join(plot_dir, '{}_{}_map.png'.format(date, var_name)))
 
 def get_avg_and_max(partial_path, variables, queue=None):
     max_value_per_day = []
@@ -154,7 +155,8 @@ def plot_histogram(data, bins, variables, mode):
         plt.text(bar.get_x(), yval + 15, yval)
 
     # Save plot
-    fig.savefig('./plot/{}_{}_hist.png'.format(mode, var_name))
+    plot_dir = os.path.join('./results', 'plot')
+    fig.savefig(os.path.join(plot_dir, '{}_{}_hist.png'.format(mode, var_name)))
 
 def get_variable_bins(variables):
     var_name = get_variable_name(variables[0])
@@ -172,10 +174,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='NIMS rainfall data visualizer')
     parser.add_argument('--type', type=str, default='map', help='type of plot [map, hist]')
     parser.add_argument('--variables', type=str, default='rain',
-                        help='which variables to use (rain, cape, etc.). \
+                        help='which variables to use [rain, cape, etc.]. \
                               must specify one variable name')
     parser.add_argument('--date', type=str, default='20170626',
-                        help='when date to be plotted')
+                        help='when date to be plotted (used for map plot)')
     
     args = parser.parse_args()
     variables_args = [args.variables]
@@ -183,7 +185,8 @@ if __name__ == '__main__':
     assert len(variables) == 1
     date = args.date
 
-    nims_train_data_path = NIMSDataset(window_size=1,
+    nims_train_data_path = NIMSDataset(model=None,
+                                       window_size=1,
                                        target_num=1,
                                        variables=variables,
                                        train_year=(2017, 2017),

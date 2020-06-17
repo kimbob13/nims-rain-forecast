@@ -1,6 +1,7 @@
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
+import numpy as np
 
 from model.unet_model import UNet
 from model.conv_lstm import EncoderForecaster
@@ -44,6 +45,7 @@ def parse_args():
     common.add_argument('--device', default='0', type=str, help='which device to use')
     common.add_argument('--num_workers', default=6, type=int, help='# of workers for dataloader')
     common.add_argument('--test_only', default=False, action='store_true', help='Test only mode')
+    common.add_argument('--custom_name', default=None, type=str, help='add customize experiment name')
     common.add_argument('--debug', help='turn on debugging print', action='store_true')
 
     unet = parser.add_argument_group('unet related')
@@ -108,6 +110,9 @@ def set_experiment_name(args):
                                   args.lr,
                                   train_year_range)
 
+    if args.custom_name:
+        experiment_name += ('_' + args.custom_name)
+
     if args.debug:
         experiment_name += '_debug'
 
@@ -122,6 +127,14 @@ if __name__ == '__main__':
     args = parse_args()
     os.environ['CUDA_VISIBLE_DEVICES'] = args.device
     device = torch.device('cuda:0')
+
+    # Fix the seed
+    torch.manual_seed(2020)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(2020)
+    np.random.seed(2020)
 
     # Create necessary directory
     create_results_dir()
@@ -159,12 +172,13 @@ if __name__ == '__main__':
 
     # Create a model and criterion
     if args.model == 'unet':
+        num_classes = 4
         model = UNet(n_channels=sample.shape[0],
-                     n_classes=4,
+                     n_classes=num_classes,
                      n_blocks=args.n_blocks,
                      start_channels=args.start_channels,
                      target_num=args.target_num)
-        criterion = NIMSCrossEntropyLoss(device, num_classes=4,
+        criterion = NIMSCrossEntropyLoss(device, num_classes=num_classes,
                                          no_weights=args.no_cross_entropy_weight)
 
         num_lat = sample.shape[1] # the number of latitudes (253)

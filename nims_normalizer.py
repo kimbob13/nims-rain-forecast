@@ -127,14 +127,16 @@ def print_stat(result_dict, data_type='train', stat_type='mean'):
     print()
 
 if __name__ == '__main__':
-    nims_train_data_path = NIMSDataset(window_size=1,
+    nims_train_data_path = NIMSDataset(model=None,
+                                       window_size=1,
                                        target_num=1,
                                        variables=list(range(14)),
                                        train_year=(2009, 2017),
                                        train=True,
                                        debug=True).data_path_list
     
-    nims_test_data_path = NIMSDataset(window_size=1,
+    nims_test_data_path = NIMSDataset(model=None,
+                                      window_size=1,
                                       target_num=1,
                                       variables=list(range(14)),
                                       train_year=(2009, 2017),
