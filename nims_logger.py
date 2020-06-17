@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from datetime import datetime, timedelta
 import sys
 import os
@@ -121,7 +122,10 @@ class NIMSLogger:
             self._clear_one_target_stat(cur_target_stat)
 
         if test:
+            stat_df = pd.DataFrame(columns=['class 0', 'class 1', 'class 2', 'class 3'], index=self.month_name)
+
             log_file = os.path.join('./results', 'log', 'test-{}.log'.format(self.experiment_name))
+            csv_file = os.path.join('./results', 'log', 'test-{}.csv'.format(self.experiment_name))
             with open(log_file, 'w') as f:
                 sys.stdout = f
 
@@ -139,10 +143,15 @@ class NIMSLogger:
                             if total == 0:
                                 accuracy = 'NO TARGET VALUE'
                                 print('\t(label {}): {} ({:10,d} / {:10,d})'.format(label, accuracy, count, total))
+                                stat_df.loc[month]['class {}'.format(label)] = np.nan
 
                             else:
                                 accuracy = (count / total) * 100
                                 print('\t(label {}): {:7.3f}% ({:10,d} / {:10,d})'.format(label, accuracy, count, total))
+                                stat_df.loc[month]['class {}'.format(label)] = accuracy
+
+            stat_df = stat_df.T
+            stat_df.to_csv(csv_file, na_rep='nan')
 
     @property
     def latest_stat(self):

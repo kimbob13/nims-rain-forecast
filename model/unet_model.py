@@ -13,7 +13,12 @@ class UNet(nn.Module):
                  start_channels=16, target_num=1, bilinear=True):
         super(UNet, self).__init__()
 
+        self.n_blocks = n_blocks
         self.target_num = target_num
+
+        if n_blocks == 7:
+            self.pad_size = 3
+            self.zero_pad = nn.ZeroPad2d((0, 0, self.pad_size, 0))
 
         factor = 2 if bilinear else 1
         self.inc = BasicConv(n_channels, start_channels)
@@ -50,6 +55,12 @@ class UNet(nn.Module):
     def forward(self, x):
         logits = []
 
+        # If n_blocks == 7, the input tensor becomes 1 by 1 images
+        # after last down block, so there is an error when batch_size = 1.
+        # Therefore, we do zero padding for H(height) dimension in this case.
+        if self.n_blocks == 7:
+            x = self.zero_pad(x)
+
         for _ in range(self.target_num):
             out = self.inc(x)
 
@@ -75,5 +86,9 @@ class UNet(nn.Module):
         # Change logits shape to NS'CHW
         # S': # of targets, C: # of class for each target
         logits = torch.stack(logits).permute(1, 0, 2, 3, 4)
+
+        # Return to original size when n_blocks == 7
+        if self.n_blocks == 7:
+            logits = logits[:, :, :, self.pad_size:, :]
 
         return logits
