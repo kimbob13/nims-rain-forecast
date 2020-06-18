@@ -20,7 +20,7 @@ MONTH_DAY = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 
 class NIMSDataset(Dataset):
     def __init__(self, model, window_size, target_num, variables, block_size, aggr_method,
-                 train_year=(2009, 2017), train=True, transform=None,
+                 train_year=(2009, 2017),  month=(1, 12), train=True, transform=None,
                  root_dir=None, debug=False):
         
         self.model = model

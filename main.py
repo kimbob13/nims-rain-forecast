@@ -200,8 +200,8 @@ if __name__ == '__main__':
         criterion = NIMSCrossEntropyLoss(device, num_classes=num_classes,
                                          no_weights=args.no_cross_entropy_weight)
 
-        num_lat = sample.shape[1] # the number of latitudes (253)
-        num_lon = sample.shape[2] # the number of longitudes (149)
+        num_lat = sample.shape[1] # the number of latitudes (originally 253)
+        num_lon = sample.shape[2] # the number of longitudes (originally 149)
 
     elif args.model == 'convlstm':
         assert args.window_size == args.target_num, \
@@ -214,8 +214,8 @@ if __name__ == '__main__':
                                   device=device)
         criterion = MSELoss()
 
-        num_lat = sample.shape[2] # the number of latitudes (253)
-        num_lon = sample.shape[3] # the number of longitudes (149)
+        num_lat = sample.shape[2] # the number of latitudes (originally 253)
+        num_lon = sample.shape[3] # the number of longitudes (originally 149)
 
     if args.debug:
         # XXX: Currently, torchsummary doesn't run on ConvLSTM
