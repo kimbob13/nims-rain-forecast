@@ -67,7 +67,7 @@ class NIMSTrainer:
         pbar = tqdm(data_loader)
         for images, target in pbar:
             if self.model.name == 'unet':
-                images = images.to(self.device)
+                images = images.type(torch.FloatTensor).to(self.device)
                 target = target.type(torch.LongTensor).to(self.device)
             
             elif self.model.name == 'convlstm':
@@ -79,7 +79,7 @@ class NIMSTrainer:
             output = self.model(images)
             loss = self.criterion(output, target, logger=self.nims_logger,
                                   test=(not train))
-
+            
             if train:
                 self.optimizer.zero_grad()
                 loss.backward()

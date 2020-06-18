@@ -60,6 +60,8 @@ def parse_args():
                               help='which variables to use (rain, cape, etc.). \
                                     Can be single number which specify how many variables to use \
                                     or list of variables name')
+    nims_dataset.add_argument('--block_size', default=1, type=int, help='the size of aggregated block')
+    nims_dataset.add_argument('--aggr_method', default=None, type=str, help='The method of block aggregation (max, avg)')
     nims_dataset.add_argument('--start_train_year', default=2009, type=int, help='start year for training')
     nims_dataset.add_argument('--end_train_year', default=2017, type=int, help='end year for training')
 
@@ -147,6 +149,8 @@ if __name__ == '__main__':
                                      window_size=args.window_size,
                                      target_num=args.target_num,
                                      variables=variables,
+                                     block_size=args.block_size,
+                                     aggr_method=args.aggr_method,
                                      train_year=(args.start_train_year,
                                                  args.end_train_year),
                                      train=True,
@@ -158,6 +162,8 @@ if __name__ == '__main__':
                                      window_size=args.window_size,
                                      target_num=args.target_num,
                                      variables=variables,
+                                     block_size=args.block_size,
+                                     aggr_method=args.aggr_method,
                                      train_year=(args.start_train_year,
                                                  args.end_train_year),
                                      train=False,
