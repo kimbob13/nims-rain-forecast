@@ -39,12 +39,17 @@ class NIMSLogger:
             self.month_name = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
             self.month_label_stat = dict()
             self.cur_test_time = datetime(year=args.end_train_year + 1,
-                                          month=1,
+                                          month=args.start_month,
                                           day=1,
                                           hour=args.window_size)
 
             for target_idx in range(target_num):
                 self.month_label_stat[target_idx + 1] = dict()
+            
+            self.micro_eval_df = pd.DataFrame(0, columns=['pred_yes', 'pred_no'],
+                                              index=['observe_yes', 'observe_no'])
+            self.macro_eval_df = pd.DataFrame(0, columns=['pred_0', 'pred_1', 'pred_2', 'pred_3'],
+                                              index=['observe_0', 'observe_1', 'observe_2', 'observe_3'])
 
     def update(self, target_idx, loss=None, correct=None,
                macro_f1=None, micro_f1=None, test=False,
@@ -140,6 +145,14 @@ class NIMSLogger:
                             count = stat['count']
                             total = stat['total']
 
+                            # Update micro eval table
+                            if label == 0:
+                                self.micro_eval_df.loc['observe_no']['pred_no'] += count
+                                self.micro_eval_df.loc['observe_no']['pred_yes'] += (total - count)
+                            else:
+                                self.micro_eval_df.loc['observe_yes']['pred_yes'] += count
+                                self.micro_eval_df.loc['observe_yes']['pred_no'] += (total - count)
+
                             if total == 0:
                                 accuracy = 'NO TARGET VALUE'
                                 print('\t(label {}): {} ({:10,d} / {:10,d})'.format(label, accuracy, count, total))
@@ -150,8 +163,23 @@ class NIMSLogger:
                                 print('\t(label {}): {:7.3f}% ({:10,d} / {:10,d})'.format(label, accuracy, count, total))
                                 stat_df.loc[month]['class {}'.format(label)] = accuracy
 
+            # Save stat df
             stat_df = stat_df.T
             stat_df.to_csv(csv_file, na_rep='nan')
+
+            # Make total row and column for macro eval table and save
+            self.macro_eval_df['total'] = self.macro_eval_df.sum(axis=1) # column total
+            self.macro_eval_df.loc['total'] = self.macro_eval_df.sum(axis=0) # row total
+
+            macro_file = os.path.join('./results', 'eval', 'macro-{}.csv'.format(self.experiment_name))
+            self.macro_eval_df.to_csv(macro_file)
+
+            # Make total row and column for macro eval table and save
+            self.micro_eval_df['total'] = self.micro_eval_df.sum(axis=1) # column total
+            self.micro_eval_df.loc['total'] = self.micro_eval_df.sum(axis=0) # row total
+
+            micro_file = os.path.join('./results', 'eval', 'micro-{}.csv'.format(self.experiment_name))
+            self.micro_eval_df.to_csv(micro_file)
 
     @property
     def latest_stat(self):
@@ -200,6 +228,11 @@ class NIMSLogger:
 
             self.month_label_stat[target_idx + 1][month_name][i]['count'] += len(cur_label_pred_idx)
             self.month_label_stat[target_idx + 1][month_name][i]['total'] += len(cur_label_target_idx)
+
+            # Update macro eval table
+            for j in range(num_class):
+                pred_idx = np.where(pred_label[cur_label_target_idx] == j)[0]
+                self.macro_eval_df.loc['observe_{}'.format(i)]['pred_{}'.format(j)] += len(pred_idx)
 
     def _clear_one_target_stat(self, _stat):
         try:

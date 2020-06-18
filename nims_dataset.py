@@ -15,12 +15,13 @@ START_YEAR = 2009
 END_YEAR = 2018
 NORMAL_YEAR_DAY = 365
 LEAP_YEAR_DAY = 366
+MONTH_DAY = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 
 
 class NIMSDataset(Dataset):
     def __init__(self, model, window_size, target_num, variables,
-                 train_year=(2009, 2017), train=True, transform=None,
-                 root_dir=None, debug=False):
+                 train_year=(2009, 2017), month=(1, 12), train=True,
+                 transform=None, root_dir=None, debug=False):
         self.model = model
         self.window_size = window_size
         self.target_num = target_num
@@ -29,6 +30,14 @@ class NIMSDataset(Dataset):
         self.start_train_year = train_year[0]       # start year for training
         self.end_train_year = train_year[1]         # end year for training
         self.test_year = self.end_train_year + 1    # year for testing
+
+        assert len(self.variables) <= 14
+        assert self.start_train_year <= self.end_train_year
+        assert self.start_train_year >= START_YEAR
+        assert self.end_train_year <= END_YEAR - 1
+        assert month[0] >= 1 and month[0] <= 12
+        assert month[1] >= 1 and month[1] <= 12
+        assert month[0] <= month[1]
 
         self.train = train
         self.transform = transform
@@ -40,12 +49,7 @@ class NIMSDataset(Dataset):
         else:
             self.root_dir = root_dir
 
-        self._data_path_list = self.__set_data_path_list()
-
-        assert len(self.variables) <= 14
-        assert self.start_train_year <= self.end_train_year
-        assert self.start_train_year >= START_YEAR
-        assert self.end_train_year <= END_YEAR - 1
+        self._data_path_list = self.__set_data_path_list(month[0], month[1])
 
     @property
     def data_path_list(self):
@@ -59,7 +63,7 @@ class NIMSDataset(Dataset):
 
         return os.path.join('/home', data_user, 'hdd/NIMS')
 
-    def __set_data_path_list(self):
+    def __set_data_path_list(self, start_month, end_month):
         root, dirs, _ = next(os.walk(self.root_dir, topdown=True))
 
         data_dirs = [os.path.join(root, d) for d in sorted(dirs)]
@@ -91,6 +95,18 @@ class NIMSDataset(Dataset):
                 end_day = start_day + LEAP_YEAR_DAY
             else:
                 end_day = start_day + NORMAL_YEAR_DAY
+
+        if start_month > 1:
+            start_day += sum(MONTH_DAY[:start_month - 1])
+
+            if (start_month != 2) and (self.start_train_year in (2012, 2016)):
+                start_day += 1
+
+        if end_month < 12:
+            end_day -= sum(MONTH_DAY[end_month:])
+
+            if (end_month == 1) and (self.end_train_year in (2012, 2016)):
+                end_day -= 1
 
         data_dirs = data_dirs[start_day:end_day]
 

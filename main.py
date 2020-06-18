@@ -31,6 +31,11 @@ def create_results_dir():
     if not os.path.isdir(log_dir):
         os.mkdir(log_dir)
 
+    # Create evaluation directory if not
+    eval_dir = os.path.join(results_dir, 'eval')
+    if not os.path.isdir(eval_dir):
+        os.mkdir(eval_dir)
+
     # Create trained_model directory if not
     model_dir = os.path.join(results_dir, 'trained_model')
     if not os.path.isdir(model_dir):
@@ -62,6 +67,8 @@ def parse_args():
                                     or list of variables name')
     nims_dataset.add_argument('--start_train_year', default=2009, type=int, help='start year for training')
     nims_dataset.add_argument('--end_train_year', default=2017, type=int, help='end year for training')
+    nims_dataset.add_argument('--start_month', default=1, type=int, help='month range for train and test')
+    nims_dataset.add_argument('--end_month', default=12, type=int, help='month range for train and test')
 
     hyperparam = parser.add_argument_group('hyper-parameters')
     hyperparam.add_argument('--num_epochs', default=50, type=int, help='# of training epochs')
@@ -80,8 +87,10 @@ def set_experiment_name(args):
     <Parameters>
     args [argparse]: parsed argument
     """
-    train_year_range = str(args.start_train_year)[-2:] + \
-                       str(args.end_train_year)[-2:]
+    train_date = '{}{:02d}-{}{:02d}'.format(str(args.start_train_year)[-2:],
+                                          args.start_month,
+                                          str(args.end_train_year)[-2:],
+                                          args.end_month)
 
     if args.model == 'unet':
         no_cross_entropy_weight = ''
@@ -98,7 +107,7 @@ def set_experiment_name(args):
                                   args.optimizer,
                                   args.lr,
                                   no_cross_entropy_weight,
-                                  train_year_range)
+                                  train_date)
 
     elif args.model == 'convlstm':
         experiment_name = 'nims_convlstm_ws{}_tn{}_ep{}_bs{}_{}{}_{}' \
@@ -108,7 +117,7 @@ def set_experiment_name(args):
                                   args.batch_size,
                                   args.optimizer,
                                   args.lr,
-                                  train_year_range)
+                                  train_date)
 
     if args.custom_name:
         experiment_name += ('_' + args.custom_name)
@@ -149,6 +158,8 @@ if __name__ == '__main__':
                                      variables=variables,
                                      train_year=(args.start_train_year,
                                                  args.end_train_year),
+                                     month=(args.start_month,
+                                            args.end_month),
                                      train=True,
                                      transform=ToTensor(),
                                      root_dir=args.dataset_dir,
@@ -160,6 +171,8 @@ if __name__ == '__main__':
                                      variables=variables,
                                      train_year=(args.start_train_year,
                                                  args.end_train_year),
+                                     month=(args.start_month,
+                                            args.end_month),
                                      train=False,
                                      transform=ToTensor(),
                                      root_dir=args.dataset_dir,
