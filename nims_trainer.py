@@ -66,6 +66,7 @@ class NIMSTrainer:
     def _epoch(self, data_loader, train):
         pbar = tqdm(data_loader)
         for images, target in pbar:
+            
             if self.model.name == 'unet':
                 images = images.type(torch.FloatTensor).to(self.device)
                 target = target.type(torch.LongTensor).to(self.device)

@@ -1,6 +1,6 @@
 import torch
 import torch.optim as optim
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 import numpy as np
 
 from model.unet_model import UNet
@@ -17,6 +17,7 @@ try:
 except:
     pass
 
+from tqdm import tqdm
 import os
 import argparse
 
@@ -71,6 +72,8 @@ def parse_args():
     nims_dataset.add_argument('--end_train_year', default=2017, type=int, help='end year for training')
     nims_dataset.add_argument('--start_month', default=1, type=int, help='month range for train and test')
     nims_dataset.add_argument('--end_month', default=12, type=int, help='month range for train and test')
+    
+    nims_dataset.add_argument('--sampling_ratio', default=1.0, type=float, help='the ratio of undersampling')
 
     hyperparam = parser.add_argument_group('hyper-parameters')
     hyperparam.add_argument('--num_epochs', default=50, type=int, help='# of training epochs')
@@ -99,24 +102,26 @@ def set_experiment_name(args):
         if args.no_cross_entropy_weight:
             no_cross_entropy_weight = 'noweight_'
             
-        experiment_name = 'nims_unet_nb{}_ch{}_ws{}_tn{}_ep{}_bs{}_{}{}_{}{}' \
+        experiment_name = 'nims_unet_nb{}_ch{}_ws{}_tn{}_ep{}_bs{}_sr{}_{}{}_{}{}' \
                           .format(args.n_blocks,
                                   args.start_channels,
                                   args.window_size,
                                   args.target_num,
                                   args.num_epochs,
                                   args.batch_size,
+                                  args.sampling_ratio,
                                   args.optimizer,
                                   args.lr,
                                   no_cross_entropy_weight,
                                   train_date)
 
     elif args.model == 'convlstm':
-        experiment_name = 'nims_convlstm_ws{}_tn{}_ep{}_bs{}_{}{}_{}' \
+        experiment_name = 'nims_convlstm_ws{}_tn{}_ep{}_bs{}_sr{}_{}{}_{}' \
                           .format(args.window_size,
                                   args.target_num,
                                   args.num_epochs,
                                   args.batch_size,
+                                  args.sampling_ratio,
                                   args.optimizer,
                                   args.lr,
                                   train_date)
@@ -227,9 +232,31 @@ if __name__ == '__main__':
             except:
                 print('If you want to see summary of model, install torchsummary')
 
+    # Undersampling
+    print (len(nims_train_dataset))
+    if args.sampling_ratio != 1.0:
+        print ("=====UnderSampling=====")
+        selected_idx = []
+        for idx in tqdm(range(len(nims_train_dataset))):
+            target = nims_train_dataset[idx][1]
+            
+            nonzero_idx = torch.nonzero(target)
+            variable_idx = nonzero_idx[:,0]
+            height_idx = nonzero_idx[:,1]
+            width_idx = nonzero_idx[:,2]
+            target_nonzero_mean = torch.mean(target[variable_idx, height_idx, width_idx])
+
+            if target_nonzero_mean < 2.0: # This case is not rainy hour
+                if np.random.uniform() < args.sampling_ratio:
+                    selected_idx.append(idx)
+            else: # This case is rainy hour
+                selected_idx.append(idx)
+        nims_train_dataset = Subset(nims_train_dataset, selected_idx)
+        print (len(nims_train_dataset))
+        
     # Create dataloaders
     train_loader = DataLoader(nims_train_dataset, batch_size=args.batch_size,
-                              shuffle=False, num_workers=args.num_workers,
+                              shuffle=True, num_workers=args.num_workers,
                               pin_memory=True)
     test_loader  = DataLoader(nims_test_dataset, batch_size=args.batch_size,
                               shuffle=False, num_workers=args.num_workers,

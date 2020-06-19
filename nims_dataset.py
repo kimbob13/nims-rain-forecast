@@ -145,17 +145,17 @@ class NIMSDataset(Dataset):
         target_start_idx = idx + self.window_size
         target_end_idx = target_start_idx + self.target_num
         target_window_path = self._data_path_list[target_start_idx:target_end_idx]
-
+        
         images = self._merge_window_data(images_window_path)
         target = self._merge_window_data(target_window_path, target=True)
-
+        
         images, target = self._to_model_specific_tensor(images, target, self.train,
                                                         self.block_size, self.aggr_method)
 
         if self.transform:
             images = self.transform(images)
             target = self.transform(target)
-
+            
         return images, target
 
     def _merge_window_data(self, window_path, target=False):
@@ -242,7 +242,7 @@ class NIMSDataset(Dataset):
                     
             images = reduced_images
             target = reduced_target
-                
+        
         if self.model == 'unet':
             # We change each tensor to CWH format when the model is UNet
             # window_size is serves as channel in UNet
