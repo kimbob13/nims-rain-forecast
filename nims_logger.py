@@ -46,10 +46,8 @@ class NIMSLogger:
             for target_idx in range(target_num):
                 self.month_label_stat[target_idx + 1] = dict()
             
-            self.micro_eval_df = pd.DataFrame(0, columns=['pred_yes', 'pred_no'],
-                                              index=['observe_yes', 'observe_no'])
-            self.macro_eval_df = pd.DataFrame(0, columns=['pred_0', 'pred_1', 'pred_2', 'pred_3'],
-                                              index=['observe_0', 'observe_1', 'observe_2', 'observe_3'])
+            self.micro_eval = np.zeros((len(self.month_name) + 1, 2, 2))
+            self.macro_eval = np.zeros((len(self.month_name) + 1, 4, 4))                                              
 
     def update(self, target_idx, loss=None, correct=None,
                macro_f1=None, micro_f1=None, test=False,
@@ -85,14 +83,13 @@ class NIMSLogger:
             cur_target_time = self.cur_test_time + timedelta(hours=target_idx)
             cur_month = cur_target_time.month
 
-            month_name = self.month_name[cur_month - 1]
-            if month_name not in self.month_label_stat[target_idx + 1]:
-                self.month_label_stat[target_idx + 1][month_name] = {0: {'count': 0, 'total': 0},
-                                                                     1: {'count': 0, 'total': 0},
-                                                                     2: {'count': 0, 'total': 0},
-                                                                     3: {'count': 0, 'total': 0}}
+            if cur_month not in self.month_label_stat[target_idx + 1]:
+                self.month_label_stat[target_idx + 1][cur_month] = {0: {'count': 0, 'total': 0},
+                                                                    1: {'count': 0, 'total': 0},
+                                                                    2: {'count': 0, 'total': 0},
+                                                                    3: {'count': 0, 'total': 0}}
 
-            self._update_label_stat(target_idx, month_name, pred_tensor, target_tensor)
+            self._update_label_stat(target_idx, cur_month, pred_tensor, target_tensor)
             self.cur_test_time += timedelta(hours=1)
 
     def print_stat(self, dataset_len, test=False):
@@ -139,7 +136,7 @@ class NIMSLogger:
                     print('-' * 10, '{} hour after'.format(hour_after), '-' * 10)
 
                     for month, label_stat in self.month_label_stat[hour_after].items():
-                        print('[{}]'.format(month))
+                        print('[{}]'.format(self.month_name[month - 1]))
 
                         for label, stat in label_stat.items():
                             count = stat['count']
@@ -147,39 +144,40 @@ class NIMSLogger:
 
                             # Update micro eval table
                             if label == 0:
-                                self.micro_eval_df.loc['observe_no']['pred_no'] += count
-                                self.micro_eval_df.loc['observe_no']['pred_yes'] += (total - count)
+                                self.micro_eval[month - 1][1][1] += count
+                                self.micro_eval[month - 1][1][0] += (total - count)
+                                self.micro_eval[-1][1][1] += count
+                                self.micro_eval[-1][1][0] += (total - count)
+
                             else:
-                                self.micro_eval_df.loc['observe_yes']['pred_yes'] += count
-                                self.micro_eval_df.loc['observe_yes']['pred_no'] += (total - count)
+                                self.micro_eval[month - 1][0][0] = count
+                                self.micro_eval[month - 1][0][1] = (total - count)
+                                self.micro_eval[-1][0][0] += count
+                                self.micro_eval[-1][0][1] += (total - count)
 
                             if total == 0:
                                 accuracy = 'NO TARGET VALUE'
                                 print('\t(label {}): {} ({:10,d} / {:10,d})'.format(label, accuracy, count, total))
-                                stat_df.loc[month]['class {}'.format(label)] = np.nan
+                                stat_df.loc[self.month_name[month - 1]]['class {}'.format(label)] = np.nan
 
                             else:
                                 accuracy = (count / total) * 100
                                 print('\t(label {}): {:7.3f}% ({:10,d} / {:10,d})'.format(label, accuracy, count, total))
-                                stat_df.loc[month]['class {}'.format(label)] = accuracy
+                                stat_df.loc[self.month_name[month - 1]]['class {}'.format(label)] = accuracy
 
             # Save stat df
             stat_df = stat_df.T
             stat_df.to_csv(csv_file, na_rep='nan')
 
-            # Make total row and column for macro eval table and save
-            self.macro_eval_df['total'] = self.macro_eval_df.sum(axis=1) # column total
-            self.macro_eval_df.loc['total'] = self.macro_eval_df.sum(axis=0) # row total
+            # Save macro confusion table
+            macro_file = os.path.join('./results', 'eval', 'macro-{}.npy'.format(self.experiment_name))
+            with open(macro_file, 'wb') as f:
+                np.save(f, self.macro_eval)
 
-            macro_file = os.path.join('./results', 'eval', 'macro-{}.csv'.format(self.experiment_name))
-            self.macro_eval_df.to_csv(macro_file)
-
-            # Make total row and column for macro eval table and save
-            self.micro_eval_df['total'] = self.micro_eval_df.sum(axis=1) # column total
-            self.micro_eval_df.loc['total'] = self.micro_eval_df.sum(axis=0) # row total
-
-            micro_file = os.path.join('./results', 'eval', 'micro-{}.csv'.format(self.experiment_name))
-            self.micro_eval_df.to_csv(micro_file)
+            # Save micro confusion table
+            micro_file = os.path.join('./results', 'eval', 'micro-{}.npy'.format(self.experiment_name))
+            with open(micro_file, 'wb') as f:
+                np.save(f, self.micro_eval)
 
     @property
     def latest_stat(self):
@@ -214,7 +212,7 @@ class NIMSLogger:
 
         return stat_str
 
-    def _update_label_stat(self, target_idx, month_name, pred_tensor, target_tensor):
+    def _update_label_stat(self, target_idx, cur_month, pred_tensor, target_tensor):
         num_class = pred_tensor.shape[1]
         _, pred_label  = pred_tensor.topk(1, dim=1, largest=True, sorted=True)
         pred_label = pred_label.squeeze(1).flatten().detach().cpu().numpy()
@@ -226,13 +224,14 @@ class NIMSLogger:
             cur_label_target_idx = np.where(target == i)[0]
             cur_label_pred_idx = np.where(pred_label[cur_label_target_idx] == i)[0]
 
-            self.month_label_stat[target_idx + 1][month_name][i]['count'] += len(cur_label_pred_idx)
-            self.month_label_stat[target_idx + 1][month_name][i]['total'] += len(cur_label_target_idx)
+            self.month_label_stat[target_idx + 1][cur_month][i]['count'] += len(cur_label_pred_idx)
+            self.month_label_stat[target_idx + 1][cur_month][i]['total'] += len(cur_label_target_idx)
 
             # Update macro eval table
             for j in range(num_class):
                 pred_idx = np.where(pred_label[cur_label_target_idx] == j)[0]
-                self.macro_eval_df.loc['observe_{}'.format(i)]['pred_{}'.format(j)] += len(pred_idx)
+                self.macro_eval[cur_month - 1][i][j] += len(pred_idx)
+                self.macro_eval[-1][i][j] += len(pred_idx)
 
     def _clear_one_target_stat(self, _stat):
         try:
