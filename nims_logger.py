@@ -22,6 +22,7 @@ class NIMSLogger:
         self.target_num = target_num
         self.one_hour_pixel = one_hour_pixel
         self.one_instance_pixel = batch_size * one_hour_pixel
+        self.num_update = 0
 
         # Initialize one epoch stat dictionary
         self.one_epoch_stat = dict()
@@ -79,6 +80,8 @@ class NIMSLogger:
             except:
                 print("You don't specify the micro_f1 to be logged")
 
+        self.num_update += 1
+
         if test:
             cur_target_time = self.cur_test_time + timedelta(hours=target_idx)
             cur_month = cur_target_time.month
@@ -100,7 +103,7 @@ class NIMSLogger:
 
             cur_stat_str = "[{:2d} hour] ".format(target_idx + 1)
             try:
-                cur_stat_str += "loss = {:.5f}".format(cur_target_stat.loss / dataset_len)
+                cur_stat_str += "loss = {:.5f}".format(cur_target_stat.loss / self.num_update)
             except:
                 pass
 
@@ -110,12 +113,12 @@ class NIMSLogger:
                 pass
 
             try:
-                cur_stat_str += ", f1 (macro) = {:.5f}".format(cur_target_stat.macro_f1 / dataset_len)
+                cur_stat_str += ", f1 (macro) = {:.5f}".format(cur_target_stat.macro_f1 / self.num_update)
             except:
                 pass
 
             try:
-                cur_stat_str += ", f1 (micro) = {:.5f}".format(cur_target_stat.micro_f1 / dataset_len)
+                cur_stat_str += ", f1 (micro) = {:.5f}".format(cur_target_stat.micro_f1 / self.num_update)
             except:
                 pass
 
@@ -144,14 +147,20 @@ class NIMSLogger:
 
                             # Update micro eval table
                             if label == 0:
+                                # Month specific
                                 self.micro_eval[month - 1][1][1] += count
                                 self.micro_eval[month - 1][1][0] += (total - count)
+
+                                # Year total
                                 self.micro_eval[-1][1][1] += count
                                 self.micro_eval[-1][1][0] += (total - count)
 
                             else:
+                                # Month specific
                                 self.micro_eval[month - 1][0][0] = count
                                 self.micro_eval[month - 1][0][1] = (total - count)
+
+                                # Year total
                                 self.micro_eval[-1][0][0] += count
                                 self.micro_eval[-1][0][1] += (total - count)
 
@@ -230,8 +239,8 @@ class NIMSLogger:
             # Update macro eval table
             for j in range(num_class):
                 pred_idx = np.where(pred_label[cur_label_target_idx] == j)[0]
-                self.macro_eval[cur_month - 1][i][j] += len(pred_idx)
-                self.macro_eval[-1][i][j] += len(pred_idx)
+                self.macro_eval[cur_month - 1][i][j] += len(pred_idx)   # month specific
+                self.macro_eval[-1][i][j] += len(pred_idx)              # year total
 
     def _clear_one_target_stat(self, _stat):
         try:
@@ -257,6 +266,8 @@ class NIMSLogger:
                 _stat.micro_f1 = 0.0
         except:
             pass
+
+        self.num_update = 0
 
 class OneTargetStat:
     def __init__(self, loss, correct, macro_f1, micro_f1):
