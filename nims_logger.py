@@ -20,6 +20,7 @@ class NIMSLogger:
         args [argparse]: parsed arguments from main
         """
         self.target_num = target_num
+        self.batch_size = batch_size
         self.one_hour_pixel = one_hour_pixel
         self.one_instance_pixel = batch_size * one_hour_pixel
         self.num_update = 0
@@ -86,14 +87,8 @@ class NIMSLogger:
             cur_target_time = self.cur_test_time + timedelta(hours=target_idx)
             cur_month = cur_target_time.month
 
-            if cur_month not in self.month_label_stat[target_idx + 1]:
-                self.month_label_stat[target_idx + 1][cur_month] = {0: {'count': 0, 'total': 0},
-                                                                    1: {'count': 0, 'total': 0},
-                                                                    2: {'count': 0, 'total': 0},
-                                                                    3: {'count': 0, 'total': 0}}
-
             self._update_label_stat(target_idx, cur_month, pred_tensor, target_tensor)
-            self.cur_test_time += timedelta(hours=1)
+            self.cur_test_time += timedelta(hours=self.batch_size)
 
     def print_stat(self, dataset_len, test=False):
         total_pixel = dataset_len * self.one_hour_pixel
@@ -226,6 +221,13 @@ class NIMSLogger:
         _, pred_label  = pred_tensor.topk(1, dim=1, largest=True, sorted=True)
         pred_label = pred_label.squeeze(1).flatten().detach().cpu().numpy()
         target = target_tensor.flatten().detach().cpu().numpy()
+
+        # Create new entry if cur_month is not encountered
+        if cur_month not in self.month_label_stat[target_idx + 1]:
+            self.month_label_stat[target_idx + 1][cur_month] = {0: {'count': 0, 'total': 0},
+                                                                1: {'count': 0, 'total': 0},
+                                                                2: {'count': 0, 'total': 0},
+                                                                3: {'count': 0, 'total': 0}}
 
         # 전체 0은 target에 있는 0의 개수여야 하고, 맞춘 건 그중에서 target이 0인 위치를 pred도 0으로 맞춘 개수
         # 1, 2, 3도 마찬가지
