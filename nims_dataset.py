@@ -19,13 +19,16 @@ MONTH_DAY = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 
 
 class NIMSDataset(Dataset):
-    def __init__(self, model, window_size, target_num, variables,
-                 train_year=(2009, 2017), month=(1, 12), train=True,
-                 transform=None, root_dir=None, debug=False):
+    def __init__(self, model, window_size, target_num, variables, block_size, aggr_method,
+                 train_year=(2009, 2017),  month=(1, 12), train=True, transform=None,
+                 root_dir=None, debug=False):
+        
         self.model = model
         self.window_size = window_size
         self.target_num = target_num
         self.variables = variables
+        self.block_size = block_size
+        self.aggr_method = aggr_method
 
         self.start_train_year = train_year[0]       # start year for training
         self.end_train_year = train_year[1]         # end year for training
@@ -142,16 +145,17 @@ class NIMSDataset(Dataset):
         target_start_idx = idx + self.window_size
         target_end_idx = target_start_idx + self.target_num
         target_window_path = self._data_path_list[target_start_idx:target_end_idx]
-
+        
         images = self._merge_window_data(images_window_path)
         target = self._merge_window_data(target_window_path, target=True)
-
-        images, target = self._to_model_specific_tensor(images, target)
+        
+        images, target = self._to_model_specific_tensor(images, target, self.train,
+                                                        self.block_size, self.aggr_method)
 
         if self.transform:
             images = self.transform(images)
             target = self.transform(target)
-
+            
         return images, target
 
     def _merge_window_data(self, window_path, target=False):
@@ -193,7 +197,7 @@ class NIMSDataset(Dataset):
 
         return results
     
-    def _to_model_specific_tensor(self, images, target):
+    def _to_model_specific_tensor(self, images, target, train, block_size=1, aggr_method=None):
         """
         Change images and target tensor to model specific tensor
         i.e. change the shape of images and target
@@ -201,6 +205,9 @@ class NIMSDataset(Dataset):
         <Parameters>
         images [np.ndarray]: SCHW format (S: window size)
         target [np.ndarray]: SCHW format (S: window size)
+        block_size [int]: the size of aggregated block.
+                          if block_size == 1, then original images and target.
+        aggr_method [str]: block aggregation method - 'max' or 'avg'
 
         <Return>
         model == unet:
@@ -210,6 +217,32 @@ class NIMSDataset(Dataset):
             images [np.ndarray]: SCHW format
             target [np.ndarray]: SCHW format
         """
+        
+        if train and block_size > 1:
+            reduced_height = images.shape[2] // block_size
+            reduced_width = images.shape[3] // block_size
+
+            reduced_images = np.zeros([images.shape[0], images.shape[1], reduced_height, reduced_width])
+            reduced_target = np.zeros([target.shape[0], target.shape[1], reduced_height, reduced_width])
+
+            for i in range(reduced_height):
+                for j in range(reduced_width):
+                    tmp_images = images[:, :, i*block_size:(i+1)*block_size, j*block_size:(j+1)*block_size]
+                    tmp_target = target[:, :, i*block_size:(i+1)*block_size, j*block_size:(j+1)*block_size]
+                    
+                    if aggr_method == 'max':
+                        aggregated_images = np.max(tmp_images, axis=(2,3))
+                        aggregated_target = np.max(tmp_target, axis=(2,3))
+                    elif aggr_method == 'avg':
+                        aggregated_images = np.average(tmp_images, axis=(2,3))
+                        aggregated_target = np.average(tmp_target, axis=(2,3))
+                    
+                    reduced_images[:,:,i,j] = aggregated_images
+                    reduced_target[:,:,i,j] = aggregated_target
+                    
+            images = reduced_images
+            target = reduced_target
+        
         if self.model == 'unet':
             # We change each tensor to CWH format when the model is UNet
             # window_size is serves as channel in UNet
@@ -217,7 +250,7 @@ class NIMSDataset(Dataset):
             images = images.squeeze(1)
             target = target.squeeze(1)
             target = self._to_pixel_wise_label(target)
-
+            
         elif self.model == 'convlstm':
             # Just return original images and target
             pass

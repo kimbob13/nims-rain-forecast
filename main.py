@@ -1,6 +1,6 @@
 import torch
 import torch.optim as optim
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 import numpy as np
 
 from model.unet_model import UNet
@@ -17,7 +17,11 @@ try:
 except:
     pass
 
+from tqdm import tqdm
+from multiprocessing import Process, Queue, cpu_count
+import random
 import os
+import sys
 import argparse
 
 def create_results_dir():
@@ -65,10 +69,14 @@ def parse_args():
                               help='which variables to use (rain, cape, etc.). \
                                     Can be single number which specify how many variables to use \
                                     or list of variables name')
+    nims_dataset.add_argument('--block_size', default=1, type=int, help='the size of aggregated block')
+    nims_dataset.add_argument('--aggr_method', default=None, type=str, help='The method of block aggregation (max, avg)')
     nims_dataset.add_argument('--start_train_year', default=2009, type=int, help='start year for training')
     nims_dataset.add_argument('--end_train_year', default=2017, type=int, help='end year for training')
     nims_dataset.add_argument('--start_month', default=1, type=int, help='month range for train and test')
     nims_dataset.add_argument('--end_month', default=12, type=int, help='month range for train and test')
+    
+    nims_dataset.add_argument('--sampling_ratio', default=1.0, type=float, help='the ratio of undersampling')
 
     hyperparam = parser.add_argument_group('hyper-parameters')
     hyperparam.add_argument('--num_epochs', default=50, type=int, help='# of training epochs')
@@ -79,6 +87,76 @@ def parse_args():
     args = parser.parse_args()
 
     return args
+
+def _undersample(train_dataset, indices, pid=None, queue=None):
+    target_nonzero_means = []
+
+    for idx in indices:
+        target = train_dataset[idx][1]
+
+        nonzero_idx = torch.nonzero(target, as_tuple=False)
+        variable_idx = nonzero_idx[:, 0]
+        height_idx = nonzero_idx[:, 1]
+        width_idx = nonzero_idx[:, 2]
+
+        target_nonzero_mean = torch.mean(target[variable_idx, height_idx, width_idx])
+        target_nonzero_means.append((idx, target_nonzero_mean.item()))
+
+    if queue:
+        queue.put(target_nonzero_means)
+    else:
+        return target_nonzero_means
+
+def undersample(train_dataset, sampling_ratio):
+    # Make indices list
+    indices = list(range(len(train_dataset)))
+
+    num_processes = cpu_count() // 2
+    num_indices_per_process = len(indices) // num_processes
+
+    # Create queue
+    queues = []
+    for i in range(num_processes):
+        queues.append(Queue())
+
+    # Create processes
+    processes = []
+    for i in range(num_processes):
+        start_idx = i * num_indices_per_process
+        end_idx = start_idx + num_indices_per_process
+
+        if i == num_processes - 1:
+            processes.append(Process(target=_undersample,
+                                     args=(train_dataset, indices[start_idx:],
+                                           i, queues[i])))
+        else:
+            processes.append(Process(target=_undersample,
+                                     args=(train_dataset, indices[start_idx:end_idx],
+                                           i, queues[i])))
+
+    # Start processes
+    for i in range(num_processes):
+        processes[i].start()
+
+    # Get return value of each process
+    target_nonzero_means = []
+    for i in tqdm(range(num_processes)):
+        proc_result = queues[i].get()
+        target_nonzero_means.extend(proc_result)
+
+    # Join processes
+    for i in range(num_processes):
+        processes[i].join()
+
+    selected_idx = []
+    for idx, target_nonzero_mean in target_nonzero_means:
+        if target_nonzero_mean < 2.0: # This case is not rainy hour
+            if np.random.uniform() < sampling_ratio:
+                selected_idx.append(idx)
+        else: # This case is rainy hour
+            selected_idx.append(idx)
+
+    return selected_idx
 
 def set_experiment_name(args):
     """
@@ -97,24 +175,26 @@ def set_experiment_name(args):
         if args.no_cross_entropy_weight:
             no_cross_entropy_weight = 'noweight_'
             
-        experiment_name = 'nims_unet_nb{}_ch{}_ws{}_tn{}_ep{}_bs{}_{}{}_{}{}' \
+        experiment_name = 'nims_unet_nb{}_ch{}_ws{}_tn{}_ep{}_bs{}_sr{}_{}{}_{}{}' \
                           .format(args.n_blocks,
                                   args.start_channels,
                                   args.window_size,
                                   args.target_num,
                                   args.num_epochs,
                                   args.batch_size,
+                                  args.sampling_ratio,
                                   args.optimizer,
                                   args.lr,
                                   no_cross_entropy_weight,
                                   train_date)
 
     elif args.model == 'convlstm':
-        experiment_name = 'nims_convlstm_ws{}_tn{}_ep{}_bs{}_{}{}_{}' \
+        experiment_name = 'nims_convlstm_ws{}_tn{}_ep{}_bs{}_sr{}_{}{}_{}' \
                           .format(args.window_size,
                                   args.target_num,
                                   args.num_epochs,
                                   args.batch_size,
+                                  args.sampling_ratio,
                                   args.optimizer,
                                   args.lr,
                                   train_date)
@@ -144,6 +224,7 @@ if __name__ == '__main__':
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(2020)
     np.random.seed(2020)
+    random.seed(2020)
 
     # Create necessary directory
     create_results_dir()
@@ -156,6 +237,8 @@ if __name__ == '__main__':
                                      window_size=args.window_size,
                                      target_num=args.target_num,
                                      variables=variables,
+                                     block_size=args.block_size,
+                                     aggr_method=args.aggr_method,
                                      train_year=(args.start_train_year,
                                                  args.end_train_year),
                                      month=(args.start_month,
@@ -169,6 +252,8 @@ if __name__ == '__main__':
                                      window_size=args.window_size,
                                      target_num=args.target_num,
                                      variables=variables,
+                                     block_size=args.block_size,
+                                     aggr_method=args.aggr_method,
                                      train_year=(args.start_train_year,
                                                  args.end_train_year),
                                      month=(args.start_month,
@@ -194,8 +279,8 @@ if __name__ == '__main__':
         criterion = NIMSCrossEntropyLoss(device, num_classes=num_classes,
                                          no_weights=args.no_cross_entropy_weight)
 
-        num_lat = sample.shape[1] # the number of latitudes (253)
-        num_lon = sample.shape[2] # the number of longitudes (149)
+        num_lat = sample.shape[1] # the number of latitudes (originally 253)
+        num_lon = sample.shape[2] # the number of longitudes (originally 149)
 
     elif args.model == 'convlstm':
         assert args.window_size == args.target_num, \
@@ -208,8 +293,8 @@ if __name__ == '__main__':
                                   device=device)
         criterion = MSELoss()
 
-        num_lat = sample.shape[2] # the number of latitudes (253)
-        num_lon = sample.shape[3] # the number of longitudes (149)
+        num_lat = sample.shape[2] # the number of latitudes (originally 253)
+        num_lon = sample.shape[3] # the number of longitudes (originally 149)
 
     if args.debug:
         # XXX: Currently, torchsummary doesn't run on ConvLSTM
@@ -221,9 +306,22 @@ if __name__ == '__main__':
             except:
                 print('If you want to see summary of model, install torchsummary')
 
+    # Undersampling
+    if args.sampling_ratio != 1.0:
+        print('=' * 20, 'Under Sampling', '=' * 20)
+        print('Before Under sampling, train len:', len(nims_train_dataset))
+
+        print('Please wait...')
+        selected_idx = undersample(nims_train_dataset, args.sampling_ratio)
+        nims_train_dataset = Subset(nims_train_dataset, selected_idx)
+
+        print('After Under sampling, train len:', len(nims_train_dataset))
+        print('=' * 20, 'Finish Under Sampling', '=' * 20)
+        print()
+        
     # Create dataloaders
     train_loader = DataLoader(nims_train_dataset, batch_size=args.batch_size,
-                              shuffle=False, num_workers=args.num_workers,
+                              shuffle=True, num_workers=args.num_workers,
                               pin_memory=True)
     test_loader  = DataLoader(nims_test_dataset, batch_size=args.batch_size,
                               shuffle=False, num_workers=args.num_workers,
