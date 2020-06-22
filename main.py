@@ -18,7 +18,10 @@ except:
     pass
 
 from tqdm import tqdm
+from multiprocessing import Process, Queue, cpu_count
+import random
 import os
+import sys
 import argparse
 
 def create_results_dir():
@@ -84,6 +87,76 @@ def parse_args():
     args = parser.parse_args()
 
     return args
+
+def _undersample(train_dataset, indices, pid=None, queue=None):
+    target_nonzero_means = []
+
+    for idx in indices:
+        target = train_dataset[idx][1]
+
+        nonzero_idx = torch.nonzero(target, as_tuple=False)
+        variable_idx = nonzero_idx[:, 0]
+        height_idx = nonzero_idx[:, 1]
+        width_idx = nonzero_idx[:, 2]
+
+        target_nonzero_mean = torch.mean(target[variable_idx, height_idx, width_idx])
+        target_nonzero_means.append((idx, target_nonzero_mean.item()))
+
+    if queue:
+        queue.put(target_nonzero_means)
+    else:
+        return target_nonzero_means
+
+def undersample(train_dataset, sampling_ratio):
+    # Make indices list
+    indices = list(range(len(train_dataset)))
+
+    num_processes = cpu_count() // 2
+    num_indices_per_process = len(indices) // num_processes
+
+    # Create queue
+    queues = []
+    for i in range(num_processes):
+        queues.append(Queue())
+
+    # Create processes
+    processes = []
+    for i in range(num_processes):
+        start_idx = i * num_indices_per_process
+        end_idx = start_idx + num_indices_per_process
+
+        if i == num_processes - 1:
+            processes.append(Process(target=_undersample,
+                                     args=(train_dataset, indices[start_idx:],
+                                           i, queues[i])))
+        else:
+            processes.append(Process(target=_undersample,
+                                     args=(train_dataset, indices[start_idx:end_idx],
+                                           i, queues[i])))
+
+    # Start processes
+    for i in range(num_processes):
+        processes[i].start()
+
+    # Get return value of each process
+    target_nonzero_means = []
+    for i in tqdm(range(num_processes)):
+        proc_result = queues[i].get()
+        target_nonzero_means.extend(proc_result)
+
+    # Join processes
+    for i in range(num_processes):
+        processes[i].join()
+
+    selected_idx = []
+    for idx, target_nonzero_mean in target_nonzero_means:
+        if target_nonzero_mean < 2.0: # This case is not rainy hour
+            if np.random.uniform() < sampling_ratio:
+                selected_idx.append(idx)
+        else: # This case is rainy hour
+            selected_idx.append(idx)
+
+    return selected_idx
 
 def set_experiment_name(args):
     """
@@ -151,6 +224,7 @@ if __name__ == '__main__':
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(2020)
     np.random.seed(2020)
+    random.seed(2020)
 
     # Create necessary directory
     create_results_dir()
@@ -233,26 +307,17 @@ if __name__ == '__main__':
                 print('If you want to see summary of model, install torchsummary')
 
     # Undersampling
-    print (len(nims_train_dataset))
     if args.sampling_ratio != 1.0:
-        print ("=====UnderSampling=====")
-        selected_idx = []
-        for idx in tqdm(range(len(nims_train_dataset))):
-            target = nims_train_dataset[idx][1]
-            
-            nonzero_idx = torch.nonzero(target)
-            variable_idx = nonzero_idx[:,0]
-            height_idx = nonzero_idx[:,1]
-            width_idx = nonzero_idx[:,2]
-            target_nonzero_mean = torch.mean(target[variable_idx, height_idx, width_idx])
+        print('=' * 20, 'Under Sampling', '=' * 20)
+        print('Before Under sampling, train len:', len(nims_train_dataset))
 
-            if target_nonzero_mean < 2.0: # This case is not rainy hour
-                if np.random.uniform() < args.sampling_ratio:
-                    selected_idx.append(idx)
-            else: # This case is rainy hour
-                selected_idx.append(idx)
+        print('Please wait...')
+        selected_idx = undersample(nims_train_dataset, args.sampling_ratio)
         nims_train_dataset = Subset(nims_train_dataset, selected_idx)
-        print (len(nims_train_dataset))
+
+        print('After Under sampling, train len:', len(nims_train_dataset))
+        print('=' * 20, 'Finish Under Sampling', '=' * 20)
+        print()
         
     # Create dataloaders
     train_loader = DataLoader(nims_train_dataset, batch_size=args.batch_size,
