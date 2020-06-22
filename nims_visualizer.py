@@ -143,13 +143,11 @@ def plot_histogram(data, bins, variables, mode):
     # Plot
     fig = plt.figure()
     ax = fig.add_subplot()
-    avg_bars = ax.bar(range(len(bins) - 1), counts[0], width=1, edgecolor='k')
+    avg_bars = ax.bar(range(len(bins) - 1), counts[0], width=1, align='edge', edgecolor='k')
     ax.set_xticks(range(len(bins) - 1))
     ax.set_xticklabels(bins[:-1])
     ax.set_title('{} {} Distribution'.format(title, var_name.title()))
     ax.set_xlabel('{} ({})'.format(var_name, get_variable_unit(var_name)))
-    #plt.hist(data, bins=bins, ec='black')
-    #plt.xscale('log')
     for bar in avg_bars:
         yval = bar.get_height()
         plt.text(bar.get_x(), yval + 15, yval)
@@ -189,6 +187,8 @@ if __name__ == '__main__':
                                        window_size=1,
                                        target_num=1,
                                        variables=variables,
+                                       block_size=1,
+                                       aggr_method=None,
                                        train_year=(2017, 2017),
                                        train=True,
                                        debug=False).data_path_list
