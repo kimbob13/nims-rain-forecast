@@ -14,15 +14,21 @@ def parse_args():
     return args
 
 def convert_micro_confusion_matrix(experiment_name, baseline_name):
-    # From micro confusion matrix
-    micro_pd = pd.read_csv(os.path.join('./results',
-                                        'eval',
-                                        'micro-{}.csv'.format(experiment_name)), index_col=0)
+    # From micro (binary) confusion matrix
+    multinomial_result = np.load(os.path.join('./results',
+                                              'eval',
+                                              'macro-{}.npy'.format(experiment_name)))
 
-    H = micro_pd['pred_yes'][0] # Hits
-    M = micro_pd['pred_no'][0] # Misses
-    F = micro_pd['pred_yes'][1] # False alarms
-    C = micro_pd['pred_no'][1] # Correct negatives
+    binary_result = np.zeros([13, 2, 2])
+    binary_result[:, 0, 0] = multinomial_result[:, 0, 0]
+    binary_result[:, 0, 1] = np.sum(multinomial_result[:, 0, 1:], axis=1)
+    binary_result[:, 1, 0] = np.sum(multinomial_result[:, 1:, 0], axis=1)
+    binary_result[:, 1, 1] = np.sum(multinomial_result[:, 1:, 1:], axis=(1,2))
+    
+    H = binary_result[:, 0, 0] # Hits
+    M = binary_result[:, 0, 1] # Misses
+    F = binary_result[:, 1, 0] # False alarms
+    C = binary_result[:, 1, 1] # Correct negatives
 
     # 1. Probability of Detection, POD
     pod = H / (H+M)
@@ -50,28 +56,33 @@ def convert_micro_confusion_matrix(experiment_name, baseline_name):
     kss = (H*C-M*F) / ((H+M)*(F+C))
 
     if baseline_name is None:
-        return pod, far, pag, bias, acc, csi, hss, kss
+        return np.array([pod, far, pag, bias, acc, csi, hss, kss])
     else:
         # 9. Improvement Against Standard
-        baseline_micro_pd = pd.read_csv(os.path.join('./results',
-                                                     'eval',
-                                                     'micro-{}.csv'.format(baseline_name)))
+        baseline_multinomial_result = np.load(os.path.join('./results',
+                                                           'eval',
+                                                           'macro-{}.npy'.format(baseline_name)))
+        
+        baseline_binary_result = np.zeros([13, 2, 2])
+        baseline_binary_result[:, 0, 0] = baseline_multinomial_result[:, 0, 0]
+        baseline_binary_result[:, 0, 1] = np.sum(baseline_multinomial_result[:, 0, 1:], axis=1)
+        baseline_binary_result[:, 1, 0] = np.sum(baseline_multinomial_result[:, 1:, 0], axis=1)
+        baseline_binary_result[:, 1, 1] = np.sum(baseline_multinomial_result[:, 1:, 1:], axis=(1,2))
 
-        baseline_H = baseline_micro_pd['pred_yes'][0] # Hits
-        baseline_M = baseline_micro_pd['pred_no'][0] # Misses
-        baseline_F = baseline_micro_pd['pred_yes'][1] # False alarms
-        baseline_C = baseline_micro_pd['pred_no'][1] # Correct negatives
-
+        baseline_H = baseline_binary_result[:, 0, 0] # Hits
+        baseline_M = baseline_binary_result[:, 0, 1] # Misses
+        baseline_F = baseline_binary_result[:, 1, 0] # False alarms
+        baseline_C = baseline_binary_result[:, 1, 1] # Correct negatives
+        
         baseline_csi = baseline_H / (baseline_H+baseline_M+baseline_F)
         improvement = (csi-baseline_csi) / baseline_csi
-        return pod, far, pag, bias, acc, csi, hss, kss, improvement
+        return np.array([pod, far, pag, bias, acc, csi, hss, kss, improvement])
         
 def convert_macro_confusion_matrix(experiment_name, baseline_name):
-    # From macro confusion matrix
-    macro_pd = pd.read_csv(os.path.join('./results',
-                                        'eval',
-                                        'macro-{}.csv'.format(experiment_name)), index_col=0)
-
+    # From macro (multinomial) confusion matrix
+    multinomial_result = np.load(os.path.join('./results',
+                                              'eval',
+                                              'macro-{}.npy'.format(experiment_name)))
     """
     # 1. Accuracy
     total_value = np.sum(np.array(macro_pd)[:4, :4])
@@ -110,7 +121,11 @@ if __name__ == '__main__':
     evaluation_metric_filename = os.path.join('./results',
                                               'eval',
                                               'eval_metric-{}.txt'.format(experiment_name))
-    
+
+    month_list = ['January', 'February', 'March', 'April',
+                  'May', 'June', 'July', 'August',
+                  'September', 'October', 'November', 'December', 'Yearly']
+
     micro_metric_name = ['Probability of Detection',
                          'False Alarm Ratio',
                          'Post Agreement',
@@ -119,19 +134,24 @@ if __name__ == '__main__':
                          'Critical Success index',
                          'Heidke Skill Score',
                          'Kuipers Skill Score']
-    
+
     # macro_metric_name = []
-    
+
     if baseline_name is not None:
         micro_metric_name.append('Improvement Against Standard')
         # macro_metric_name.append('Improvement Against Standard')
-    
+
     with open(evaluation_metric_filename, "w") as f:
         f.write("Evaluation metric from micro confusion matrix\n")
         f.write("=============================================\n")
-        micro_metric = convert_micro_confusion_matrix(experiment_name, baseline_name)
-        for name, metric in list(zip(micro_metric_name, micro_metric)):
-            f.write("{}: {}\n".format(name, metric))
+        micro_metric_list = convert_micro_confusion_matrix(experiment_name, baseline_name)
+        micro_metric_list = micro_metric_list.T
+        for idx, micro_metric in enumerate(micro_metric_list):
+            f.write("{} Result\n".format(month_list[idx]))
+            for name, metric in list(zip(micro_metric_name, micro_metric)):
+                f.write("{}: {}\n".format(name, round(metric, 4)))
+            f.write("=============================================\n")
+    
         """
         f.write("=============================================\n\n")
         f.write("Evaluation metric from macro confusion matrix\n")
