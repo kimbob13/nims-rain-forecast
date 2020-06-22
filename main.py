@@ -54,7 +54,7 @@ def parse_args():
     common.add_argument('--device', default='0', type=str, help='which device to use')
     common.add_argument('--num_workers', default=6, type=int, help='# of workers for dataloader')
     common.add_argument('--test_only', default=False, action='store_true', help='Test only mode')
-    common.add_argument('--baaseline_name', default=None, type=str, help='name of baseline experiment you want to compare')
+    common.add_argument('--baseline_name', default=None, type=str, help='name of baseline experiment you want to compare')
     common.add_argument('--custom_name', default=None, type=str, help='add customize experiment name')
     common.add_argument('--debug', help='turn on debugging print', action='store_true')
 
@@ -167,9 +167,9 @@ def set_experiment_name(args):
     args [argparse]: parsed argument
     """
     train_date = '{}{:02d}-{}{:02d}'.format(str(args.start_train_year)[-2:],
-                                          args.start_month,
-                                          str(args.end_train_year)[-2:],
-                                          args.end_month)
+                                            args.start_month,
+                                            str(args.end_train_year)[-2:],
+                                            args.end_month)
 
     if args.model == 'unet':
         no_cross_entropy_weight = ''
@@ -308,7 +308,7 @@ if __name__ == '__main__':
                 print('If you want to see summary of model, install torchsummary')
 
     # Undersampling
-    if args.sampling_ratio != 1.0:
+    if not args.test_only and (args.sampling_ratio != 1.0):
         print('=' * 20, 'Under Sampling', '=' * 20)
         print('Before Under sampling, train len:', len(nims_train_dataset))
 

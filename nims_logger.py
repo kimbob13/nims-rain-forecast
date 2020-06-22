@@ -251,8 +251,8 @@ class NIMSLogger:
 
                         else:
                             # Month specific
-                            self.micro_eval[month - 1][0][0] = count
-                            self.micro_eval[month - 1][0][1] = (total - count)
+                            self.micro_eval[month - 1][0][0] += count
+                            self.micro_eval[month - 1][0][1] += (total - count)
 
                             # Year total
                             self.micro_eval[-1][0][0] += count
