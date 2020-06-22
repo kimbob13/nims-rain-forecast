@@ -15,15 +15,9 @@ def parse_args():
 
 def convert_micro_confusion_matrix(experiment_name, baseline_name):
     # From micro (binary) confusion matrix
-    multinomial_result = np.load(os.path.join('./results',
-                                              'eval',
-                                              'macro-{}.npy'.format(experiment_name)))
-
-    binary_result = np.zeros([13, 2, 2])
-    binary_result[:, 0, 0] = multinomial_result[:, 0, 0]
-    binary_result[:, 0, 1] = np.sum(multinomial_result[:, 0, 1:], axis=1)
-    binary_result[:, 1, 0] = np.sum(multinomial_result[:, 1:, 0], axis=1)
-    binary_result[:, 1, 1] = np.sum(multinomial_result[:, 1:, 1:], axis=(1,2))
+    binary_result = np.load(os.path.join('./results',
+                                         'eval',
+                                         'micro-{}.npy'.format(experiment_name)))
     
     H = binary_result[:, 0, 0] # Hits
     M = binary_result[:, 0, 1] # Misses
@@ -59,16 +53,10 @@ def convert_micro_confusion_matrix(experiment_name, baseline_name):
         return np.array([pod, far, pag, bias, acc, csi, hss, kss])
     else:
         # 9. Improvement Against Standard
-        baseline_multinomial_result = np.load(os.path.join('./results',
-                                                           'eval',
-                                                           'macro-{}.npy'.format(baseline_name)))
+        baseline_binary_result = np.load(os.path.join('./results',
+                                                      'eval',
+                                                      'micro-{}.npy'.format(baseline_name)))
         
-        baseline_binary_result = np.zeros([13, 2, 2])
-        baseline_binary_result[:, 0, 0] = baseline_multinomial_result[:, 0, 0]
-        baseline_binary_result[:, 0, 1] = np.sum(baseline_multinomial_result[:, 0, 1:], axis=1)
-        baseline_binary_result[:, 1, 0] = np.sum(baseline_multinomial_result[:, 1:, 0], axis=1)
-        baseline_binary_result[:, 1, 1] = np.sum(baseline_multinomial_result[:, 1:, 1:], axis=(1,2))
-
         baseline_H = baseline_binary_result[:, 0, 0] # Hits
         baseline_M = baseline_binary_result[:, 0, 1] # Misses
         baseline_F = baseline_binary_result[:, 1, 0] # False alarms
