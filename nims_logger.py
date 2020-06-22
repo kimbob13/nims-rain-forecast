@@ -4,6 +4,8 @@ from datetime import datetime, timedelta
 import sys
 import os
 
+from nims_eval_converter import save_nims_metric
+
 __all__ = ['NIMSLogger']
 
 class NIMSLogger:
@@ -18,6 +20,11 @@ class NIMSLogger:
         one_hour_pixel [int]: # of total pixels in each one hour data
         experiment_name [str]: self-explanatory
         args [argparse]: parsed arguments from main
+
+        <Public Method>
+        update: Update specified stat for one instance(batch)
+        print_stat: Print one epoch stat
+        latest_stat: Return straing of one "instance(batch)" stat
         """
         self.target_num = target_num
         self.batch_size = batch_size
@@ -38,6 +45,7 @@ class NIMSLogger:
         # Store monthly stat for label-wise accuracy for classification model
         if args:
             self.experiment_name = experiment_name
+            self.baseline_name = args.baseline_name
             self.month_name = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
             self.month_label_stat = dict()
             self.cur_test_time = datetime(year=args.end_train_year + 1,
@@ -122,66 +130,7 @@ class NIMSLogger:
             self._clear_one_target_stat(cur_target_stat)
 
         if test:
-            stat_df = pd.DataFrame(columns=['class 0', 'class 1', 'class 2', 'class 3'], index=self.month_name)
-
-            log_file = os.path.join('./results', 'log', 'test-{}.log'.format(self.experiment_name))
-            csv_file = os.path.join('./results', 'log', 'test-{}.csv'.format(self.experiment_name))
-            with open(log_file, 'w') as f:
-                sys.stdout = f
-
-                print('=' * 25, 'Monthly label accuracy', '=' * 25)
-                for hour_after in self.month_label_stat:
-                    print('-' * 10, '{} hour after'.format(hour_after), '-' * 10)
-
-                    for month, label_stat in self.month_label_stat[hour_after].items():
-                        print('[{}]'.format(self.month_name[month - 1]))
-
-                        for label, stat in label_stat.items():
-                            count = stat['count']
-                            total = stat['total']
-
-                            # Update micro eval table
-                            if label == 0:
-                                # Month specific
-                                self.micro_eval[month - 1][1][1] += count
-                                self.micro_eval[month - 1][1][0] += (total - count)
-
-                                # Year total
-                                self.micro_eval[-1][1][1] += count
-                                self.micro_eval[-1][1][0] += (total - count)
-
-                            else:
-                                # Month specific
-                                self.micro_eval[month - 1][0][0] = count
-                                self.micro_eval[month - 1][0][1] = (total - count)
-
-                                # Year total
-                                self.micro_eval[-1][0][0] += count
-                                self.micro_eval[-1][0][1] += (total - count)
-
-                            if total == 0:
-                                accuracy = 'NO TARGET VALUE'
-                                print('\t(label {}): {} ({:10,d} / {:10,d})'.format(label, accuracy, count, total))
-                                stat_df.loc[self.month_name[month - 1]]['class {}'.format(label)] = np.nan
-
-                            else:
-                                accuracy = (count / total) * 100
-                                print('\t(label {}): {:7.3f}% ({:10,d} / {:10,d})'.format(label, accuracy, count, total))
-                                stat_df.loc[self.month_name[month - 1]]['class {}'.format(label)] = accuracy
-
-            # Save stat df
-            stat_df = stat_df.T
-            stat_df.to_csv(csv_file, na_rep='nan')
-
-            # Save macro confusion table
-            macro_file = os.path.join('./results', 'eval', 'macro-{}.npy'.format(self.experiment_name))
-            with open(macro_file, 'wb') as f:
-                np.save(f, self.macro_eval)
-
-            # Save micro confusion table
-            micro_file = os.path.join('./results', 'eval', 'micro-{}.npy'.format(self.experiment_name))
-            with open(micro_file, 'wb') as f:
-                np.save(f, self.micro_eval)
+            self._save_test_result()
 
     @property
     def latest_stat(self):
@@ -270,6 +219,71 @@ class NIMSLogger:
             pass
 
         self.num_update = 0
+
+    def _save_test_result(self):
+        stat_df = pd.DataFrame(columns=['class 0', 'class 1', 'class 2', 'class 3'], index=self.month_name)
+
+        log_file = os.path.join('./results', 'log', 'test-{}.log'.format(self.experiment_name))
+        csv_file = os.path.join('./results', 'log', 'test-{}.csv'.format(self.experiment_name))
+        with open(log_file, 'w') as f:
+            sys.stdout = f
+
+            print('=' * 25, 'Monthly label accuracy', '=' * 25)
+            for hour_after in self.month_label_stat:
+                print('-' * 10, '{} hour after'.format(hour_after), '-' * 10)
+
+                for month, label_stat in self.month_label_stat[hour_after].items():
+                    print('[{}]'.format(self.month_name[month - 1]))
+
+                    for label, stat in label_stat.items():
+                        count = stat['count']
+                        total = stat['total']
+
+                        # Update micro eval table
+                        if label == 0:
+                            # Month specific
+                            self.micro_eval[month - 1][1][1] += count
+                            self.micro_eval[month - 1][1][0] += (total - count)
+
+                            # Year total
+                            self.micro_eval[-1][1][1] += count
+                            self.micro_eval[-1][1][0] += (total - count)
+
+                        else:
+                            # Month specific
+                            self.micro_eval[month - 1][0][0] = count
+                            self.micro_eval[month - 1][0][1] = (total - count)
+
+                            # Year total
+                            self.micro_eval[-1][0][0] += count
+                            self.micro_eval[-1][0][1] += (total - count)
+
+                        if total == 0:
+                            accuracy = 'NO TARGET VALUE'
+                            print('\t(label {}): {} ({:10,d} / {:10,d})'.format(label, accuracy, count, total))
+                            stat_df.loc[self.month_name[month - 1]]['class {}'.format(label)] = np.nan
+
+                        else:
+                            accuracy = (count / total) * 100
+                            print('\t(label {}): {:7.3f}% ({:10,d} / {:10,d})'.format(label, accuracy, count, total))
+                            stat_df.loc[self.month_name[month - 1]]['class {}'.format(label)] = accuracy
+
+        # Save stat df
+        stat_df = stat_df.T
+        stat_df.to_csv(csv_file, na_rep='nan')
+
+        # Save macro confusion table
+        macro_file = os.path.join('./results', 'eval', 'macro-{}.npy'.format(self.experiment_name))
+        with open(macro_file, 'wb') as f:
+            np.save(f, self.macro_eval)
+
+        # Save micro confusion table
+        micro_file = os.path.join('./results', 'eval', 'micro-{}.npy'.format(self.experiment_name))
+        with open(micro_file, 'wb') as f:
+            np.save(f, self.micro_eval)
+
+        # Save metric for NIMS to file
+        save_nims_metric(self.experiment_name, self.baseline_name)
 
 class OneTargetStat:
     def __init__(self, loss, correct, macro_f1, micro_f1):
