@@ -239,25 +239,6 @@ class NIMSLogger:
                         count = stat['count']
                         total = stat['total']
 
-                        # Update micro eval table
-                        if label == 0:
-                            # Month specific
-                            self.micro_eval[month - 1][1][1] += count
-                            self.micro_eval[month - 1][1][0] += (total - count)
-
-                            # Year total
-                            self.micro_eval[-1][1][1] += count
-                            self.micro_eval[-1][1][0] += (total - count)
-
-                        else:
-                            # Month specific
-                            self.micro_eval[month - 1][0][0] += count
-                            self.micro_eval[month - 1][0][1] += (total - count)
-
-                            # Year total
-                            self.micro_eval[-1][0][0] += count
-                            self.micro_eval[-1][0][1] += (total - count)
-
                         if total == 0:
                             accuracy = 'NO TARGET VALUE'
                             print('\t(label {}): {} ({:10,d} / {:10,d})'.format(label, accuracy, count, total))
@@ -271,6 +252,12 @@ class NIMSLogger:
         # Save stat df
         stat_df = stat_df.T
         stat_df.to_csv(csv_file, na_rep='nan')
+
+        # Update micro confusion table
+        self.micro_eval[:, 1, 1] = self.macro_eval[:, 0, 0]                        # Correct negative
+        self.micro_eval[:, 1, 0] = np.sum(self.macro_eval[:, 0, 1:], axis=1)       # False Alarm
+        self.micro_eval[:, 0, 1] = np.sum(self.macro_eval[:, 1:, 0], axis=1)       # Misses
+        self.micro_eval[:, 0, 0] = np.sum(self.macro_eval[:, 1:, 1:], axis=(1, 2)) # Hits
 
         # Save macro confusion table
         macro_file = os.path.join('./results', 'eval', 'macro-{}.npy'.format(self.experiment_name))
