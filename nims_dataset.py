@@ -158,6 +158,20 @@ class NIMSDataset(Dataset):
             
         return images, target
 
+    def get_real_target(self, idx):
+        # TODO: Fix undersampling when target_num > 1
+        assert self.target_num == 1, \
+               'Currently, undersampling only works on target_num == 1'
+
+        # Get target window path
+        target_start_idx = idx + self.window_size
+        target_end_idx = target_start_idx + self.target_num
+        target_window_path = self._data_path_list[target_start_idx:target_end_idx]
+        
+        target = self._merge_window_data(target_window_path, target=True)
+
+        return target
+
     def _merge_window_data(self, window_path, target=False):
         """
         Merge data in current window into single numpy array

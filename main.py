@@ -93,15 +93,16 @@ def _undersample(train_dataset, indices, pid=None, queue=None):
     target_nonzero_means = []
 
     for idx in indices:
-        target = train_dataset[idx][1]
+        target = train_dataset.get_real_target(idx)
 
-        nonzero_idx = torch.nonzero(target, as_tuple=False)
-        variable_idx = nonzero_idx[:, 0]
-        height_idx = nonzero_idx[:, 1]
-        width_idx = nonzero_idx[:, 2]
-
-        target_nonzero_mean = torch.mean(target[variable_idx, height_idx, width_idx])
-        target_nonzero_means.append((idx, target_nonzero_mean.item()))
+        # Get average rain for target
+        max_one_hour_value = np.amax(target)
+        if max_one_hour_value == 0:
+            target_nonzero_means.append((idx, 0))
+        else:
+            # Average over nonzero data
+            avg_rain = np.mean(target[np.nonzero(target)])
+            target_nonzero_means.append((idx, avg_rain))
 
     if queue:
         queue.put(target_nonzero_means)
@@ -149,6 +150,7 @@ def undersample(train_dataset, sampling_ratio):
     for i in range(num_processes):
         processes[i].join()
 
+    # Sampling index for non-rainy instance
     selected_idx = []
     for idx, target_nonzero_mean in target_nonzero_means:
         if target_nonzero_mean < 2.0: # This case is not rainy hour
