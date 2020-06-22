@@ -94,10 +94,15 @@ def _undersample(train_dataset, indices, pid=None, queue=None):
 
     for idx in indices:
         target = train_dataset.get_real_target(idx)
+        total_pixel = len(target.flatten())
 
         # Get average rain for target
         max_one_hour_value = np.amax(target)
-        if max_one_hour_value == 0:
+        nonzero_count = np.count_nonzero(target)
+        if (max_one_hour_value == 0) or \
+           (nonzero_count < (total_pixel * 0.03)):
+            # If the # of nonzero pixels are less than 3% of total pixels,
+            # we treat it as non-rainy instance, so make avg_value as 0
             target_nonzero_means.append((idx, 0))
         else:
             # Average over nonzero data
