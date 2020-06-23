@@ -10,11 +10,12 @@ from .unet_parts import *
 
 class UNet(nn.Module):
     def __init__(self, n_channels, n_classes, n_blocks=7,
-                 start_channels=16, target_num=1, bilinear=True):
+                 start_channels=16, target_num=1, bilinear=True, clas_task=False):
         super(UNet, self).__init__()
 
         self.n_blocks = n_blocks
         self.target_num = target_num
+        self.clas_task = clas_task
 
         if n_blocks == 7:
             self.pad_size = 3
@@ -28,26 +29,31 @@ class UNet(nn.Module):
         for i in range(n_blocks - 1):
             cur_in_ch = start_channels * (2 ** i)
             self.down.append(Down(cur_in_ch, cur_in_ch * 2))
-
+        
         bridge_channels = start_channels * (2 ** n_blocks)
         self.down.append(Down(bridge_channels // 2,
                               bridge_channels // factor))
+        
+        if clas_task:
+            self.global_pool = nn.AdaptiveAvgPool2d(1)
+            self.clas_fc = nn.Linear(bridge_channels // factor, 2)
+            
+        else:
+            # Create bridge block
+            self.bridge = BasicConv(bridge_channels // factor,
+                                    bridge_channels // factor)
 
-        # Create bridge block
-        self.bridge = BasicConv(bridge_channels // factor,
-                                bridge_channels // factor)
+            # Create up blocks
+            self.up = nn.ModuleList([])
+            for i in range(n_blocks, 1, -1):
+                cur_in_ch = start_channels * (2 ** i)
+                self.up.append(Up(cur_in_ch, (cur_in_ch // 2) // factor,
+                                  bilinear))
+            self.up.append(Up(start_channels * 2, start_channels, bilinear))
 
-        # Create up blocks
-        self.up = nn.ModuleList([])
-        for i in range(n_blocks, 1, -1):
-            cur_in_ch = start_channels * (2 ** i)
-            self.up.append(Up(cur_in_ch, (cur_in_ch // 2) // factor,
-                              bilinear))
-        self.up.append(Up(start_channels * 2, start_channels, bilinear))
-
-        # Create out convolution block
-        self.outc = OutConv(start_channels, n_classes)
-
+            # Create out convolution block
+            self.outc = OutConv(start_channels, n_classes)
+            
     @property
     def name(self):
         return 'unet'
@@ -72,23 +78,31 @@ class UNet(nn.Module):
             for down_block in self.down:
                 out = down_block(out)
                 long_residual.append(out.clone())
+            
+            if self.clas_task:
+                out = self.global_pool(out)
+                logit = self.clas_fc(out.view(out.shape[0], -1))
+                logits.append(logit)
+            else:
+                # Bridge block
+                out = self.bridge(out)
 
-            # Bridge block
-            out = self.bridge(out)
+                # Up blocks
+                for i, up_block in enumerate(self.up):
+                    out = up_block(out, long_residual[-1 * (i + 2)])
 
-            # Up blocks
-            for i, up_block in enumerate(self.up):
-                out = up_block(out, long_residual[-1 * (i + 2)])
+                logit = self.outc(out)
+                logits.append(logit)
+           
+        if self.clas_task:
+            logits = torch.stack(logits).permute(1, 0, 2)
+        else:
+            # Change logits shape to NS'CHW
+            # S': # of targets, C: # of class for each target
+            logits = torch.stack(logits).permute(1, 0, 2, 3, 4)
 
-            logit = self.outc(out)
-            logits.append(logit)
-
-        # Change logits shape to NS'CHW
-        # S': # of targets, C: # of class for each target
-        logits = torch.stack(logits).permute(1, 0, 2, 3, 4)
-
-        # Return to original size when n_blocks == 7
-        if self.n_blocks == 7:
-            logits = logits[:, :, :, self.pad_size:, :]
+            # Return to original size when n_blocks == 7
+            if self.n_blocks == 7:
+                logits = logits[:, :, :, self.pad_size:, :]
 
         return logits

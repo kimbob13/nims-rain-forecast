@@ -6,7 +6,7 @@ import numpy as np
 from sklearn.metrics import f1_score
 from sklearn.utils.class_weight import compute_class_weight
 
-__all__ = ['MSELoss', 'RMSELoss', 'NIMSCrossEntropyLoss']
+__all__ = ['MSELoss', 'RMSELoss', 'CELoss', 'NIMSCrossEntropyLoss']
 
 class MSELoss(nn.Module):
     def __init__(self):
@@ -35,7 +35,65 @@ class RMSELoss(nn.Module):
     def forward(self, yhat, y):
         loss = torch.sqrt(self.mse(yhat, y) + self.eps)
         return loss
+    
+class CELoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.ce = nn.CrossEntropyLoss()
+        
+    def _get_num_correct(self, preds, targets):
+        _, pred_labels = preds.topk(1, dim=1, largest=True, sorted=True)
+        pred_labels = pred_labels.squeeze(1)
 
+        correct = torch.sum(pred_labels == targets.data)
+
+        return correct.item()
+    
+    def _get_f1_score(self, preds, targets):
+        _, pred_labels = preds.topk(1, dim=1, largest=True, sorted=True)
+        pred_labels = pred_labels.squeeze(1).flatten().detach().cpu().numpy()
+        _targets = targets.flatten().detach().cpu().numpy()
+
+        # Remove 0 class for micro f1 score evaluation.
+        # However, by doing this, macro f1 score becomes nan,
+        # so we just keep 0 class for macro f1 score evaluation.
+        nonzero_target_idx = _targets.nonzero()
+        nonzero_pred_labels = pred_labels[nonzero_target_idx]
+        nonzero_targets = _targets[nonzero_target_idx]
+
+        _macro_f1_score = f1_score(_targets, pred_labels,
+                                   average='macro', zero_division=0)
+        _micro_f1_score = f1_score(nonzero_targets, nonzero_pred_labels,
+                                   average='micro', zero_division=0)
+        #print('[_get_f1_score] macro f1: {}, micro f1: {}'.format(_macro_f1_score, _micro_f1_score))
+
+        return _macro_f1_score, _micro_f1_score
+    
+    def forward(self, preds, targets, logger=None, test=False):
+        preds = preds.permute(1, 0, 2)
+        targets = targets.permute(1, 0)
+        assert preds.shape[0] == targets.shape[0]
+        
+        target_num = targets.shape[0]
+        loss = 0.0
+        for target_idx in range(target_num):
+            cur_pred = preds[target_idx, ...] # NC
+            cur_target = targets[target_idx, ...] # N
+            
+            correct = self._get_num_correct(cur_pred, cur_target)
+            
+            cur_loss = self.ce(cur_pred, cur_target)
+            macro_f1, micro_f1 = self._get_f1_score(cur_pred, cur_target)
+            
+            if logger:
+                logger.update(target_idx, loss=cur_loss.item(), correct=correct,
+                              macro_f1=macro_f1, micro_f1=micro_f1, test=test,
+                              pred_tensor=cur_pred, target_tensor=cur_target)
+            
+            loss += cur_loss
+        
+        return loss
+    
 class NIMSCrossEntropyLoss(nn.Module):
     def __init__(self, device, num_classes=4, no_weights=False):
         super().__init__()

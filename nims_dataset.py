@@ -20,8 +20,8 @@ MONTH_DAY = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 
 class NIMSDataset(Dataset):
     def __init__(self, model, window_size, target_num, variables, block_size, aggr_method,
-                 train_year=(2009, 2017),  month=(1, 12), train=True, transform=None,
-                 root_dir=None, debug=False):
+                 train_year=(2009, 2017),  month=(1, 12), train=True, clas_task=False,
+                 transform=None, root_dir=None, debug=False):
         
         self.model = model
         self.window_size = window_size
@@ -43,6 +43,7 @@ class NIMSDataset(Dataset):
         assert month[0] <= month[1]
 
         self.train = train
+        self.clas_task = clas_task
         self.transform = transform
 
         self.debug = debug
@@ -149,12 +150,32 @@ class NIMSDataset(Dataset):
         images = self._merge_window_data(images_window_path)
         target = self._merge_window_data(target_window_path, target=True)
         
-        images, target = self._to_model_specific_tensor(images, target, self.train,
-                                                        self.block_size, self.aggr_method)
+        if self.clas_task:
+            images = images.squeeze(1)
+            
+            total_pixel = len(target.flatten())
+            # Get average rain for target
+            max_one_hour_value = np.amax(target)
+            nonzero_count = np.count_nonzero(target)
+            if (max_one_hour_value == 0) or \
+               (nonzero_count < (total_pixel * 0.03)):
+                # If the # of nonzero pixels are less than 3% of total pixels,
+                # we treat it as non-rainy instance, so make avg_value as 0
+                target = np.array([0]*self.target_num)
+            else:
+                # Average over nonzero data
+                avg_rain = np.mean(target[np.nonzero(target)])
+                if avg_rain > 2.0:
+                    target = np.array([1]*self.target_num)
+                else:
+                    target = np.array([0]*self.target_num)
+        else:
+            images, target = self._to_model_specific_tensor(images, target, self.train,
+                                                            self.block_size, self.aggr_method)
 
-        if self.transform:
-            images = self.transform(images)
-            target = self.transform(target)
+            if self.transform:
+                images = self.transform(images)
+                target = self.transform(target)
             
         return images, target
 
