@@ -63,8 +63,9 @@ def parse_args():
     unet.add_argument('--start_channels', default=64, type=int, help='# of channels after first block of unet')
     unet.add_argument('--no_cross_entropy_weight', default=False, help='use weight for cross entropy loss', action='store_true')
     
-    unet.add_argument('--clas_task', default=False, help='UNet for classification task (only encoder)', action='store_true')
-    unet.add_argument('--clas_pretrained', default=False, help='Use UNet-Encoder for segmentation task', action='store_true')
+    unet.add_argument('--clas_task', default=False, help='UNet for pre-text (classification) task (only encoder)', action='store_true')
+    unet.add_argument('--clas_pretrained', default=False, help='Initialize UNet-Encoder for downstream (segmentation) task', action='store_true')
+    unet.add_argument('--clas_pretrained_fix', default=False, help='Fix UNet-Encoder for downstream (segmentation) task', action='store_true')
     
     nims_dataset = parser.add_argument_group('nims dataset related')
     nims_dataset.add_argument('--window_size', default=10, type=int, help='# of input sequences in time')
@@ -200,7 +201,7 @@ def set_experiment_name(args):
                                   train_date)
         
         if args.clas_task:
-            experiment_name = 'clas_pretrained'
+            experiment_name = 'clas_pretrained_sr{}'.format(args.sampling_ratio)
 
     elif args.model == 'convlstm':
         experiment_name = 'nims_convlstm_ws{}_tn{}_ep{}_bs{}_sr{}_{}{}_{}' \
@@ -300,8 +301,9 @@ if __name__ == '__main__':
             num_lat = 1
             num_lon = 1
         else:
-            if args.clas_pretrained:
-                clas_pretrained_path = os.path.join('./results', 'trained_model', 'clas_pretrained.pt')
+            if args.clas_pretrained or args.clas_pretrained_fix:
+                clas_pretrained_path = os.path.join('./results', 'trained_model',
+                                                    'clas_pretrained_sr{}'.format(args.sampling_ratio) + '.pt')
                 model.load_state_dict(torch.load(clas_pretrained_path), strict=False)
 
             criterion = NIMSCrossEntropyLoss(device, num_classes=num_classes,

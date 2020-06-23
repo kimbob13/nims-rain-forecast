@@ -24,7 +24,7 @@ class NIMSTrainer:
         self.target_num = args.target_num
         self.debug = args.debug
         
-        self.clas_pretrained = args.clas_pretrained
+        self.clas_pretrained_fix = args.clas_pretrained_fix
 
         self.one_hour_pixel = num_lat * num_lon
         self.experiment_name = experiment_name
@@ -49,7 +49,7 @@ class NIMSTrainer:
                                           args=None)
 
     def train(self):
-        if self.clas_pretrained:
+        if self.clas_pretrained_fix:
             for name, p in self.model.named_parameters():
                 if 'inc' in name or 'down' in name:
                     p.requires_grad = False
