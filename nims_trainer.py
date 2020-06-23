@@ -6,12 +6,13 @@ import os
 __all__ = ['NIMSTrainer']
 
 class NIMSTrainer:
-    def __init__(self, model, criterion, optimizer, device,
+    def __init__(self, model, criterion, optimizer, scheduler, device,
                  train_loader, test_loader, train_len, test_len,
                  num_lat, num_lon, experiment_name, args):
         self.model = model
         self.criterion = criterion
         self.optimizer = optimizer
+        self.scheduler = scheduler
         self.device = device
 
         self.train_loader = train_loader
@@ -22,6 +23,8 @@ class NIMSTrainer:
         self.num_epochs = args.num_epochs
         self.target_num = args.target_num
         self.debug = args.debug
+        
+        self.clas_pretrained = args.clas_pretrained
 
         self.one_hour_pixel = num_lat * num_lon
         self.experiment_name = experiment_name
@@ -46,11 +49,17 @@ class NIMSTrainer:
                                           args=None)
 
     def train(self):
+        if self.clas_pretrained:
+            for name, p in self.model.named_parameters():
+                if 'inc' in name or 'down' in name:
+                    p.requires_grad = False
+                    
         for epoch in range(1, self.num_epochs + 1):
             # Run one epoch
             print('=' * 25, 'Epoch {} / {}'.format(epoch, self.num_epochs),
                   '=' * 25)
             self._epoch(self.train_loader, train=True)
+            self.scheduler.step()
             self.nims_logger.print_stat(self.train_len)
 
         # Save model weight
@@ -85,5 +94,5 @@ class NIMSTrainer:
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
-
+                
             pbar.set_description(self.nims_logger.latest_stat)

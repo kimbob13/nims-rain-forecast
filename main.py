@@ -64,6 +64,7 @@ def parse_args():
     unet.add_argument('--no_cross_entropy_weight', default=False, help='use weight for cross entropy loss', action='store_true')
     
     unet.add_argument('--clas_task', default=False, help='UNet for classification task (only encoder)', action='store_true')
+    unet.add_argument('--clas_pretrained', default=False, help='Use UNet-Encoder for segmentation task', action='store_true')
     
     nims_dataset = parser.add_argument_group('nims dataset related')
     nims_dataset.add_argument('--window_size', default=10, type=int, help='# of input sequences in time')
@@ -197,6 +198,9 @@ def set_experiment_name(args):
                                   args.lr,
                                   no_cross_entropy_weight,
                                   train_date)
+        
+        if args.clas_task:
+            experiment_name = 'clas_pretrained'
 
     elif args.model == 'convlstm':
         experiment_name = 'nims_convlstm_ws{}_tn{}_ep{}_bs{}_sr{}_{}{}_{}' \
@@ -296,6 +300,10 @@ if __name__ == '__main__':
             num_lat = 1
             num_lon = 1
         else:
+            if args.clas_pretrained:
+                clas_pretrained_path = os.path.join('./results', 'trained_model', 'clas_pretrained.pt')
+                model.load_state_dict(torch.load(clas_pretrained_path), strict=False)
+
             criterion = NIMSCrossEntropyLoss(device, num_classes=num_classes,
                                              no_weights=args.no_cross_entropy_weight)
 
@@ -359,6 +367,9 @@ if __name__ == '__main__':
     elif args.optimizer == 'adadelta':
         optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
 
+    # Set the scheduler
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.num_epochs)
+    
     # Set experiment name and use it as process name if possible
     experiment_name = set_experiment_name(args)
 
@@ -368,7 +379,7 @@ if __name__ == '__main__':
         model.load_state_dict(torch.load(weight_path))
 
     # Start training and testing
-    nims_trainer = NIMSTrainer(model, criterion, optimizer, device,
+    nims_trainer = NIMSTrainer(model, criterion, optimizer, scheduler, device,
                                train_loader, test_loader,
                                len(nims_train_dataset), len(nims_test_dataset),
                                num_lat, num_lon, experiment_name, args)
