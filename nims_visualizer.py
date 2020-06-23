@@ -1,3 +1,4 @@
+  
 import os
 import numpy as np
 import xarray as xr
@@ -18,6 +19,7 @@ def plot_map(partial_path, date, hour, variable, queue=None):
     back_img = mpimg.imread('back_tmp.png')
 
     ##
+    var_name = get_variable_name(variable)
     hour_start = int(hour)
     date_path = []
     date_last = ''
@@ -50,7 +52,7 @@ def plot_map(partial_path, date, hour, variable, queue=None):
             one_day_value = np.concatenate((one_day_value, one_hour_value), axis=0)
 
     fig, axes = plt.subplots(4, 6, sharex=True, sharey=True)
-    fig.suptitle('From {} {}:00 ~ {} {}:00'.format(date, hour, date_last, hour_last))
+    fig.suptitle('From {} {}:00 ~ {} {}:00 / variable={}'.format(date, hour, date_last, hour_last, var_name))
     
     cbar_ax = fig.add_axes([.91, .3, .03, .4])
     
@@ -69,7 +71,6 @@ def plot_map(partial_path, date, hour, variable, queue=None):
     #fig.tight_layout(rect=[0, 0, .9, 1])
     
     # Save plot map
-    var_name = get_variable_name(variable)
     fig.savefig('./plot/{}_{}_{}_map.png'.format(date, hour, var_name))
 
 def get_avg_and_max(partial_path, variables, queue=None):
