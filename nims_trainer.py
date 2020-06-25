@@ -28,7 +28,7 @@ class NIMSTrainer:
 
         self.model.to(self.device)
 
-        if model.name == 'unet':
+        if model.name == 'unet' or model.name == 'persistence':
             self.nims_logger = NIMSLogger(loss=True, correct=True,
                                           macro_f1=True, micro_f1=True,
                                           target_num=self.target_num,
@@ -46,6 +46,8 @@ class NIMSTrainer:
                                           args=None)
 
     def train(self):
+        self.model.train()
+
         for epoch in range(1, self.num_epochs + 1):
             # Run one epoch
             print('=' * 25, 'Epoch {} / {}'.format(epoch, self.num_epochs),
@@ -59,15 +61,21 @@ class NIMSTrainer:
         torch.save(self.model.state_dict(), weight_path)
 
     def test(self):
+        # self.model.eval()
+        # for m in self.model.modules():
+        #     if isinstance(m, torch.nn.BatchNorm2d):
+        #         m.track_running_stats = False
+
         print('=' * 25, 'Test', '=' * 25)
-        self._epoch(self.test_loader, train=False)
+        with torch.no_grad():
+            self._epoch(self.test_loader, train=False)
+
         self.nims_logger.print_stat(self.test_len, test=True)
 
     def _epoch(self, data_loader, train):
         pbar = tqdm(data_loader)
         for images, target in pbar:
-            
-            if self.model.name == 'unet':
+            if self.model.name == 'unet' or self.model.name == 'persistence':
                 images = images.type(torch.FloatTensor).to(self.device)
                 target = target.type(torch.LongTensor).to(self.device)
             

@@ -5,6 +5,7 @@ import numpy as np
 
 from model.unet_model import UNet
 from model.conv_lstm import EncoderForecaster
+from model.persistence import Persistence
 
 from nims_dataset import NIMSDataset, ToTensor
 from nims_loss import MSELoss, NIMSCrossEntropyLoss
@@ -49,7 +50,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='NIMS rainfall data prediction')
 
     common = parser.add_argument_group('common')
-    common.add_argument('--model', default='unet', type=str, help='which model to use')
+    common.add_argument('--model', default='unet', type=str, help='which model to use [unet, convlstm, persistence]')
     common.add_argument('--dataset_dir', type=str, help='root directory of dataset')
     common.add_argument('--device', default='0', type=str, help='which device to use')
     common.add_argument('--num_workers', default=6, type=int, help='# of workers for dataloader')
@@ -76,7 +77,6 @@ def parse_args():
     nims_dataset.add_argument('--end_train_year', default=2017, type=int, help='end year for training')
     nims_dataset.add_argument('--start_month', default=1, type=int, help='month range for train and test')
     nims_dataset.add_argument('--end_month', default=12, type=int, help='month range for train and test')
-    
     nims_dataset.add_argument('--sampling_ratio', default=1.0, type=float, help='the ratio of undersampling')
 
     hyperparam = parser.add_argument_group('hyper-parameters')
@@ -86,6 +86,11 @@ def parse_args():
     hyperparam.add_argument('--lr', default=0.001, type=float, help='learning rate of optimizer')
 
     args = parser.parse_args()
+    if args.model == 'persistence':
+        args.test_only = True
+        args.window_size = 1
+        args.batch_size = 1
+        args.target_num = 1
 
     return args
 
@@ -178,11 +183,11 @@ def set_experiment_name(args):
                                             str(args.end_train_year)[-2:],
                                             args.end_month)
 
-    if args.model == 'unet':
-        no_cross_entropy_weight = ''
-        if args.no_cross_entropy_weight:
-            no_cross_entropy_weight = 'noweight_'
-            
+    no_cross_entropy_weight = ''
+    if args.no_cross_entropy_weight:
+        no_cross_entropy_weight = 'noweight_'
+
+    if args.model == 'unet':            
         experiment_name = 'nims_unet_nb{}_ch{}_ws{}_tn{}_ep{}_bs{}_sr{}_{}{}_{}{}' \
                           .format(args.n_blocks,
                                   args.start_channels,
@@ -207,6 +212,11 @@ def set_experiment_name(args):
                                   args.lr,
                                   train_date)
 
+    elif args.model == 'persistence':
+        experiment_name = 'nims_persistence_{}{}' \
+                          .format(no_cross_entropy_weight,
+                                  train_date)
+
     if args.custom_name:
         experiment_name += ('_' + args.custom_name)
 
@@ -222,8 +232,11 @@ def set_experiment_name(args):
 
 if __name__ == '__main__':
     args = parse_args()
-    os.environ['CUDA_VISIBLE_DEVICES'] = args.device
-    device = torch.device('cuda:0')
+    if args.device == 'cpu':
+        device = torch.device('cpu')
+    else:
+        os.environ['CUDA_VISIBLE_DEVICES'] = args.device
+        device = torch.device('cuda:0')
 
     # Fix the seed
     torch.manual_seed(2020)
@@ -277,8 +290,8 @@ if __name__ == '__main__':
         print('[main] one images sample shape:', sample.shape)
 
     # Create a model and criterion
+    num_classes = 4
     if args.model == 'unet':
-        num_classes = 4
         model = UNet(n_channels=sample.shape[0],
                      n_classes=num_classes,
                      n_blocks=args.n_blocks,
@@ -303,6 +316,14 @@ if __name__ == '__main__':
 
         num_lat = sample.shape[2] # the number of latitudes (originally 253)
         num_lon = sample.shape[3] # the number of longitudes (originally 149)
+
+    elif args.model == 'persistence':
+        model = Persistence(num_classes=num_classes, device=device)
+        criterion = NIMSCrossEntropyLoss(device, num_classes=num_classes,
+                                         no_weights=args.no_cross_entropy_weight)
+
+        num_lat = sample.shape[1] # the number of latitudes (originally 253)
+        num_lon = sample.shape[2] # the number of longitudes (originally 149)
 
     if args.debug:
         # XXX: Currently, torchsummary doesn't run on ConvLSTM
@@ -352,8 +373,10 @@ if __name__ == '__main__':
 
     # Load model weight when test only mode
     if args.test_only:
-        weight_path = os.path.join('./results', 'trained_model', experiment_name + '.pt')
-        model.load_state_dict(torch.load(weight_path))
+        # Persistence model doesn't have trained model
+        if not args.model == 'persistence':
+            weight_path = os.path.join('./results', 'trained_model', experiment_name + '.pt')
+            model.load_state_dict(torch.load(weight_path))
 
     # Start training and testing
     nims_trainer = NIMSTrainer(model, criterion, optimizer, device,

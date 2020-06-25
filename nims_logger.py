@@ -11,7 +11,7 @@ __all__ = ['NIMSLogger']
 class NIMSLogger:
     def __init__(self, loss, correct, macro_f1, micro_f1,
                  target_num, batch_size, one_hour_pixel,
-                 experiment_name, args=None):
+                 experiment_name, num_classes=4, args=None):
         """
         <Parameter>
         loss, correct, macro_f1, micro_f1 [bool]: whether to record each variable
@@ -30,6 +30,7 @@ class NIMSLogger:
         self.batch_size = batch_size
         self.one_hour_pixel = one_hour_pixel
         self.one_instance_pixel = batch_size * one_hour_pixel
+        self.num_classes = num_classes
         self.num_update = 0
 
         # Initialize one epoch stat dictionary
@@ -173,10 +174,14 @@ class NIMSLogger:
 
         # Create new entry if cur_month is not encountered
         if cur_month not in self.month_label_stat[target_idx + 1]:
-            self.month_label_stat[target_idx + 1][cur_month] = {0: {'count': 0, 'total': 0},
-                                                                1: {'count': 0, 'total': 0},
-                                                                2: {'count': 0, 'total': 0},
-                                                                3: {'count': 0, 'total': 0}}
+            self.month_label_stat[target_idx + 1][cur_month] = dict()
+            for label in range(self.num_classes):
+                self.month_label_stat[target_idx + 1][cur_month][label] = {'count': 0, 'total': 0}
+
+            # self.month_label_stat[target_idx + 1][cur_month] = {0: {'count': 0, 'total': 0},
+            #                                                     1: {'count': 0, 'total': 0},
+            #                                                     2: {'count': 0, 'total': 0},
+            #                                                     3: {'count': 0, 'total': 0}}
 
         # 전체 0은 target에 있는 0의 개수여야 하고, 맞춘 건 그중에서 target이 0인 위치를 pred도 0으로 맞춘 개수
         # 1, 2, 3도 마찬가지
@@ -221,7 +226,8 @@ class NIMSLogger:
         self.num_update = 0
 
     def _save_test_result(self):
-        stat_df = pd.DataFrame(columns=['class 0', 'class 1', 'class 2', 'class 3'], index=self.month_name)
+        columns = ['label {}'.format(label) for label in range(self.num_classes)]
+        stat_df = pd.DataFrame(columns=columns, index=self.month_name)
 
         log_file = os.path.join('./results', 'log', 'test-{}.log'.format(self.experiment_name))
         csv_file = os.path.join('./results', 'log', 'test-{}.csv'.format(self.experiment_name))
@@ -232,6 +238,8 @@ class NIMSLogger:
             for hour_after in self.month_label_stat:
                 print('-' * 10, '{} hour after'.format(hour_after), '-' * 10)
 
+                year_count = [0] * self.num_classes
+                year_total = [0] * self.num_classes
                 for month, label_stat in self.month_label_stat[hour_after].items():
                     print('[{}]'.format(self.month_name[month - 1]))
 
@@ -241,13 +249,21 @@ class NIMSLogger:
 
                         if total == 0:
                             accuracy = 'NO TARGET VALUE'
-                            print('\t(label {}): {} ({:10,d} / {:10,d})'.format(label, accuracy, count, total))
-                            stat_df.loc[self.month_name[month - 1]]['class {}'.format(label)] = np.nan
+                            print('\t(label {}): {} ({:11,d} / {:11,d})'.format(label, accuracy, count, total))
+                            stat_df.loc[self.month_name[month - 1]]['label {}'.format(label)] = np.nan
 
                         else:
                             accuracy = (count / total) * 100
-                            print('\t(label {}): {:7.3f}% ({:10,d} / {:10,d})'.format(label, accuracy, count, total))
-                            stat_df.loc[self.month_name[month - 1]]['class {}'.format(label)] = accuracy
+                            print('\t(label {}): {:7.3f}% ({:11,d} / {:11,d})'.format(label, accuracy, count, total))
+                            stat_df.loc[self.month_name[month - 1]]['label {}'.format(label)] = accuracy
+
+                        year_count[label] += count
+                        year_total[label] += total
+
+                print('[Year Total]')
+                for label, (y_count, y_total) in enumerate(zip(year_count, year_total)):
+                    accuracy = (y_count / y_total) * 100
+                    print('\t(label {}): {:7.3f}% ({:11,d} / {:11,d})'.format(label, accuracy, y_count, y_total))
 
         # Save stat df
         stat_df = stat_df.T

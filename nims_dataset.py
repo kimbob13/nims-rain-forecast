@@ -257,7 +257,7 @@ class NIMSDataset(Dataset):
             images = reduced_images
             target = reduced_target
         
-        if self.model == 'unet':
+        if self.model == 'unet' or self.model == 'persistence':
             # We change each tensor to CWH format when the model is UNet
             # window_size is serves as channel in UNet
             #assert self.window_size == 1
