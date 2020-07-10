@@ -28,7 +28,9 @@ class NIMSTrainer:
 
         self.model.to(self.device)
 
-        if model.name == 'unet' or model.name == 'persistence':
+        if model.name == 'unet' or \
+           model.name == 'attn_unet' or \
+           model.name == 'persistence':
             self.nims_logger = NIMSLogger(loss=True, correct=True,
                                           macro_f1=True, micro_f1=True,
                                           target_num=self.target_num,
@@ -75,7 +77,9 @@ class NIMSTrainer:
     def _epoch(self, data_loader, train):
         pbar = tqdm(data_loader)
         for images, target in pbar:
-            if self.model.name == 'unet' or self.model.name == 'persistence':
+            if self.model.name == 'unet' or \
+               self.model.name == 'attn_unet' or \
+               self.model.name == 'persistence':
                 images = images.type(torch.FloatTensor).to(self.device)
                 target = target.type(torch.LongTensor).to(self.device)
             

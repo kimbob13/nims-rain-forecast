@@ -3,7 +3,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, Subset
 import numpy as np
 
-from model.unet_model import UNet
+from model.unet_model import UNet, AttentionUNet
 from model.conv_lstm import EncoderForecaster
 from model.persistence import Persistence
 
@@ -50,7 +50,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='NIMS rainfall data prediction')
 
     common = parser.add_argument_group('common')
-    common.add_argument('--model', default='unet', type=str, help='which model to use [unet, convlstm, persistence]')
+    common.add_argument('--model', default='unet', type=str, help='which model to use [unet, attn_unet, convlstm, persistence]')
     common.add_argument('--dataset_dir', type=str, help='root directory of dataset')
     common.add_argument('--device', default='0', type=str, help='which device to use')
     common.add_argument('--num_workers', default=6, type=int, help='# of workers for dataloader')
@@ -201,6 +201,20 @@ def set_experiment_name(args):
                                   no_cross_entropy_weight,
                                   train_date)
 
+    elif args.model == 'attn_unet':
+        experiment_name = 'nims_attn_unet_nb{}_ch{}_ws{}_tn{}_ep{}_bs{}_sr{}_{}{}_{}{}' \
+                          .format(args.n_blocks,
+                                  args.start_channels,
+                                  args.window_size,
+                                  args.target_num,
+                                  args.num_epochs,
+                                  args.batch_size,
+                                  args.sampling_ratio,
+                                  args.optimizer,
+                                  args.lr,
+                                  no_cross_entropy_weight,
+                                  train_date)
+
     elif args.model == 'convlstm':
         experiment_name = 'nims_convlstm_ws{}_tn{}_ep{}_bs{}_sr{}_{}{}_{}' \
                           .format(args.window_size,
@@ -291,12 +305,21 @@ if __name__ == '__main__':
 
     # Create a model and criterion
     num_classes = 4
-    if args.model == 'unet':
-        model = UNet(n_channels=sample.shape[0],
-                     n_classes=num_classes,
-                     n_blocks=args.n_blocks,
-                     start_channels=args.start_channels,
-                     target_num=args.target_num)
+    if (args.model == 'unet') or (args.model == 'attn_unet'):
+        if args.model == 'unet':
+            model = UNet(n_channels=sample.shape[0],
+                         n_classes=num_classes,
+                         n_blocks=args.n_blocks,
+                         start_channels=args.start_channels,
+                         target_num=args.target_num)
+
+        elif args.model == 'attn_unet':
+            model = AttentionUNet(n_channels=sample.shape[0],
+                                  n_classes=num_classes,
+                                  n_blocks=args.n_blocks,
+                                  start_channels=args.start_channels,
+                                  target_num=args.target_num)
+
         criterion = NIMSCrossEntropyLoss(device, num_classes=num_classes,
                                          no_weights=args.no_cross_entropy_weight)
 

@@ -224,7 +224,7 @@ class NIMSDataset(Dataset):
         aggr_method [str]: block aggregation method - 'max' or 'avg'
 
         <Return>
-        model == unet:
+        model == unet, attn_unet, persistence:
             images [np.ndarray]: SHW format
             target [np.ndarray]: SHW format
         model == convlstm
@@ -257,7 +257,9 @@ class NIMSDataset(Dataset):
             images = reduced_images
             target = reduced_target
         
-        if self.model == 'unet' or self.model == 'persistence':
+        if self.model == 'unet' or \
+           self.model == 'attn_unet' or \
+           self.model == 'persistence':
             # We change each tensor to CWH format when the model is UNet
             # window_size is serves as channel in UNet
             #assert self.window_size == 1
