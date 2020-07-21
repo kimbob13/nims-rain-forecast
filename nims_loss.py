@@ -74,7 +74,7 @@ class NIMSCrossEntropyLoss(nn.Module):
     def _get_class_weights(self, targets):
         _targets = targets.flatten().detach().cpu().numpy()
         targets_classes = np.unique(_targets)
-        weights = compute_class_weight('balanced', targets_classes, _targets) # shape: (C)
+        weights = compute_class_weight('balanced', classes=targets_classes, y=_targets) # shape: (C)
 
         if len(self.classes) != len(targets_classes):
             for label in self.classes:
