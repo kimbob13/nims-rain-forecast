@@ -32,7 +32,7 @@ class NIMSTrainer:
            model.name == 'attn_unet' or \
            model.name == 'persistence':
             self.nims_logger = NIMSLogger(loss=True, correct=True,
-                                          macro_f1=True, micro_f1=True,
+                                          macro_f1=False, micro_f1=False,
                                           target_num=self.target_num,
                                           batch_size=args.batch_size,
                                           one_hour_pixel=self.one_hour_pixel,

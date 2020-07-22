@@ -3,10 +3,16 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import numpy as np
+import pandas as pd
 from sklearn.metrics import f1_score
 from sklearn.utils.class_weight import compute_class_weight
 
 __all__ = ['MSELoss', 'RMSELoss', 'NIMSCrossEntropyLoss']
+
+codi_aws_df = pd.read_csv('/home/kimbob/jupyter/weather_prediction/pr_sample/codi_ldps_aws/codi_ldps_aws_512.csv')
+
+dii_info = np.array(codi_aws_df['dii']) - 1
+stn_codi = np.array([(dii // 512, dii % 512) for dii in dii_info])
 
 class MSELoss(nn.Module):
     def __init__(self):
@@ -93,9 +99,6 @@ class NIMSCrossEntropyLoss(nn.Module):
         # convert preds to S'NCHW, and targets to S'NHW format
         assert preds.shape[0] == targets.shape[0]
 
-        correct = self._get_num_correct(preds, targets)
-        macro_f1, micro_f1 = self._get_f1_score(preds, targets)
-
         if self.no_weights:
             class_weights = None
         else:
@@ -106,14 +109,19 @@ class NIMSCrossEntropyLoss(nn.Module):
         # print('[cross_entropy] correct: {}, totalnum: {}'
         #      .format(correct, cur_pred.shape[0] * cur_pred.shape[2] * cur_pred.shape[3]))
 
-        loss = F.cross_entropy(preds, targets, weight=class_weights, reduction='none')
-        loss = torch.sum(torch.mean(loss, dim=0))
+        stn_preds = preds[:, :, stn_codi[:,0], stn_codi[:,1]]
+        stn_targets = targets[:, stn_codi[:,0], stn_codi[:,1]]
+        
+        correct = self._get_num_correct(stn_preds, stn_targets)
+        macro_f1, micro_f1 = self._get_f1_score(stn_preds, stn_targets)
+        
+        loss = F.cross_entropy(stn_preds, stn_targets, weight=class_weights, reduction='none')
+        loss = torch.mean(torch.mean(loss, dim=0))
 
         # TODO: fix logger
-        # if logger:
-        #     logger.update(target_idx, loss=loss.item(), correct=correct,
-        #                   macro_f1=macro_f1, micro_f1=micro_f1, test=test,
-        #                   pred_tensor=cur_pred, target_tensor=cur_target)
+        if logger:
+            logger.update(0, loss=loss.item(), correct=correct, test=test,
+                          pred_tensor=stn_preds, target_tensor=stn_targets)
 
         #print('[cross_entropy] loss: {}'.format(loss.item()))
 
