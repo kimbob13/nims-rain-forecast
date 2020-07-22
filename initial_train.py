@@ -51,7 +51,7 @@ def parse_args():
 
     common = parser.add_argument_group('common')
     common.add_argument('--model', default='unet', type=str, help='which model to use [unet, attn_unet, convlstm, persistence]')
-    common.add_argument('--dataset_dir', type=str, help='root directory of dataset')
+    common.add_argument('--dataset_dir', default='/home/osilab11/hdd/NIMS_LDPS', type=str, help='root directory of dataset')
     common.add_argument('--device', default='0', type=str, help='which device to use')
     common.add_argument('--num_workers', default=6, type=int, help='# of workers for dataloader')
     common.add_argument('--test_only', default=False, action='store_true', help='Test only mode')
@@ -265,46 +265,24 @@ if __name__ == '__main__':
     create_results_dir()
 
     # Parse NIMS dataset variables
-    variables = parse_variables(args.variables)
+    # variables = parse_variables(args.variables)
 
     # Train and test dataset
-    nims_train_dataset = NIMSDataset(model=args.model,
+    # TODO: add test_time, numeric_thres arguments 
+    nims_train_dataset = NIMSDataset(root_dir=args.dataset_dir,
+                                     test_time='2020050213',
                                      window_size=args.window_size,
-                                     target_num=args.target_num,
-                                     variables=variables,
-                                     block_size=args.block_size,
-                                     aggr_method=args.aggr_method,
-                                     train_year=(args.start_train_year,
-                                                 args.end_train_year),
-                                     month=(args.start_month,
-                                            args.end_month),
-                                     train=True,
-                                     transform=ToTensor(),
-                                     root_dir=args.dataset_dir,
-                                     debug=args.debug)
+                                     numeric_thres=12,
+                                     model=args.model,
+                                     transform=ToTensor())
     
-    nims_test_dataset  = NIMSDataset(model=args.model,
-                                     window_size=args.window_size,
-                                     target_num=args.target_num,
-                                     variables=variables,
-                                     block_size=args.block_size,
-                                     aggr_method=args.aggr_method,
-                                     train_year=(args.start_train_year,
-                                                 args.end_train_year),
-                                     month=(args.start_month,
-                                            args.end_month),
-                                     train=False,
-                                     transform=ToTensor(),
-                                     root_dir=args.dataset_dir,
-                                     debug=args.debug)
-
     # Get a sample for getting shape of each tensor
     sample, _ = nims_train_dataset[0]
     if args.debug:
         print('[main] one images sample shape:', sample.shape)
 
     # Create a model and criterion
-    num_classes = 4
+    num_classes = 2
     if (args.model == 'unet') or (args.model == 'attn_unet'):
         if args.model == 'unet':
             model = UNet(n_channels=sample.shape[0],
@@ -375,9 +353,6 @@ if __name__ == '__main__':
     train_loader = DataLoader(nims_train_dataset, batch_size=args.batch_size,
                               shuffle=True, num_workers=args.num_workers,
                               pin_memory=True)
-    test_loader  = DataLoader(nims_test_dataset, batch_size=args.batch_size,
-                              shuffle=False, num_workers=args.num_workers,
-                              pin_memory=True)
 
     # Set the optimizer
     if args.optimizer == 'sgd':
@@ -402,9 +377,10 @@ if __name__ == '__main__':
             model.load_state_dict(torch.load(weight_path))
 
     # Start training and testing
+    # TODO: separate test_loader
     nims_trainer = NIMSTrainer(model, criterion, optimizer, device,
-                               train_loader, test_loader,
-                               len(nims_train_dataset), len(nims_test_dataset),
+                               train_loader, None,
+                               len(nims_train_dataset), 0,
                                num_lat, num_lon, experiment_name, args)
     if not args.test_only:
         nims_trainer.train()

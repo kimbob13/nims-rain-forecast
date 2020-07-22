@@ -37,7 +37,7 @@ class RMSELoss(nn.Module):
         return loss
 
 class NIMSCrossEntropyLoss(nn.Module):
-    def __init__(self, device, num_classes=4, no_weights=False):
+    def __init__(self, device, num_classes=2, no_weights=False):
         super().__init__()
         self.device = device
         self.classes = np.arange(num_classes)
@@ -91,38 +91,29 @@ class NIMSCrossEntropyLoss(nn.Module):
         logger [NIMSLogger]: Collect stat for this data instance
         """
         # convert preds to S'NCHW, and targets to S'NHW format
-        preds = preds.permute(1, 0, 2, 3, 4)
-        targets = targets.permute(1, 0, 2, 3)
         assert preds.shape[0] == targets.shape[0]
 
-        target_num = targets.shape[0]
-        loss = 0.0
-        for target_idx in range(target_num):
-            cur_pred = preds[target_idx, ...] # NCHW
-            cur_target = targets[target_idx, ...] # NHW
+        correct = self._get_num_correct(preds, targets)
+        macro_f1, micro_f1 = self._get_f1_score(preds, targets)
 
-            correct = self._get_num_correct(cur_pred, cur_target)
-            macro_f1, micro_f1 = self._get_f1_score(cur_pred, cur_target)
+        if self.no_weights:
+            class_weights = None
+        else:
+            class_weights = self._get_class_weights(targets)
 
-            if self.no_weights:
-                class_weights = None
-            else:
-                class_weights = self._get_class_weights(cur_target)
+        # print('[cross_entropy] cur_pred shape:', cur_pred.shape)
+        # print('[cross_entropy] cur_target shape:', cur_target.shape)
+        # print('[cross_entropy] correct: {}, totalnum: {}'
+        #      .format(correct, cur_pred.shape[0] * cur_pred.shape[2] * cur_pred.shape[3]))
 
-            # print('[cross_entropy] cur_pred shape:', cur_pred.shape)
-            # print('[cross_entropy] cur_target shape:', cur_target.shape)
-            # print('[cross_entropy] correct: {}, totalnum: {}'
-            #      .format(correct, cur_pred.shape[0] * cur_pred.shape[2] * cur_pred.shape[3]))
-            
-            cur_loss = F.cross_entropy(cur_pred, cur_target, weight=class_weights, reduction='none')
-            cur_loss = torch.sum(torch.mean(cur_loss, dim=0))
-                    
-            if logger:
-                logger.update(target_idx, loss=cur_loss.item(), correct=correct,
-                              macro_f1=macro_f1, micro_f1=micro_f1, test=test,
-                              pred_tensor=cur_pred, target_tensor=cur_target)
+        loss = F.cross_entropy(preds, targets, weight=class_weights, reduction='none')
+        loss = torch.sum(torch.mean(loss, dim=0))
 
-            loss += cur_loss
+        # TODO: fix logger
+        # if logger:
+        #     logger.update(target_idx, loss=loss.item(), correct=correct,
+        #                   macro_f1=macro_f1, micro_f1=micro_f1, test=test,
+        #                   pred_tensor=cur_pred, target_tensor=cur_target)
 
         #print('[cross_entropy] loss: {}'.format(loss.item()))
 
