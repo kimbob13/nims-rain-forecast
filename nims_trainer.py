@@ -1,7 +1,10 @@
 import torch
 from nims_logger import NIMSLogger
+
 from tqdm import tqdm
 import os
+import numpy as np
+import pandas as pd
 
 __all__ = ['NIMSTrainer']
 
@@ -23,6 +26,8 @@ class NIMSTrainer:
         self.target_num = args.target_num
         self.debug = args.debug
 
+        self.stn_codi = self._get_station_coordinate()
+        self.num_stn = len(self.stn_codi)
         self.one_hour_pixel = num_lat * num_lon
         self.experiment_name = experiment_name
 
@@ -36,6 +41,7 @@ class NIMSTrainer:
                                           target_num=self.target_num,
                                           batch_size=args.batch_size,
                                           one_hour_pixel=self.one_hour_pixel,
+                                          num_stn=self.num_stn,
                                           experiment_name=experiment_name,
                                           args=args)
         elif model.name == 'convlstm':
@@ -44,8 +50,16 @@ class NIMSTrainer:
                                           target_num=self.target_num,
                                           batch_size=args.batch_size,
                                           one_hour_pixel=self.one_hour_pixel,
+                                          num_stn=self.num_stn,
                                           experiment_name=experiment_name,
                                           args=None)
+
+    def _get_station_coordinate(self):
+        codi_aws_df = pd.read_csv('/home/kimbob/jupyter/weather_prediction/pr_sample/codi_ldps_aws/codi_ldps_aws_512.csv')
+        dii_info = np.array(codi_aws_df['dii']) - 1
+        stn_codi = np.array([(dii // 512, dii % 512) for dii in dii_info])
+
+        return stn_codi
 
     def train(self):
         self.model.train()
@@ -90,8 +104,8 @@ class NIMSTrainer:
                 target = target.permute(1, 0, 2, 3, 4).to(self.device)
 
             output = self.model(images)
-            loss = self.criterion(output, target, logger=self.nims_logger,
-                                  test=(not train))
+            loss = self.criterion(output, target, stn_codi=self.stn_codi,
+                                  logger=self.nims_logger, test=(not train))
             
             if train:
                 self.optimizer.zero_grad()

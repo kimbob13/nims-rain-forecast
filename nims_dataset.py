@@ -104,7 +104,8 @@ class NIMSDataset(Dataset):
             ldaps_input = self.transform(ldaps_input)
         
         gt = torch.tensor(np.load(gt_path))
-        gt = torch.where(gt>=0.1, torch.ones(gt.shape), torch.zeros(gt.shape)).type(torch.LongTensor)
+        gt = torch.where(gt >= 0.1, torch.ones(gt.shape), torch.zeros(gt.shape))
+
         return ldaps_input, gt
 
     def _merge_pres_unis(self, data_list, pres_idx_list, unis_idx_list):
@@ -115,6 +116,8 @@ class NIMSDataset(Dataset):
             else:
                 pres = pres + np.load(p).reshape(512, 512, 20).transpose()
                 unis = unis + np.load(u).reshape(512, 512, 20).transpose()
+
+        # XXX: Get error when test time is changed
         pres = pres / len(data_list)
         unis = unis / len(data_list)
         

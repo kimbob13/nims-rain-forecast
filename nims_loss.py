@@ -3,16 +3,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import numpy as np
-import pandas as pd
 from sklearn.metrics import f1_score
 from sklearn.utils.class_weight import compute_class_weight
 
 __all__ = ['MSELoss', 'RMSELoss', 'NIMSCrossEntropyLoss']
-
-codi_aws_df = pd.read_csv('/home/kimbob/jupyter/weather_prediction/pr_sample/codi_ldps_aws/codi_ldps_aws_512.csv')
-
-dii_info = np.array(codi_aws_df['dii']) - 1
-stn_codi = np.array([(dii // 512, dii % 512) for dii in dii_info])
 
 class MSELoss(nn.Module):
     def __init__(self):
@@ -89,7 +83,7 @@ class NIMSCrossEntropyLoss(nn.Module):
 
         return torch.from_numpy(weights).type(torch.FloatTensor).to(self.device)
 
-    def forward(self, preds, targets, logger=None, test=False):
+    def forward(self, preds, targets, stn_codi, logger=None, test=False):
         """
         <Parameter>
         preds [torch.tensor]: NS'CHW format (N: batch size, S': target num, C: class num)

@@ -11,7 +11,7 @@ __all__ = ['NIMSLogger']
 class NIMSLogger:
     def __init__(self, loss, correct, macro_f1, micro_f1,
                  target_num, batch_size, one_hour_pixel,
-                 experiment_name, num_classes=4, args=None):
+                 num_stn, experiment_name, num_classes=2, args=None):
         """
         <Parameter>
         loss, correct, macro_f1, micro_f1 [bool]: whether to record each variable
@@ -30,6 +30,7 @@ class NIMSLogger:
         self.batch_size = batch_size
         self.one_hour_pixel = one_hour_pixel
         self.one_instance_pixel = batch_size * one_hour_pixel
+        self.num_stn = num_stn
         self.num_classes = num_classes
         self.num_update = 0
 
@@ -100,7 +101,8 @@ class NIMSLogger:
             self.cur_test_time += timedelta(hours=self.batch_size)
 
     def print_stat(self, dataset_len, test=False):
-        total_pixel = dataset_len * self.one_hour_pixel
+        #total_pixel = dataset_len * self.one_hour_pixel
+        total_stn = dataset_len * self.num_stn
 
         for target_idx in range(self.target_num):
             cur_target_stat = self.one_epoch_stat[target_idx + 1]
@@ -112,7 +114,7 @@ class NIMSLogger:
                 pass
 
             try:
-                cur_stat_str += ", accuracy = {:.3f}%".format((cur_target_stat.correct / total_pixel) * 100)
+                cur_stat_str += ", accuracy = {:.3f}%".format((cur_target_stat.correct / total_stn) * 100)
             except:
                 pass
 
@@ -138,7 +140,7 @@ class NIMSLogger:
         # TODO: Currently, only show one hour after.
         # Need to extend to multiple hours
         try:
-            accuracy = self._latest_stat[1].correct / self.one_instance_pixel
+            accuracy = self._latest_stat[1].correct / self.num_stn
             assert accuracy <= 1.0
         except:
             pass
