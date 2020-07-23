@@ -65,7 +65,7 @@ def parse_args():
     unet.add_argument('--no_cross_entropy_weight', default=False, help='use weight for cross entropy loss', action='store_true')
 
     nims_dataset = parser.add_argument_group('nims dataset related')
-    nims_dataset.add_argument('--test_time', default='2020050213', type=str, help='date of test')
+    nims_dataset.add_argument('--test_time', default='2020050305', type=str, help='date of test')
     nims_dataset.add_argument('--window_size', default=10, type=int, help='# of input sequences in time')
     nims_dataset.add_argument('--target_num', default=1, type=int, help='# of output sequences to evaluate')
     nims_dataset.add_argument('--variables', nargs='+',
@@ -271,9 +271,9 @@ if __name__ == '__main__':
     # Train and test dataset
     # TODO: add numeric_thres arguments 
     nims_train_dataset = NIMSDataset(root_dir=args.dataset_dir,
+                                     model_utc=0,
                                      test_time=args.test_time,
                                      window_size=args.window_size,
-                                     numeric_thres=12,
                                      model=args.model,
                                      transform=ToTensor())
     

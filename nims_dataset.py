@@ -10,6 +10,7 @@ import xarray as xr
 
 import os
 import pwd
+import copy
 
 __all__ = ['NIMSDataset', 'ToTensor']
 
@@ -21,11 +22,14 @@ MONTH_DAY = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 
 
 class NIMSDataset(Dataset):
-    def __init__(self, root_dir, test_time, window_size, numeric_thres, model, transform=None):
+    def __init__(self, root_dir, model_utc, test_time, window_size, model, transform=None):
+        assert window_size >= 0 and window_size <= 48, \
+            'window_size must be in between 0 and 48'
+
         self.root_dir = root_dir
+        self.model_utc = model_utc
         self.test_time = test_time
         self.window_size = window_size
-        self.numeric_thres = numeric_thres
         self.model = model
         self.transform = transform
         
@@ -40,32 +44,37 @@ class NIMSDataset(Dataset):
                              hour=int(self.test_time[8:10]))
         
         data_dirs = sorted([os.path.join(root, d) for d in dirs \
-                            if d.isnumeric() and d<=test_time.strftime("%Y%m%d")])
+                            if d.isnumeric() and d <= test_time.strftime("%Y%m%d")])
         
         data_path_dict = defaultdict(list)
         pres_data_path_list = []
         unis_data_path_list = []
         for data_dir in data_dirs:
             # remove data that predict beyond threshold hours
-            curr_data_path_list = [f for f in os.listdir(data_dir) \
-                                   if int(f.split('_')[3][1:]) <= self.numeric_thres]
+            curr_data_path_list = [f for f in os.listdir(data_dir)]
             pres_data_path_list = sorted([f for f in curr_data_path_list if 'pres' in f])
             unis_data_path_list = sorted([f for f in curr_data_path_list if 'unis' in f])
+            assert len(pres_data_path_list) == len(unis_data_path_list)
             
-            for p, u in list(zip(pres_data_path_list, unis_data_path_list)):    
+            for p, u in list(zip(pres_data_path_list, unis_data_path_list)):
+                # p name: ldps_pres_sp_h0xx_yyyymmddhh
+                # hh: LDAPS prediction start hour (00, 06, 12, 18)
+                # xx: xx hour prediction from hh
                 time = datetime(year=int(p.split('_')[4][0:4]),
                                 month=int(p.split('_')[4][4:6]),
                                 day=int(p.split('_')[4][6:8]),
                                 hour=int(p.split('_')[4][8:10])) + timedelta(hours=int(p.split('_')[3][1:]))
                 time = time.strftime("%Y%m%d%H")
-                data_path_dict[time].append((os.path.join(data_dir, p), os.path.join(data_dir, u)))
-                
+
+                if int(p.split('_')[4][8:10]) == self.model_utc:
+                    data_path_dict[time].append((os.path.join(data_dir, p), os.path.join(data_dir, u)))
+
         gt_dir = os.path.join(self.root_dir, 'OBS')
         gt_path_list = os.listdir(gt_dir)
         gt_path_list = sorted([os.path.join(gt_dir, f) for f in gt_path_list \
                                if '.npy' in f and
                                f.split('_')[3] < test_time.strftime("%Y%m%d%H")])
-        gt_path_list = gt_path_list[self.window_size-1:]
+        gt_path_list = gt_path_list[self.window_size:]
         
         return data_path_dict, gt_path_list
 
@@ -75,19 +84,42 @@ class NIMSDataset(Dataset):
     def __getitem__(self, idx):
         gt_path = self._gt_path_list[idx]
         
+        # train_end_time is also target time for this x, y instance
         train_end_time = gt_path.split('/')[-1].split('_')[3]
         train_end_time = datetime(year=int(train_end_time[0:4]),
                                   month=int(train_end_time[4:6]),
                                   day=int(train_end_time[6:8]),
                                   hour=int(train_end_time[8:10]))
-        train_start_time = train_end_time - timedelta(hours=self.window_size-1)
-        
+        train_start_time = train_end_time - timedelta(hours=self.window_size)
+
+        # Get the latest UTC time before current train end time
+        latest_utc = datetime(year=train_end_time.year,
+                              month=train_end_time.month,
+                              day=train_end_time.day,
+                              hour=self.model_utc)
+        if train_end_time < latest_utc:
+            latest_utc = latest_utc - timedelta(days=1)
+
         _ldaps_input = []
-        for t in range(self.window_size):
-            time = train_start_time + timedelta(hours=t)
-            time = time.strftime("%Y%m%d%H")
+        for t in range(self.window_size + 1):
+            curr_time = train_start_time + timedelta(hours=t)
+            curr_time_str = curr_time.strftime("%Y%m%d%H")
+
+            data_list = copy.deepcopy(self._data_path_dict[curr_time_str])
+
+            # Considering the calculation time of LDAPS model (5 hours)
+            # If current time is within 6 hours from latest_utc,
+            # this data can't be used, so we need to remove them.
+            if curr_time >= latest_utc:
+                train_end_time_from_latest_utc = train_end_time - latest_utc
+                if (train_end_time_from_latest_utc >= timedelta(hours=0)) and \
+                   (train_end_time_from_latest_utc <= timedelta(hours=5)):
+                    assert len(data_list) > 1
+                    data_list.sort(key=lambda x: x[0].split('/')[-1].split('_')[-1])
+                    data_list.pop(-1)
+
             # TODO: add pres_idx_list and unis_idx_list arguments using var_name
-            _ldaps_input.append(self._merge_pres_unis(data_list=self._data_path_dict[time],
+            _ldaps_input.append(self._merge_pres_unis(data_list=data_list,
                                                       pres_idx_list=[0],
                                                       unis_idx_list=[0]))
             
@@ -108,23 +140,16 @@ class NIMSDataset(Dataset):
 
         return ldaps_input, gt
 
-    def _merge_pres_unis(self, data_list, pres_idx_list, unis_idx_list):
-        for idx, (p, u) in enumerate(data_list):
-            if idx == 0:
-                pres = np.load(p).reshape(512, 512, 20).transpose()
-                unis = np.load(u).reshape(512, 512, 20).transpose()
-            else:
-                pres = pres + np.load(p).reshape(512, 512, 20).transpose()
-                unis = unis + np.load(u).reshape(512, 512, 20).transpose()
+    def _merge_pres_unis(self, data_list, pres_idx_list=None, unis_idx_list=None):
+        p, u = sorted(data_list)[-1]
+        pres = np.load(p).reshape(512, 512, 20).transpose()
+        unis = np.load(u).reshape(512, 512, 20).transpose()
 
-        # XXX: Get error when test time is changed
-        pres = pres / len(data_list)
-        unis = unis / len(data_list)
-        
         if pres_idx_list is not None:
             pres = pres[pres_idx_list,:,:]
         if unis_idx_list is not None:
             unis = unis[unis_idx_list,:,:]
+
         return np.concatenate((pres,unis), axis=0)
     
 class ToTensor(object):
