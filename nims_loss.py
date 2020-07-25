@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import numpy as np
-from sklearn.metrics import f1_score
+from sklearn.metrics import f1_score, confusion_matrix
 from sklearn.utils.class_weight import compute_class_weight
 
 __all__ = ['MSELoss', 'RMSELoss', 'NIMSCrossEntropyLoss']
@@ -43,13 +43,23 @@ class NIMSCrossEntropyLoss(nn.Module):
         self.classes = np.arange(num_classes)
         self.no_weights = no_weights
 
-    def _get_num_correct(self, preds, targets):
+    def _get_stat(self, preds, targets):
         _, pred_labels = preds.topk(1, dim=1, largest=True, sorted=True)
-        pred_labels = pred_labels.squeeze(1)
+        pred_labels = pred_labels.squeeze(1).detach().cpu().numpy().squeeze(axis=0)
+        target_labels = targets.data.detach().cpu().numpy().squeeze(axis=0)
 
-        correct = torch.sum(pred_labels == targets.data)
+        binary_f1 = f1_score(target_labels, pred_labels, zero_division=0)
+        conf_mat = confusion_matrix(target_labels, pred_labels, labels=self.classes)
+        tp, fp, tn, fn = conf_mat[1, 1], conf_mat[0, 1], conf_mat[0, 0], conf_mat[1, 0]
 
-        return correct.item()
+        #conf_mat_met = {'hit': tp, 'miss': fn, 'false alarm': fp, 'correct negative': tn}
+        csi = tp / (tp + fn + fp) if tp + fn + fp > 0 else -1.0
+        correct = tp + tn
+        # print('=' * 50)
+        # print('csi:', csi)
+        # print('conf_mat:\n', conf_mat)
+
+        return correct, binary_f1, csi
 
     def _get_f1_score(self, preds, targets):
         _, pred_labels = preds.topk(1, dim=1, largest=True, sorted=True)
@@ -103,18 +113,19 @@ class NIMSCrossEntropyLoss(nn.Module):
         # print('[cross_entropy] correct: {}, totalnum: {}'
         #      .format(correct, cur_pred.shape[0] * cur_pred.shape[2] * cur_pred.shape[3]))
 
-        stn_preds = preds[:, :, stn_codi[:,0], stn_codi[:,1]]
-        stn_targets = targets[:, stn_codi[:,0], stn_codi[:,1]]
+        stn_preds = preds[:, :, stn_codi[:, 0], stn_codi[:, 1]]
+        stn_targets = targets[:, stn_codi[:, 0], stn_codi[:, 1]]
         
-        correct = self._get_num_correct(stn_preds, stn_targets)
-        macro_f1, micro_f1 = self._get_f1_score(stn_preds, stn_targets)
+        correct, binary_f1, csi = self._get_stat(stn_preds, stn_targets)
+        #macro_f1, micro_f1 = self._get_f1_score(stn_preds, stn_targets)
         
         loss = F.cross_entropy(stn_preds, stn_targets, weight=class_weights, reduction='none')
         loss = torch.mean(torch.mean(loss, dim=0))
 
         # TODO: fix logger
         if logger:
-            logger.update(0, loss=loss.item(), correct=correct, test=test,
+            logger.update(0, loss=loss.item(), correct=correct,
+                          binary_f1=binary_f1, csi=csi, test=test,
                           pred_tensor=stn_preds, target_tensor=stn_targets)
 
         #print('[cross_entropy] loss: {}'.format(loss.item()))

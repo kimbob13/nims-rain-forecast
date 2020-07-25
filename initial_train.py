@@ -385,4 +385,3 @@ if __name__ == '__main__':
                                num_lat, num_lon, experiment_name, args)
     if not args.test_only:
         nims_trainer.train()
-    nims_trainer.test()

@@ -9,7 +9,7 @@ from nims_eval_converter import save_nims_metric
 __all__ = ['NIMSLogger']
 
 class NIMSLogger:
-    def __init__(self, loss, correct, macro_f1, micro_f1,
+    def __init__(self, loss, correct, binary_f1, macro_f1, micro_f1, csi,
                  target_num, batch_size, one_hour_pixel,
                  num_stn, experiment_name, num_classes=2, args=None):
         """
@@ -33,16 +33,17 @@ class NIMSLogger:
         self.num_stn = num_stn
         self.num_classes = num_classes
         self.num_update = 0
+        self.csi_update = 0
 
         # Initialize one epoch stat dictionary
         self.one_epoch_stat = dict()
         for target_idx in range(target_num):
-            self.one_epoch_stat[target_idx + 1] = OneTargetStat(loss, correct, macro_f1, micro_f1)
+            self.one_epoch_stat[target_idx + 1] = OneTargetStat(loss, correct, binary_f1, macro_f1, micro_f1, csi)
 
         # Used for one data instance stat
         self._latest_stat = dict()
         for target_idx in range(target_num):
-            self._latest_stat[target_idx + 1] = OneTargetStat(loss, correct, macro_f1, micro_f1)
+            self._latest_stat[target_idx + 1] = OneTargetStat(loss, correct, binary_f1, macro_f1, micro_f1, csi)
 
         # Store monthly stat for label-wise accuracy for classification model
         if args:
@@ -62,34 +63,49 @@ class NIMSLogger:
             self.macro_eval = np.zeros((len(self.month_name) + 1, 4, 4))                                              
 
     def update(self, target_idx, loss=None, correct=None,
-               macro_f1=None, micro_f1=None, test=False,
-               pred_tensor=None, target_tensor=None):
+               binary_f1=None, macro_f1=None, micro_f1=None, csi=None,
+               test=False, pred_tensor=None, target_tensor=None):
         assert (target_idx >= 0) and (target_idx < self.target_num)
 
-        if loss:
+        if loss != None:
             try:
                 self.one_epoch_stat[target_idx + 1].loss += loss
                 self._latest_stat[target_idx + 1].loss = loss
             except:
                 print("You don't specify the loss to be logged")
-        if correct:
+        if correct != None:
             try:
                 self.one_epoch_stat[target_idx + 1].correct += correct
                 self._latest_stat[target_idx + 1].correct = correct
             except:
                 print("You don't specify the coorect to be logged")
-        if macro_f1:
+        if binary_f1 != None:
+            try:
+                self.one_epoch_stat[target_idx + 1].binary_f1 += binary_f1
+                self._latest_stat[target_idx + 1].binary_f1 = binary_f1
+            except:
+                print("You don't specify the binary_f1 to be logged")
+        if macro_f1 != None:
             try:
                 self.one_epoch_stat[target_idx + 1].macro_f1 += macro_f1
                 self._latest_stat[target_idx + 1].macro_f1 = macro_f1
             except:
                 print("You don't specify the macro_f1 to be logged")
-        if micro_f1:
+        if micro_f1 != None:
             try:
                 self.one_epoch_stat[target_idx + 1].micro_f1 += micro_f1
                 self._latest_stat[target_idx + 1].micro_f1 = micro_f1
             except:
                 print("You don't specify the micro_f1 to be logged")
+        if csi != None:
+            try:
+                if csi >= 0.0:
+                    self.one_epoch_stat[target_idx + 1].csi += csi
+                    self.csi_update += 1
+                
+                self._latest_stat[target_idx + 1].csi = csi
+            except:
+                print("You don't specify the csi to be logged")
 
         self.num_update += 1
 
@@ -119,12 +135,22 @@ class NIMSLogger:
                 pass
 
             try:
+                cur_stat_str += ", f1 (binary) = {:.5f}".format(cur_target_stat.binary_f1 / self.num_update)
+            except:
+                pass
+
+            try:
                 cur_stat_str += ", f1 (macro) = {:.5f}".format(cur_target_stat.macro_f1 / self.num_update)
             except:
                 pass
 
             try:
                 cur_stat_str += ", f1 (micro) = {:.5f}".format(cur_target_stat.micro_f1 / self.num_update)
+            except:
+                pass
+
+            try:
+                cur_stat_str += ", csi = {:.5f}".format(cur_target_stat.csi / self.csi_update)
             except:
                 pass
 
@@ -140,8 +166,8 @@ class NIMSLogger:
         # TODO: Currently, only show one hour after.
         # Need to extend to multiple hours
         try:
-            accuracy = self._latest_stat[1].correct / self.num_stn
-            assert accuracy <= 1.0
+            accuracy = (self._latest_stat[1].correct / self.num_stn) * 100
+            assert accuracy <= 100.0
         except:
             pass
 
@@ -152,7 +178,12 @@ class NIMSLogger:
             pass
 
         try:
-            stat_str += ", accuracy = {:.3f}%".format(accuracy * 100)
+            stat_str += ", accuracy = {:.3f}%".format(accuracy)
+        except:
+            pass
+
+        try:
+            stat_str += ", f1 (binary) = {:.5f}".format(self._latest_stat[1].binary_f1)
         except:
             pass
 
@@ -163,6 +194,11 @@ class NIMSLogger:
         
         try:
             stat_str += ", f1 (micro) = {:.5f}".format(self._latest_stat[1].micro_f1)
+        except:
+            pass
+
+        try:
+            stat_str += ", csi = {:.5f}".format(self._latest_stat[1].csi)
         except:
             pass
 
@@ -212,6 +248,12 @@ class NIMSLogger:
                 _stat.correct = 0
         except:
             pass
+
+        try:
+            if _stat.binary_f1:
+                _stat.binary_f1 = 0.0
+        except:
+            pass
             
         try:
             if _stat.macro_f1:
@@ -225,7 +267,14 @@ class NIMSLogger:
         except:
             pass
 
+        try:
+            if _stat.csi:
+                _stat.csi = 0.0
+        except:
+            pass
+
         self.num_update = 0
+        self.csi_update = 0
 
     def _save_test_result(self):
         columns = ['label {}'.format(label) for label in range(self.num_classes)]
@@ -291,7 +340,7 @@ class NIMSLogger:
         save_nims_metric(self.experiment_name, self.baseline_name)
 
 class OneTargetStat:
-    def __init__(self, loss, correct, macro_f1, micro_f1):
+    def __init__(self, loss, correct, binary_f1, macro_f1, micro_f1, csi):
         """
         <Parameter>
         loss, correct, macro_f1, micro_f1 [bool]: whether to record each variable
@@ -300,10 +349,14 @@ class OneTargetStat:
             self._loss = 0.0
         if correct:
             self._correct = 0
+        if binary_f1:
+            self._binary_f1 = 0.0
         if macro_f1:
             self._macro_f1 = 0.0
         if micro_f1:
             self._micro_f1 = 0.0
+        if csi:
+            self._csi = 0.0
     
     @property
     def loss(self):
@@ -322,6 +375,14 @@ class OneTargetStat:
         self._correct = correct_val
 
     @property
+    def binary_f1(self):
+        return self._binary_f1
+
+    @binary_f1.setter
+    def binary_f1(self, binary_f1_val):
+        self._binary_f1 = binary_f1_val
+
+    @property
     def macro_f1(self):
         return self._macro_f1
 
@@ -336,3 +397,11 @@ class OneTargetStat:
     @micro_f1.setter
     def micro_f1(self, micro_f1_val):
         self._micro_f1 = micro_f1_val
+
+    @property
+    def csi(self):
+        return self._csi
+
+    @csi.setter
+    def csi(self, csi_val):
+        self._csi = csi_val
