@@ -52,7 +52,7 @@ class NIMSTrainer:
                                           args=None)
 
     def _get_station_coordinate(self):
-        codi_aws_df = pd.read_csv('/home/kimbob/jupyter/weather_prediction/pr_sample/codi_ldps_aws/codi_ldps_aws_512.csv')
+        codi_aws_df = pd.read_csv('./codi_ldps_aws/codi_ldps_aws_512.csv')
         dii_info = np.array(codi_aws_df['dii']) - 1
         stn_codi = np.array([(dii // 512, dii % 512) for dii in dii_info])
 
