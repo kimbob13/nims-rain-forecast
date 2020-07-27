@@ -10,12 +10,11 @@ __all__ = ['NIMSLogger']
 
 class NIMSLogger:
     def __init__(self, loss, correct, binary_f1, macro_f1, micro_f1, csi,
-                 target_num, batch_size, one_hour_pixel,
-                 num_stn, experiment_name, num_classes=2, args=None):
+                 batch_size, one_hour_pixel, num_stn, experiment_name,
+                 num_classes=2, args=None):
         """
         <Parameter>
         loss, correct, macro_f1, micro_f1 [bool]: whether to record each variable
-        target_num [int]: # of hours to predict
         batch_size [int]: self-explanatory
         one_hour_pixel [int]: # of total pixels in each one hour data
         experiment_name [str]: self-explanatory
@@ -26,7 +25,6 @@ class NIMSLogger:
         print_stat: Print one epoch stat
         latest_stat: Return straing of one "instance(batch)" stat
         """
-        self.target_num = target_num
         self.batch_size = batch_size
         self.one_hour_pixel = one_hour_pixel
         self.one_instance_pixel = batch_size * one_hour_pixel
@@ -36,144 +34,135 @@ class NIMSLogger:
         self.csi_update = 0
 
         # Initialize one epoch stat dictionary
-        self.one_epoch_stat = dict()
-        for target_idx in range(target_num):
-            self.one_epoch_stat[target_idx + 1] = OneTargetStat(loss, correct, binary_f1, macro_f1, micro_f1, csi)
+        self.one_epoch_stat = OneTargetStat(loss, correct, binary_f1, macro_f1, micro_f1, csi)
 
         # Used for one data instance stat
-        self._latest_stat = dict()
-        for target_idx in range(target_num):
-            self._latest_stat[target_idx + 1] = OneTargetStat(loss, correct, binary_f1, macro_f1, micro_f1, csi)
+        self._latest_stat = OneTargetStat(loss, correct, binary_f1, macro_f1, micro_f1, csi)
 
-        # Store monthly stat for label-wise accuracy for classification model
-        if args:
-            self.experiment_name = experiment_name
-            self.baseline_name = args.baseline_name
-            self.month_name = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-            self.month_label_stat = dict()
-            self.cur_test_time = datetime(year=args.end_train_year + 1,
-                                          month=args.start_month,
-                                          day=1,
-                                          hour=args.window_size)
+        # # Store monthly stat for label-wise accuracy for classification model
+        # if args:
+        #     self.experiment_name = experiment_name
+        #     self.baseline_name = args.baseline_name
+        #     self.month_name = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        #     self.month_label_stat = dict()
+        #     self.cur_test_time = datetime(year=args.end_train_year + 1,
+        #                                   month=args.start_month,
+        #                                   day=1,
+        #                                   hour=args.window_size)
 
-            for target_idx in range(target_num):
-                self.month_label_stat[target_idx + 1] = dict()
+        #     for target_idx in range(target_num):
+        #         self.month_label_stat[target_idx + 1] = dict()
             
-            self.micro_eval = np.zeros((len(self.month_name) + 1, 2, 2))
-            self.macro_eval = np.zeros((len(self.month_name) + 1, 4, 4))                                              
+        #     self.micro_eval = np.zeros((len(self.month_name) + 1, 2, 2))
+        #     self.macro_eval = np.zeros((len(self.month_name) + 1, 4, 4))                                              
 
-    def update(self, target_idx, loss=None, correct=None,
+    def update(self, loss=None, correct=None,
                binary_f1=None, macro_f1=None, micro_f1=None, csi=None,
                test=False, pred_tensor=None, target_tensor=None):
-        assert (target_idx >= 0) and (target_idx < self.target_num)
 
         if loss != None:
             try:
-                self.one_epoch_stat[target_idx + 1].loss += loss
-                self._latest_stat[target_idx + 1].loss = loss
+                self.one_epoch_stat.loss += loss
+                self._latest_stat.loss = loss
             except:
                 print("You don't specify the loss to be logged")
         if correct != None:
             try:
-                self.one_epoch_stat[target_idx + 1].correct += correct
-                self._latest_stat[target_idx + 1].correct = correct
+                self.one_epoch_stat.correct += correct
+                self._latest_stat.correct = correct
             except:
                 print("You don't specify the coorect to be logged")
         if binary_f1 != None:
             try:
-                self.one_epoch_stat[target_idx + 1].binary_f1 += binary_f1
-                self._latest_stat[target_idx + 1].binary_f1 = binary_f1
+                self.one_epoch_stat.binary_f1 += binary_f1
+                self._latest_stat.binary_f1 = binary_f1
             except:
                 print("You don't specify the binary_f1 to be logged")
         if macro_f1 != None:
             try:
-                self.one_epoch_stat[target_idx + 1].macro_f1 += macro_f1
-                self._latest_stat[target_idx + 1].macro_f1 = macro_f1
+                self.one_epoch_stat.macro_f1 += macro_f1
+                self._latest_stat.macro_f1 = macro_f1
             except:
                 print("You don't specify the macro_f1 to be logged")
         if micro_f1 != None:
             try:
-                self.one_epoch_stat[target_idx + 1].micro_f1 += micro_f1
-                self._latest_stat[target_idx + 1].micro_f1 = micro_f1
+                self.one_epoch_stat.micro_f1 += micro_f1
+                self._latest_stat.micro_f1 = micro_f1
             except:
                 print("You don't specify the micro_f1 to be logged")
         if csi != None:
             try:
                 if csi >= 0.0:
-                    self.one_epoch_stat[target_idx + 1].csi += csi
+                    self.one_epoch_stat.csi += csi
                     self.csi_update += 1
                 
-                self._latest_stat[target_idx + 1].csi = csi
+                self._latest_stat.csi = csi
             except:
                 print("You don't specify the csi to be logged")
 
         self.num_update += 1
 
-        if test:
-            cur_target_time = self.cur_test_time + timedelta(hours=target_idx)
-            cur_month = cur_target_time.month
+        # if test:
+        #     cur_target_time = self.cur_test_time + timedelta(hours=target_idx)
+        #     cur_month = cur_target_time.month
 
-            self._update_label_stat(target_idx, cur_month, pred_tensor, target_tensor)
-            self.cur_test_time += timedelta(hours=self.batch_size)
+        #     self._update_label_stat(target_idx, cur_month, pred_tensor, target_tensor)
+        #     self.cur_test_time += timedelta(hours=self.batch_size)
 
     def print_stat(self, dataset_len, test=False):
         #total_pixel = dataset_len * self.one_hour_pixel
         total_stn = dataset_len * self.num_stn
 
-        for target_idx in range(self.target_num):
-            cur_target_stat = self.one_epoch_stat[target_idx + 1]
+        stat_str = ''
+        
+        try:
+            stat_str += "loss = {:.5f}".format(self.one_epoch_stat.loss / self.num_update)
+        except:
+            pass
 
-            cur_stat_str = "[{:2d} hour] ".format(target_idx + 1)
-            try:
-                cur_stat_str += "loss = {:.5f}".format(cur_target_stat.loss / self.num_update)
-            except:
-                pass
+        try:
+            stat_str += ", accuracy = {:.3f}%".format((self.one_epoch_stat.correct / total_stn) * 100)
+        except:
+            pass
 
-            try:
-                cur_stat_str += ", accuracy = {:.3f}%".format((cur_target_stat.correct / total_stn) * 100)
-            except:
-                pass
+        try:
+            stat_str += ", f1 (binary) = {:.5f}".format(self.one_epoch_stat.binary_f1 / self.num_update)
+        except:
+            pass
 
-            try:
-                cur_stat_str += ", f1 (binary) = {:.5f}".format(cur_target_stat.binary_f1 / self.num_update)
-            except:
-                pass
+        try:
+            stat_str += ", f1 (macro) = {:.5f}".format(self.one_epoch_stat.macro_f1 / self.num_update)
+        except:
+            pass
 
-            try:
-                cur_stat_str += ", f1 (macro) = {:.5f}".format(cur_target_stat.macro_f1 / self.num_update)
-            except:
-                pass
+        try:
+            stat_str += ", f1 (micro) = {:.5f}".format(self.one_epoch_stat.micro_f1 / self.num_update)
+        except:
+            pass
 
-            try:
-                cur_stat_str += ", f1 (micro) = {:.5f}".format(cur_target_stat.micro_f1 / self.num_update)
-            except:
-                pass
+        try:
+            stat_str += ", csi = {:.5f}".format(self.one_epoch_stat.csi / self.csi_update)
+        except:
+            pass
 
-            try:
-                cur_stat_str += ", csi = {:.5f}".format(cur_target_stat.csi / self.csi_update)
-            except:
-                pass
+        print(stat_str)
+        print()
+        self._clear_one_target_stat(self.one_epoch_stat)
 
-            print(cur_stat_str)
-            print()
-            self._clear_one_target_stat(cur_target_stat)
-
-        if test:
-            self._save_test_result()
+        # if test:
+        #     self._save_test_result()
 
     @property
     def latest_stat(self):
-        # TODO: Currently, only show one hour after.
-        # Need to extend to multiple hours
         try:
-            accuracy = (self._latest_stat[1].correct / self.num_stn) * 100
+            accuracy = (self._latest_stat.correct / self.num_stn) * 100
             assert accuracy <= 100.0
         except:
             pass
 
         stat_str = ""
         try:
-            stat_str += "loss = {:.5f}".format(self._latest_stat[1].loss)
+            stat_str += "loss = {:.5f}".format(self._latest_stat.loss)
         except:
             pass
 
@@ -183,22 +172,22 @@ class NIMSLogger:
             pass
 
         try:
-            stat_str += ", f1 (binary) = {:.5f}".format(self._latest_stat[1].binary_f1)
+            stat_str += ", f1 (binary) = {:.5f}".format(self._latest_stat.binary_f1)
         except:
             pass
 
         try:
-            stat_str += ", f1 (macro) = {:.5f}".format(self._latest_stat[1].macro_f1)
+            stat_str += ", f1 (macro) = {:.5f}".format(self._latest_stat.macro_f1)
         except:
             pass
         
         try:
-            stat_str += ", f1 (micro) = {:.5f}".format(self._latest_stat[1].micro_f1)
+            stat_str += ", f1 (micro) = {:.5f}".format(self._latest_stat.micro_f1)
         except:
             pass
 
         try:
-            stat_str += ", csi = {:.5f}".format(self._latest_stat[1].csi)
+            stat_str += ", csi = {:.5f}".format(self._latest_stat.csi)
         except:
             pass
 

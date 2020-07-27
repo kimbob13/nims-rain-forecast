@@ -11,11 +11,10 @@ __all__ = ['UNet', 'AttentionUNet']
 
 class UNet(nn.Module):
     def __init__(self, n_channels, n_classes, n_blocks=7,
-                 start_channels=16, target_num=1, bilinear=True):
+                 start_channels=16, bilinear=True):
         super(UNet, self).__init__()
 
         self.n_blocks = n_blocks
-        self.target_num = target_num
 
         # Add padding when n_blocks == 7 so that image size becomes 256 x 149
         if n_blocks == 7:
@@ -84,11 +83,10 @@ class UNet(nn.Module):
 
 class AttentionUNet(nn.Module):
     def __init__(self, n_channels, n_classes, n_blocks=7,
-                 start_channels=16, target_num=1, bilinear=True):
+                 start_channels=16, bilinear=True):
         super(AttentionUNet, self).__init__()
 
         self.n_blocks = n_blocks
-        self.target_num = target_num
 
         if n_blocks == 7:
             self.pad_size = 3
@@ -130,34 +128,28 @@ class AttentionUNet(nn.Module):
         if self.n_blocks == 7:
             x = self.zero_pad(x)
 
-        for _ in range(self.target_num):
-            out = self.inc(x)
+        out = self.inc(x)
 
-            # Long residual list for Up phase
-            long_residual = []
+        # Long residual list for Up phase
+        long_residual = []
+        long_residual.append(out.clone())
+
+        # Down blocks
+        for down_block in self.down:
+            out = down_block(out)
             long_residual.append(out.clone())
 
-            # Down blocks
-            for down_block in self.down:
-                out = down_block(out)
-                long_residual.append(out.clone())
+        # Bridge block
+        out = self.bridge(out)
 
-            # Bridge block
-            out = self.bridge(out)
+        # Up blocks
+        for i, up_block in enumerate(self.up):
+            out = up_block(out, long_residual[-1 * (i + 2)])
 
-            # Up blocks
-            for i, up_block in enumerate(self.up):
-                out = up_block(out, long_residual[-1 * (i + 2)])
-
-            logit = self.outc(out)
-            logits.append(logit)
-
-        # Change logits shape to NS'CHW
-        # S': # of targets, C: # of class for each target
-        logits = torch.stack(logits).permute(1, 0, 2, 3, 4)
+        logit = self.outc(out)
 
         # Return to original size when n_blocks == 7
         if self.n_blocks == 7:
-            logits = logits[:, :, :, self.pad_size:, :]
+            logit = logit[:, :, self.pad_size:, :]
 
-        return logits
+        return logit

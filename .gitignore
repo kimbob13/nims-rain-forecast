@@ -1,5 +1,5 @@
 # NIMS specific
-results/
+results*/
 *.png
 *.ipynb
 .vscode/

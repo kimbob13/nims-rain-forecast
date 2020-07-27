@@ -37,11 +37,11 @@ class RMSELoss(nn.Module):
         return loss
 
 class NIMSCrossEntropyLoss(nn.Module):
-    def __init__(self, device, num_classes=2, no_weights=False):
+    def __init__(self, device, num_classes=2, use_weights=False):
         super().__init__()
         self.device = device
         self.classes = np.arange(num_classes)
-        self.no_weights = no_weights
+        self.use_weights = use_weights
 
     def _get_stat(self, preds, targets):
         _, pred_labels = preds.topk(1, dim=1, largest=True, sorted=True)
@@ -103,15 +103,14 @@ class NIMSCrossEntropyLoss(nn.Module):
         # convert preds to S'NCHW, and targets to S'NHW format
         assert preds.shape[0] == targets.shape[0]
 
-        if self.no_weights:
-            class_weights = None
-        else:
+        class_weights = None
+        if self.use_weights:
             class_weights = self._get_class_weights(targets)
 
-        # print('[cross_entropy] cur_pred shape:', cur_pred.shape)
-        # print('[cross_entropy] cur_target shape:', cur_target.shape)
+        # print('[cross_entropy] preds shape:', preds.shape)
+        # print('[cross_entropy] targets shape:', targets.shape)
         # print('[cross_entropy] correct: {}, totalnum: {}'
-        #      .format(correct, cur_pred.shape[0] * cur_pred.shape[2] * cur_pred.shape[3]))
+        #      .format(correct, preds.shape[0] * preds.shape[2] * preds.shape[3]))
 
         stn_preds = preds[:, :, stn_codi[:, 0], stn_codi[:, 1]]
         stn_targets = targets[:, stn_codi[:, 0], stn_codi[:, 1]]
@@ -124,7 +123,7 @@ class NIMSCrossEntropyLoss(nn.Module):
 
         # TODO: fix logger
         if logger:
-            logger.update(0, loss=loss.item(), correct=correct,
+            logger.update(loss=loss.item(), correct=correct,
                           binary_f1=binary_f1, csi=csi, test=test,
                           pred_tensor=stn_preds, target_tensor=stn_targets)
 

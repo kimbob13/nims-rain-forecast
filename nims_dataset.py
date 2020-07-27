@@ -18,30 +18,51 @@ START_YEAR = 2009
 END_YEAR = 2018
 NORMAL_YEAR_DAY = 365
 LEAP_YEAR_DAY = 366
-MONTH_DAY = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+MONTH_DAY = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 
 
 class NIMSDataset(Dataset):
-    def __init__(self, root_dir, model_utc, test_time, window_size, model, transform=None):
+    def __init__(self, model, model_utc, window_size, root_dir,
+                 test_time=None, train=True, transform=None):
         assert window_size >= 0 and window_size <= 48, \
             'window_size must be in between 0 and 48'
+        
+        if not train:
+            assert test_time != None, 'You must specify test time in test mode'
 
-        self.root_dir = root_dir
-        self.model_utc = model_utc
-        self.test_time = test_time
-        self.window_size = window_size
         self.model = model
+        self.model_utc = model_utc
+        self.window_size = window_size
+        self.root_dir = root_dir
+        self.test_time = test_time
+        self.train = train
         self.transform = transform
+
+        # Initial train mode.
+        # Set test time as 2020-06-01-00 to use whole May data for training
+        if self.test_time == None:
+            self.test_time = '2020060100'
         
         self._data_path_dict, self._gt_path_list = self.__set_path()
         
     def __set_path(self):
         root, dirs, _ = next(os.walk(self.root_dir, topdown=True))
-        
-        test_time = datetime(year=int(self.test_time[0:4]),
-                             month=int(self.test_time[4:6]),
-                             day=int(self.test_time[6:8]),
-                             hour=int(self.test_time[8:10]))
+
+        if len(self.test_time) == 10:
+            test_time = datetime(year=int(self.test_time[0:4]),
+                                 month=int(self.test_time[4:6]),
+                                 day=int(self.test_time[6:8]),
+                                 hour=int(self.test_time[8:10]))
+        elif len(self.test_time) == 8:
+            # Consider one day
+            test_time = datetime(year=int(self.test_time[0:4]),
+                                 month=int(self.test_time[4:6]),
+                                 day=int(self.test_time[6:8]))
+        elif len(self.test_time) == 6:
+            # Consider one month
+            test_time = datetime(year=int(self.test_time[0:4]),
+                                 month=int(self.test_time[4:6]),
+                                 day=MONTH_DAY[int(self.test_time[4:6])])
         
         data_dirs = sorted([os.path.join(root, d) for d in dirs \
                             if d.isnumeric() and d <= test_time.strftime("%Y%m%d")])
@@ -71,11 +92,18 @@ class NIMSDataset(Dataset):
 
         gt_dir = os.path.join(self.root_dir, 'OBS')
         gt_path_list = os.listdir(gt_dir)
-        gt_path_list = sorted([os.path.join(gt_dir, f) for f in gt_path_list \
-                               if '.npy' in f and
-                               f.split('_')[3] < test_time.strftime("%Y%m%d%H")])
-        gt_path_list = gt_path_list[self.window_size:]
-        
+
+        if self.train:
+            gt_path_list = sorted([os.path.join(gt_dir, f) for f in gt_path_list \
+                                if '.npy' in f and
+                                f.split('_')[3] < test_time.strftime("%Y%m%d%H")])
+            gt_path_list = gt_path_list[self.window_size:]
+
+        else:
+            gt_path_list = sorted([os.path.join(gt_dir, f) \
+                                   for f in gt_path_list \
+                                   if self.test_time in f and f.endswith('.npy')])
+
         return data_path_dict, gt_path_list
 
     def __len__(self):
@@ -120,8 +148,8 @@ class NIMSDataset(Dataset):
 
             # TODO: add pres_idx_list and unis_idx_list arguments using var_name
             _ldaps_input.append(self._merge_pres_unis(data_list=data_list,
-                                                      pres_idx_list=[0],
-                                                      unis_idx_list=[0]))
+                                                      pres_idx_list=[4, 5, 6, 7, 8, 9],
+                                                      unis_idx_list=[0, 2, 3, 5, 6, 7]))
             
         if self.model == 'unet':
             for idx, l in enumerate(_ldaps_input):
@@ -150,7 +178,7 @@ class NIMSDataset(Dataset):
         if unis_idx_list is not None:
             unis = unis[unis_idx_list,:,:]
 
-        return np.concatenate((pres,unis), axis=0)
+        return np.concatenate((pres, unis), axis=0)
     
 class ToTensor(object):
     def __call__(self, images):

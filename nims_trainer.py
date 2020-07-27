@@ -23,7 +23,6 @@ class NIMSTrainer:
         self.test_len = test_len
 
         self.num_epochs = args.num_epochs
-        self.target_num = args.target_num
         self.debug = args.debug
 
         self.stn_codi = self._get_station_coordinate()
@@ -38,7 +37,6 @@ class NIMSTrainer:
            model.name == 'persistence':
             self.nims_logger = NIMSLogger(loss=True, correct=True, binary_f1=True,
                                           macro_f1=False, micro_f1=False, csi=True,
-                                          target_num=self.target_num,
                                           batch_size=args.batch_size,
                                           one_hour_pixel=self.one_hour_pixel,
                                           num_stn=self.num_stn,
@@ -47,7 +45,6 @@ class NIMSTrainer:
         elif model.name == 'convlstm':
             self.nims_logger = NIMSLogger(loss=True, correct=False, binary_f1=True,
                                           macro_f1=False, micro_f1=False, csi=True,
-                                          target_num=self.target_num,
                                           batch_size=args.batch_size,
                                           one_hour_pixel=self.one_hour_pixel,
                                           num_stn=self.num_stn,
