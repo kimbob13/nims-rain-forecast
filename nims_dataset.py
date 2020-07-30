@@ -34,38 +34,27 @@ class NIMSDataset(Dataset):
         self.model_utc = model_utc
         self.window_size = window_size
         self.root_dir = root_dir
-        self.test_time = test_time
         self.train = train
         self.transform = transform
 
         # Initial train mode.
         # Set test time as 2020-06-01-00 to use whole May data for training
-        if self.test_time == None:
+        if test_time == None:
             self.test_time = '2020060100'
-        
+        elif '-' in test_time:
+            self.test_time = test_time.strip().split('-')
+        else:
+            self.test_time = test_time
+            
         self._data_path_dict, self._gt_path_list = self.__set_path()
         
     def __set_path(self):
         root, dirs, _ = next(os.walk(self.root_dir, topdown=True))
-
-        if len(self.test_time) == 10:
-            test_time = datetime(year=int(self.test_time[0:4]),
-                                 month=int(self.test_time[4:6]),
-                                 day=int(self.test_time[6:8]),
-                                 hour=int(self.test_time[8:10]))
-        elif len(self.test_time) == 8:
-            # Consider one day
-            test_time = datetime(year=int(self.test_time[0:4]),
-                                 month=int(self.test_time[4:6]),
-                                 day=int(self.test_time[6:8]))
-        elif len(self.test_time) == 6:
-            # Consider one month
-            test_time = datetime(year=int(self.test_time[0:4]),
-                                 month=int(self.test_time[4:6]),
-                                 day=MONTH_DAY[int(self.test_time[4:6])])
         
+        start_test_time, end_test_time = self.__start_end_test_time()
+
         data_dirs = sorted([os.path.join(root, d) for d in dirs \
-                            if d.isnumeric() and d <= test_time.strftime("%Y%m%d")])
+                            if d.isnumeric() and d <= end_test_time.strftime("%Y%m%d")])
         
         data_path_dict = defaultdict(list)
         pres_data_path_list = []
@@ -96,15 +85,76 @@ class NIMSDataset(Dataset):
         if self.train:
             gt_path_list = sorted([os.path.join(gt_dir, f) for f in gt_path_list \
                                 if '.npy' in f and
-                                f.split('_')[3] < test_time.strftime("%Y%m%d%H")])
+                                f.split('_')[3][:-2] < end_test_time.strftime("%Y%m%d%H")])
             gt_path_list = gt_path_list[self.window_size:]
 
         else:
             gt_path_list = sorted([os.path.join(gt_dir, f) \
                                    for f in gt_path_list \
-                                   if self.test_time in f and f.endswith('.npy')])
+                                   if f.split('_')[3][:-2] >= start_test_time.strftime("%Y%m%d%H") and \
+                                   f.split('_')[3][:-2] <= end_test_time.strftime("%Y%m%d%H") and \
+                                   f.endswith('.npy')])
 
         return data_path_dict, gt_path_list
+
+    def __start_end_test_time(self):
+        if isinstance(self.test_time, str):
+            if len(self.test_time) == 10:
+                # Consider one hour
+                start_test_time = datetime(year=int(self.test_time[0:4]),
+                                           month=int(self.test_time[4:6]),
+                                           day=int(self.test_time[6:8]),
+                                           hour=int(self.test_time[8:10]))
+                end_test_time = start_test_time
+            elif len(self.test_time) == 8:
+                # Consider one day
+                start_test_time = datetime(year=int(self.test_time[0:4]),
+                                           month=int(self.test_time[4:6]),
+                                           day=int(self.test_time[6:8]),
+                                           hour=0)
+                end_test_time = start_test_time + timedelta(hours=23)
+            elif len(self.test_time) == 6:
+                # Consider one month
+                start_test_time = datetime(year=int(self.test_time[0:4]),
+                                           month=int(self.test_time[4:6]),
+                                           day=1,
+                                           hour=0)
+                end_test_time = start_test_time + timedelta(days=MONTH_DAY[int(self.test_time[4:6])],
+                                                            hours=23)
+            else:
+                raise ValueError
+
+        elif isinstance(self.test_time, list):
+            _start = self.test_time[0]
+            _end = self.test_time[1]
+            assert len(_start) == len(_end)
+
+            if len(_start) == 10:
+                start_test_time = datetime(year=int(_start[0:4]),
+                                           month=int(_start[4:6]),
+                                           day=int(_start[6:8]),
+                                           hour=int(_start[8:10]))
+
+                end_test_time = datetime(year=int(_end[0:4]),
+                                         month=int(_end[4:6]),
+                                         day=int(_end[6:8]),
+                                         hour=int(_end[8:10]))
+
+            elif len(_start) == 8:
+                start_test_time = datetime(year=int(_start[0:4]),
+                                           month=int(_start[4:6]),
+                                           day=int(_start[6:8]),
+                                           hour=0)
+
+                end_test_time = datetime(year=int(_end[0:4]),
+                                         month=int(_end[4:6]),
+                                         day=int(_end[6:8]),
+                                         hour=23)
+            
+            elif len(_start) == 6:
+                raise NotImplementedError
+
+        return start_test_time, end_test_time
 
     def __len__(self):
         return len(self._gt_path_list)

@@ -8,7 +8,6 @@ from nims_trainer import NIMSTrainer
 
 try:
     from torchsummary import summary
-    import setproctitle
 except:
     pass
 

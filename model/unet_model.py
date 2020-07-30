@@ -16,11 +16,6 @@ class UNet(nn.Module):
 
         self.n_blocks = n_blocks
 
-        # Add padding when n_blocks == 7 so that image size becomes 256 x 149
-        if n_blocks == 7:
-            self.pad_size = 3
-            self.zero_pad = nn.ZeroPad2d((0, 0, self.pad_size, 0))
-
         self.inc = BasicConv(n_channels, start_channels)
 
         # Create down blocks
@@ -49,12 +44,6 @@ class UNet(nn.Module):
     def forward(self, x):
         logits = []
 
-        # If n_blocks == 7, the input tensor becomes 1 by 1 images
-        # after last down block, so there is an error when batch_size = 1.
-        # Therefore, we do zero padding for H(height) dimension in this case.
-        if self.n_blocks == 7:
-            x = self.zero_pad(x)
-
         out = self.inc(x)
 
         # Long residual list for Up phase
@@ -74,10 +63,6 @@ class UNet(nn.Module):
             out = up_block(out, long_residual[-1 * (i + 2)])
 
         logit = self.outc(out)
-        
-        # Return to original size when n_blocks == 7
-        if self.n_blocks == 7:
-            logit = logit[:, :, self.pad_size:, :]
 
         return logit
 
@@ -87,10 +72,6 @@ class AttentionUNet(nn.Module):
         super(AttentionUNet, self).__init__()
 
         self.n_blocks = n_blocks
-
-        if n_blocks == 7:
-            self.pad_size = 3
-            self.zero_pad = nn.ZeroPad2d((0, 0, self.pad_size, 0))
 
         factor = 2 if bilinear else 1
         self.inc = BasicConv(n_channels, start_channels)
@@ -122,12 +103,6 @@ class AttentionUNet(nn.Module):
     def forward(self, x):
         logits = []
 
-        # If n_blocks == 7, the input tensor becomes 1 by 1 images
-        # after last down block, so there is an error when batch_size = 1.
-        # Therefore, we do zero padding for H(height) dimension in this case.
-        if self.n_blocks == 7:
-            x = self.zero_pad(x)
-
         out = self.inc(x)
 
         # Long residual list for Up phase
@@ -147,9 +122,5 @@ class AttentionUNet(nn.Module):
             out = up_block(out, long_residual[-1 * (i + 2)])
 
         logit = self.outc(out)
-
-        # Return to original size when n_blocks == 7
-        if self.n_blocks == 7:
-            logit = logit[:, :, self.pad_size:, :]
 
         return logit

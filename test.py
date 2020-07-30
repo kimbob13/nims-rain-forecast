@@ -34,7 +34,7 @@ if __name__ == '__main__':
         print('[main] one images sample shape:', sample.shape)
 
     # Create a model and criterion
-    model, criterion, num_lat, num_lon = set_model(sample, device, args)
+    model, criterion, num_lat, num_lon = set_model(sample, device, args, train=False)
 
     # Create dataloaders
     test_loader = DataLoader(nims_test_dataset, batch_size=args.batch_size,
@@ -50,7 +50,7 @@ if __name__ == '__main__':
     # Load trained model weight
     # Persistence model doesn't have trained model
     if not args.model == 'persistence':
-        weight_name = experiment_name[:-(len(args.test_time) - 1)]
+        weight_name = '_'.join(experiment_name.split('_')[:-1])
         weight_path = os.path.join('./results', 'trained_model', weight_name + '.pt')
         model.load_state_dict(torch.load(weight_path))
 

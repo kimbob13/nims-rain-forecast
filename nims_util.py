@@ -16,6 +16,11 @@ import argparse
 from tqdm import tqdm
 from multiprocessing import Process, Queue, cpu_count
 
+try:
+    import setproctitle
+except:
+    pass
+
 __all__ = ['create_results_dir', 'parse_args', 'set_device', 'fix_seed',
            'set_model', 'set_optimizer', 'set_experiment_name']
 
@@ -45,7 +50,7 @@ def parse_args():
 
     common = parser.add_argument_group('common')
     common.add_argument('--model', default='unet', type=str, help='which model to use [unet, attn_unet, convlstm, persistence]')
-    common.add_argument('--dataset_dir', default='/home/osilab11/hdd/NIMS_LDPS', type=str, help='root directory of dataset')
+    common.add_argument('--dataset_dir', default='/home/osilab12/ssd/NIMS_LDPS', type=str, help='root directory of dataset')
     common.add_argument('--device', default='0', type=str, help='which device to use')
     common.add_argument('--num_workers', default=6, type=int, help='# of workers for dataloader')
     common.add_argument('--baseline_name', default=None, type=str, help='name of baseline experiment you want to compare')
@@ -184,7 +189,7 @@ def undersample(train_dataset, sampling_ratio):
     return selected_idx
 """
 
-def set_model(sample, device, args):
+def set_model(sample, device, args, train=True):
     # Create a model and criterion
     num_classes = 2
 
@@ -202,7 +207,8 @@ def set_model(sample, device, args):
                                   start_channels=args.start_channels)
 
         criterion = NIMSCrossEntropyLoss(device, num_classes=num_classes,
-                                         use_weights=args.cross_entropy_weight)
+                                         use_weights=args.cross_entropy_weight,
+                                         train=train)
 
         num_lat = sample.shape[1] # the number of latitudes (originally 253)
         num_lon = sample.shape[2] # the number of longitudes (originally 149)
@@ -224,7 +230,8 @@ def set_model(sample, device, args):
     elif args.model == 'persistence':
         model = Persistence(num_classes=num_classes, device=device)
         criterion = NIMSCrossEntropyLoss(device, num_classes=num_classes,
-                                         use_weights=args.cross_entropy_weight)
+                                         use_weights=args.cross_entropy_weight,
+                                         train=train)
 
         num_lat = sample.shape[1] # the number of latitudes (originally 253)
         num_lon = sample.shape[2] # the number of longitudes (originally 149)
@@ -252,15 +259,39 @@ def set_experiment_name(args):
     <Parameters>
     args [argparse]: parsed argument
     """
-    test_time = ''
     if args.test_time:
-        try:
-            test_time += '_{}'.format(int(args.test_time[2:4]))
-            test_time += '{:02d}'.format(int(args.test_time[4:6]))
-            test_time += '{:02d}'.format(int(args.test_time[6:8]))
-            test_time += '{:02d}'.format(int(args.test_time[8:10]))
-        except:
-            pass
+        if '-' in args.test_time:
+            _start, _end = args.test_time.strip().split('-')
+            start_test_time = ''
+            end_test_time = ''
+            try:
+                start_test_time += '_{}'.format(int(_start[2:4]))
+                start_test_time += '{:02d}'.format(int(_start[4:6]))
+                start_test_time += '{:02d}'.format(int(_start[6:8]))
+                start_test_time += '{:02d}'.format(int(_start[8:10]))
+            except:
+                pass
+                
+            try:
+                end_test_time += '{}'.format(int(_end[2:4]))
+                end_test_time += '{:02d}'.format(int(_end[4:6]))
+                end_test_time += '{:02d}'.format(int(_end[6:8]))
+                end_test_time += '{:02d}'.format(int(_end[8:10]))
+            except:
+                pass
+
+            test_time = start_test_time + '-' + end_test_time
+
+        else:
+            test_time = ''
+            try:
+                test_time += '_{}'.format(int(args.test_time[2:4]))
+                test_time += '{:02d}'.format(int(args.test_time[4:6]))
+                test_time += '{:02d}'.format(int(args.test_time[6:8]))
+                test_time += '{:02d}'.format(int(args.test_time[8:10]))
+            except:
+                pass
+        
 
     cross_entropy_weight = ''
     if args.cross_entropy_weight:

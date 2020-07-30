@@ -37,11 +37,12 @@ class RMSELoss(nn.Module):
         return loss
 
 class NIMSCrossEntropyLoss(nn.Module):
-    def __init__(self, device, num_classes=2, use_weights=False):
+    def __init__(self, device, num_classes=2, use_weights=False, train=True):
         super().__init__()
         self.device = device
         self.classes = np.arange(num_classes)
         self.use_weights = use_weights
+        self.train = train
 
     def _get_stat(self, preds, targets):
         _, pred_labels = preds.topk(1, dim=1, largest=True, sorted=True)
@@ -52,12 +53,14 @@ class NIMSCrossEntropyLoss(nn.Module):
         conf_mat = confusion_matrix(target_labels, pred_labels, labels=self.classes)
         tp, fp, tn, fn = conf_mat[1, 1], conf_mat[0, 1], conf_mat[0, 0], conf_mat[1, 0]
 
+        correct = tp + tn
+        if not self.train:
+            ratio = (tp + fp) / (tn + fn)
+            tn *= ratio
+            fn *= ratio
+
         #conf_mat_met = {'hit': tp, 'miss': fn, 'false alarm': fp, 'correct negative': tn}
         csi = tp / (tp + fn + fp) if tp + fn + fp > 0 else -1.0
-        correct = tp + tn
-        # print('=' * 50)
-        # print('csi:', csi)
-        # print('conf_mat:\n', conf_mat)
 
         return correct, binary_f1, csi
 
