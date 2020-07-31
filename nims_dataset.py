@@ -47,6 +47,10 @@ class NIMSDataset(Dataset):
             self.test_time = test_time
             
         self._data_path_dict, self._gt_path_list = self.__set_path()
+
+    @property
+    def gt_path_list(self):
+        return self._gt_path_list
         
     def __set_path(self):
         root, dirs, _ = next(os.walk(self.root_dir, topdown=True))
@@ -91,9 +95,9 @@ class NIMSDataset(Dataset):
         else:
             gt_path_list = sorted([os.path.join(gt_dir, f) \
                                    for f in gt_path_list \
-                                   if f.split('_')[3][:-2] >= start_test_time.strftime("%Y%m%d%H") and \
-                                   f.split('_')[3][:-2] <= end_test_time.strftime("%Y%m%d%H") and \
-                                   f.endswith('.npy')])
+                                   if f.endswith('.npy') and \
+                                   f.split('_')[3][:-2] >= start_test_time.strftime("%Y%m%d%H") and \
+                                   f.split('_')[3][:-2] <= end_test_time.strftime("%Y%m%d%H")])
 
         return data_path_dict, gt_path_list
 
@@ -119,8 +123,10 @@ class NIMSDataset(Dataset):
                                            month=int(self.test_time[4:6]),
                                            day=1,
                                            hour=0)
-                end_test_time = start_test_time + timedelta(days=MONTH_DAY[int(self.test_time[4:6])],
-                                                            hours=23)
+                # Because original OBS files are stored in KST time,
+                # the converted OBS npy file ends at 2020-06-30-14 UTC (2020-06-30-23 KST)
+                end_test_time = start_test_time + timedelta(days=MONTH_DAY[int(self.test_time[4:6])] - 1,
+                                                            hours=14)
             else:
                 raise ValueError
 
@@ -217,6 +223,12 @@ class NIMSDataset(Dataset):
         gt = torch.where(gt >= 0.1, torch.ones(gt.shape), torch.zeros(gt.shape))
 
         return ldaps_input, gt
+
+    def get_real_gt(self, idx):
+        gt_path = self._gt_path_list[idx]
+        real_gt = np.load(gt_path)
+
+        return real_gt
 
     def _merge_pres_unis(self, data_list, pres_idx_list=None, unis_idx_list=None):
         p, u = sorted(data_list)[-1]

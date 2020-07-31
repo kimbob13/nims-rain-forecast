@@ -1,5 +1,6 @@
 import torch
 import torch.optim as optim
+from torch.utils.data import Subset
 import numpy as np
 
 from model.unet_model import UNet, AttentionUNet
@@ -21,8 +22,8 @@ try:
 except:
     pass
 
-__all__ = ['create_results_dir', 'parse_args', 'set_device', 'fix_seed',
-           'set_model', 'set_optimizer', 'set_experiment_name']
+__all__ = ['create_results_dir', 'parse_args', 'set_device', 'undersample',
+           'fix_seed', 'set_model', 'set_optimizer', 'set_experiment_name']
 
 def create_results_dir():
     # Base results directory
@@ -70,7 +71,7 @@ def parse_args():
     #                           help='which variables to use (rain, cape, etc.). \
     #                                 Can be single number which specify how many variables to use \
     #                                 or list of variables name')
-    # nims_dataset.add_argument('--sampling_ratio', default=1.0, type=float, help='the ratio of undersampling')
+    nims_dataset.add_argument('--sampling_ratio', default=1.0, type=float, help='the ratio of undersampling')
 
     hyperparam = parser.add_argument_group('hyper-parameters')
     hyperparam.add_argument('--num_epochs', default=50, type=int, help='# of training epochs')
@@ -108,22 +109,22 @@ def set_device(args):
 
     return device
 
-"""
-Archive of Undersampling code
-
 def _undersample(train_dataset, indices, pid=None, queue=None):
     target_nonzero_means = []
 
     for idx in indices:
-        target = train_dataset.get_real_target(idx)
+        target = train_dataset.get_real_gt(idx)
         total_pixel = len(target.flatten())
+
+        # Missing values are -99. Change these values to 0
+        target[target < 0] = 0.0
 
         # Get average rain for target
         max_one_hour_value = np.amax(target)
         nonzero_count = np.count_nonzero(target)
         if (max_one_hour_value == 0) or \
-           (nonzero_count < (total_pixel * 0.03)):
-            # If the # of nonzero pixels are less than 3% of total pixels,
+           (nonzero_count < (total_pixel * 0.000019)):
+            # If the # of nonzero pixels are less than 0.0019% of total pixels,
             # we treat it as non-rainy instance, so make avg_value as 0
             target_nonzero_means.append((idx, 0))
         else:
@@ -186,8 +187,10 @@ def undersample(train_dataset, sampling_ratio):
         else: # This case is rainy hour
             selected_idx.append(idx)
 
-    return selected_idx
-"""
+    # Undersample train dataset
+    train_dataset = Subset(train_dataset, selected_idx)
+
+    return train_dataset
 
 def set_model(sample, device, args, train=True):
     # Create a model and criterion
@@ -259,6 +262,7 @@ def set_experiment_name(args):
     <Parameters>
     args [argparse]: parsed argument
     """
+    test_time = ''
     if args.test_time:
         if '-' in args.test_time:
             _start, _end = args.test_time.strip().split('-')
@@ -283,7 +287,6 @@ def set_experiment_name(args):
             test_time = start_test_time + '-' + end_test_time
 
         else:
-            test_time = ''
             try:
                 test_time += '_{}'.format(int(args.test_time[2:4]))
                 test_time += '{:02d}'.format(int(args.test_time[4:6]))
@@ -298,24 +301,28 @@ def set_experiment_name(args):
         cross_entropy_weight = '_weight'
 
     if args.model == 'unet':            
-        experiment_name = 'nims-unet_nb{}_ch{}_ws{}_ep{}_bs{}_{}{}{}{}' \
-                          .format(args.n_blocks,
+        experiment_name = 'nims-utc{}-unet_nb{}_ch{}_ws{}_ep{}_bs{}_sr{}_{}{}{}{}' \
+                          .format(args.model_utc,
+                                  args.n_blocks,
                                   args.start_channels,
                                   args.window_size,
                                   args.num_epochs,
                                   args.batch_size,
+                                  args.sampling_ratio,
                                   args.optimizer,
                                   args.lr,
                                   cross_entropy_weight,
                                   test_time)
 
     elif args.model == 'attn_unet':
-        experiment_name = 'nims-attn_unet_nb{}_ch{}_ws{}_ep{}_bs{}_{}{}{}{}' \
-                          .format(args.n_blocks,
+        experiment_name = 'nims-utc{}-attn_unet_nb{}_ch{}_ws{}_ep{}_bs{}_sr{}_{}{}{}{}' \
+                          .format(args.model_utc,
+                                  args.n_blocks,
                                   args.start_channels,
                                   args.window_size,
                                   args.num_epochs,
                                   args.batch_size,
+                                  args.sampling_ratio,
                                   args.optimizer,
                                   args.lr,
                                   cross_entropy_weight,

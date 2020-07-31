@@ -1,11 +1,13 @@
 import os
-import pytz
+import argparse
 from datetime import datetime, timezone
 from dateutil import tz
+
 import numpy as np
 import pandas as pd
 
-codi_aws_df = pd.read_csv('/home/kimbob/jupyter/weather_prediction/pr_sample/codi_ldps_aws/codi_ldps_aws_512.csv')
+
+codi_aws_df = pd.read_csv('./codi_ldps_aws/codi_ldps_aws_512.csv')
 
 def get_station_coordinate(stn_id):
     stn_info = codi_aws_df[codi_aws_df['stn'] == stn_id]
@@ -16,7 +18,11 @@ def get_station_coordinate(stn_id):
     return x, y
 
 if __name__ == '__main__':
-    root_dir = '/home/osilab11/hdd/NIMS_LDPS/OBS'
+    parser = argparse.ArgumentParser(description='LDAPS Observations Converter')
+    parser.add_argument('--root_dir', default='/home/osilab12/ssd/NIMS_LDPS/OBS', type=str, help='root directory of dataset')
+    args = parser.parse_args()
+
+    root_dir = args.root_dir
 
     KST = tz.gettz('Asia/Seoul')
     obs_list = sorted(os.listdir(root_dir))

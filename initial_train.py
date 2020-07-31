@@ -53,18 +53,17 @@ if __name__ == '__main__':
             except:
                 print('If you want to see summary of model, install torchsummary')
 
-    # # Undersampling
-    # if not args.test_only and (args.sampling_ratio != 1.0):
-    #     print('=' * 20, 'Under Sampling', '=' * 20)
-    #     print('Before Under sampling, train len:', len(nims_train_dataset))
+    # Undersampling
+    if args.sampling_ratio < 1.0:
+        print('=' * 20, 'Under Sampling', '=' * 20)
+        print('Before Under sampling, train len:', len(nims_train_dataset))
 
-    #     print('Please wait...')
-    #     selected_idx = undersample(nims_train_dataset, args.sampling_ratio)
-    #     nims_train_dataset = Subset(nims_train_dataset, selected_idx)
+        print('Please wait...')
+        nims_train_dataset = undersample(nims_train_dataset, args.sampling_ratio)
 
-    #     print('After Under sampling, train len:', len(nims_train_dataset))
-    #     print('=' * 20, 'Finish Under Sampling', '=' * 20)
-    #     print()
+        print('After Under sampling, train len:', len(nims_train_dataset))
+        print('=' * 20, 'Finish Under Sampling', '=' * 20)
+        print()
         
     # Create dataloaders
     train_loader = DataLoader(nims_train_dataset, batch_size=args.batch_size,
