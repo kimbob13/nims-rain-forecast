@@ -13,6 +13,8 @@ except:
 
 if __name__ == '__main__':
     args = parse_args()
+    args.num_epochs = args.finetune_num_epochs
+    args.lr = args.finetune_lr_ratio * args.lr
 
     # Set device
     device = set_device(args)
@@ -25,7 +27,7 @@ if __name__ == '__main__':
 
     # Parse NIMS dataset variables
     # variables = parse_variables(args.variables)
-
+    
     # Train dataset
     nims_train_dataset = NIMSDataset(model=args.model,
                                      model_utc=args.model_utc,
@@ -33,7 +35,7 @@ if __name__ == '__main__':
                                      root_dir=args.dataset_dir,
                                      test_time=args.test_time,
                                      train=True,
-                                     finetune=False,
+                                     finetune=True,
                                      transform=ToTensor())
     
     # Get a sample for getting shape of each tensor

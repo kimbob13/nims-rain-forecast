@@ -23,7 +23,7 @@ MONTH_DAY = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 
 class NIMSDataset(Dataset):
     def __init__(self, model, model_utc, window_size, root_dir,
-                 test_time=None, train=True, transform=None):
+                 test_time=None, train=True, finetune=False, transform=None):
         assert window_size >= 0 and window_size <= 48, \
             'window_size must be in between 0 and 48'
         

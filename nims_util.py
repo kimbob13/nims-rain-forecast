@@ -78,7 +78,12 @@ def parse_args():
     hyperparam.add_argument('--batch_size', default=1, type=int, help='batch size')
     hyperparam.add_argument('--optimizer', default='adam', type=str, help='which optimizer to use (rmsprop, adam, sgd)')
     hyperparam.add_argument('--lr', default=0.001, type=float, help='learning rate of optimizer')
-
+    
+    finetune = parser.add_argument_group('finetune related')
+    finetune.add_argument('--final_date', default=None, type=str, help='the final date of fine-tuning')
+    finetune.add_argument('--finetune_lr_ratio', default=0.1, type=float, help='the ratio of fine-tuning learning rate to the original learning rate')
+    finetune.add_argument('--finetune_num_epochs', default=3, type=int, help='# of fine-tuning epochs')
+    
     args = parser.parse_args()
     if args.model == 'persistence':
         args.test_only = True
