@@ -27,7 +27,6 @@ class NIMSTrainer:
 
         self.stn_codi = self._get_station_coordinate()
         self.num_stn = len(self.stn_codi)
-        self.one_hour_pixel = num_lat * num_lon
         self.experiment_name = experiment_name
 
         self.model.to(self.device)
@@ -38,8 +37,6 @@ class NIMSTrainer:
             self.nims_logger = NIMSLogger(loss=True, correct=True, binary_f1=True,
                                           macro_f1=False, micro_f1=False,
                                           csi=True, pod=True, bias=True,
-                                          batch_size=args.batch_size,
-                                          one_hour_pixel=self.one_hour_pixel,
                                           num_stn=self.num_stn,
                                           experiment_name=experiment_name,
                                           args=args)
@@ -47,8 +44,6 @@ class NIMSTrainer:
             self.nims_logger = NIMSLogger(loss=True, correct=False, binary_f1=True,
                                           macro_f1=False, micro_f1=False,
                                           csi=True, pod=True, bias=True,
-                                          batch_size=args.batch_size,
-                                          one_hour_pixel=self.one_hour_pixel,
                                           num_stn=self.num_stn,
                                           experiment_name=experiment_name,
                                           args=None)

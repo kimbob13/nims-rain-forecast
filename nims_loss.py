@@ -101,8 +101,9 @@ class NIMSCrossEntropyLoss(nn.Module):
     def forward(self, preds, targets, stn_codi, logger=None, test=False):
         """
         <Parameter>
-        preds [torch.tensor]: NS'CHW format (N: batch size, S': target num, C: class num)
-        targets [torch.tensor]:  NS'HW format (same as preds)
+        preds [torch.tensor]: NCHW format (N: batch size, C: class num)
+        targets [torch.tensor]:  NHW format (same as preds)
+        stn_codi [np.ndarray]: coordinates of station
         logger [NIMSLogger]: Collect stat for this data instance
         """
         assert preds.shape[0] == targets.shape[0]
@@ -125,7 +126,6 @@ class NIMSCrossEntropyLoss(nn.Module):
         loss = F.cross_entropy(stn_preds, stn_targets, weight=class_weights, reduction='none')
         loss = torch.mean(torch.mean(loss, dim=0))
 
-        # TODO: fix logger
         if logger:
             logger.update(loss=loss.item(), correct=correct,
                           binary_f1=binary_f1, csi=csi, pod=pod, bias=bias,

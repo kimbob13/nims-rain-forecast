@@ -10,14 +10,11 @@ __all__ = ['NIMSLogger']
 
 class NIMSLogger:
     def __init__(self, loss, correct, binary_f1, macro_f1, micro_f1,
-                 csi, pod, bias, batch_size, one_hour_pixel, num_stn,
-                 experiment_name, num_classes=2, args=None):
+                 csi, pod, bias, num_stn, experiment_name,
+                 num_classes=2, args=None):
         """
         <Parameter>
         loss, correct, macro_f1, micro_f1 [bool]: whether to record each variable
-        batch_size [int]: self-explanatory
-        one_hour_pixel [int]: # of total pixels in each one hour data
-        experiment_name [str]: self-explanatory
         args [argparse]: parsed arguments from main
 
         <Public Method>
@@ -25,9 +22,6 @@ class NIMSLogger:
         print_stat: Print one epoch stat
         latest_stat: Return straing of one "instance(batch)" stat
         """
-        self.batch_size = batch_size
-        self.one_hour_pixel = one_hour_pixel
-        self.one_instance_pixel = batch_size * one_hour_pixel
         self.num_stn = num_stn
         self.num_classes = num_classes
 
