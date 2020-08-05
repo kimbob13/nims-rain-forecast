@@ -36,7 +36,8 @@ class NIMSTrainer:
            model.name == 'attn_unet' or \
            model.name == 'persistence':
             self.nims_logger = NIMSLogger(loss=True, correct=True, binary_f1=True,
-                                          macro_f1=False, micro_f1=False, csi=True,
+                                          macro_f1=False, micro_f1=False,
+                                          csi=True, pod=True, bias=True,
                                           batch_size=args.batch_size,
                                           one_hour_pixel=self.one_hour_pixel,
                                           num_stn=self.num_stn,
@@ -44,7 +45,8 @@ class NIMSTrainer:
                                           args=args)
         elif model.name == 'convlstm':
             self.nims_logger = NIMSLogger(loss=True, correct=False, binary_f1=True,
-                                          macro_f1=False, micro_f1=False, csi=True,
+                                          macro_f1=False, micro_f1=False,
+                                          csi=True, pod=True, bias=True,
                                           batch_size=args.batch_size,
                                           one_hour_pixel=self.one_hour_pixel,
                                           num_stn=self.num_stn,

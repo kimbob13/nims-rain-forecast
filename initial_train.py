@@ -1,5 +1,5 @@
 import torch
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader
 
 from nims_util import *
 from nims_dataset import NIMSDataset, ToTensor

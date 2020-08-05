@@ -9,9 +9,9 @@ from nims_eval_converter import save_nims_metric
 __all__ = ['NIMSLogger']
 
 class NIMSLogger:
-    def __init__(self, loss, correct, binary_f1, macro_f1, micro_f1, csi,
-                 batch_size, one_hour_pixel, num_stn, experiment_name,
-                 num_classes=2, args=None):
+    def __init__(self, loss, correct, binary_f1, macro_f1, micro_f1,
+                 csi, pod, bias, batch_size, one_hour_pixel, num_stn,
+                 experiment_name, num_classes=2, args=None):
         """
         <Parameter>
         loss, correct, macro_f1, micro_f1 [bool]: whether to record each variable
@@ -30,14 +30,17 @@ class NIMSLogger:
         self.one_instance_pixel = batch_size * one_hour_pixel
         self.num_stn = num_stn
         self.num_classes = num_classes
+
         self.num_update = 0
         self.csi_update = 0
+        self.pod_update = 0
+        self.bias_update = 0
 
         # Initialize one epoch stat dictionary
-        self.one_epoch_stat = OneTargetStat(loss, correct, binary_f1, macro_f1, micro_f1, csi)
+        self.one_epoch_stat = OneTargetStat(loss, correct, binary_f1, macro_f1, micro_f1, csi, pod, bias)
 
         # Used for one data instance stat
-        self._latest_stat = OneTargetStat(loss, correct, binary_f1, macro_f1, micro_f1, csi)
+        self._latest_stat = OneTargetStat(loss, correct, binary_f1, macro_f1, micro_f1, csi, pod, bias)
 
         # # Store monthly stat for label-wise accuracy for classification model
         # if args:
@@ -57,7 +60,8 @@ class NIMSLogger:
         #     self.macro_eval = np.zeros((len(self.month_name) + 1, 4, 4))                                              
 
     def update(self, loss=None, correct=None,
-               binary_f1=None, macro_f1=None, micro_f1=None, csi=None,
+               binary_f1=None, macro_f1=None, micro_f1=None,
+               csi=None, pod=None, bias=None,
                test=False, pred_tensor=None, target_tensor=None):
 
         if loss != None:
@@ -99,6 +103,24 @@ class NIMSLogger:
                 self._latest_stat.csi = csi
             except:
                 print("You don't specify the csi to be logged")
+        if pod != None:
+            try:
+                if pod >= 0.0:
+                    self.one_epoch_stat.pod += pod
+                    self.pod_update += 1
+                
+                self._latest_stat.pod = pod
+            except:
+                print("You don't specify the pod to be logged")
+        if bias != None:
+            try:
+                if bias >= 0.0:
+                    self.one_epoch_stat.bias += bias
+                    self.bias_update += 1
+                
+                self._latest_stat.bias = bias
+            except:
+                print("You don't specify the bias to be logged")
 
         self.num_update += 1
 
@@ -145,6 +167,16 @@ class NIMSLogger:
         except:
             pass
 
+        try:
+            stat_str += ", pod = {:.5f}".format(self.one_epoch_stat.pod / self.pod_update)
+        except:
+            pass
+
+        try:
+            stat_str += ", bias = {:.5f}".format(self.one_epoch_stat.bias / self.bias_update)
+        except:
+            pass
+
         print(stat_str)
         print()
         self._clear_one_target_stat(self.one_epoch_stat)
@@ -188,6 +220,16 @@ class NIMSLogger:
 
         try:
             stat_str += ", csi = {:.5f}".format(self._latest_stat.csi)
+        except:
+            pass
+
+        try:
+            stat_str += ", pod = {:.5f}".format(self._latest_stat.pod)
+        except:
+            pass
+
+        try:
+            stat_str += ", bias = {:.5f}".format(self._latest_stat.bias)
         except:
             pass
 
@@ -262,8 +304,22 @@ class NIMSLogger:
         except:
             pass
 
+        try:
+            if _stat.pod:
+                _stat.pod = 0.0
+        except:
+            pass
+
+        try:
+            if _stat.bias:
+                _stat.bias = 0.0
+        except:
+            pass
+
         self.num_update = 0
         self.csi_update = 0
+        self.pod_update = 0
+        self.bias_update = 0
 
     def _save_test_result(self):
         columns = ['label {}'.format(label) for label in range(self.num_classes)]
@@ -329,7 +385,7 @@ class NIMSLogger:
         save_nims_metric(self.experiment_name, self.baseline_name)
 
 class OneTargetStat:
-    def __init__(self, loss, correct, binary_f1, macro_f1, micro_f1, csi):
+    def __init__(self, loss, correct, binary_f1, macro_f1, micro_f1, csi, pod, bias):
         """
         <Parameter>
         loss, correct, macro_f1, micro_f1 [bool]: whether to record each variable
@@ -346,6 +402,10 @@ class OneTargetStat:
             self._micro_f1 = 0.0
         if csi:
             self._csi = 0.0
+        if pod:
+            self._pod = 0.0
+        if bias:
+            self._bias = 0.0
     
     @property
     def loss(self):
@@ -394,3 +454,19 @@ class OneTargetStat:
     @csi.setter
     def csi(self, csi_val):
         self._csi = csi_val
+
+    @property
+    def pod(self):
+        return self._pod
+
+    @pod.setter
+    def pod(self, pod_val):
+        self._pod = pod_val
+
+    @property
+    def bias(self):
+        return self._bias
+
+    @bias.setter
+    def bias(self, bias_val):
+        self._bias = bias_val

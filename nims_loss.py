@@ -61,8 +61,10 @@ class NIMSCrossEntropyLoss(nn.Module):
 
         #conf_mat_met = {'hit': tp, 'miss': fn, 'false alarm': fp, 'correct negative': tn}
         csi = tp / (tp + fn + fp) if tp + fn + fp > 0 else -1.0
+        pod = tp / (tp + fn) if tp + fn > 0 else -1.0
+        bias = (tp + fp) / (tp + fn) if tp + fn > 0 else -1.0
 
-        return correct, binary_f1, csi
+        return correct, binary_f1, csi, pod, bias
 
     def _get_f1_score(self, preds, targets):
         _, pred_labels = preds.topk(1, dim=1, largest=True, sorted=True)
@@ -103,7 +105,6 @@ class NIMSCrossEntropyLoss(nn.Module):
         targets [torch.tensor]:  NS'HW format (same as preds)
         logger [NIMSLogger]: Collect stat for this data instance
         """
-        # convert preds to S'NCHW, and targets to S'NHW format
         assert preds.shape[0] == targets.shape[0]
 
         class_weights = None
@@ -118,7 +119,7 @@ class NIMSCrossEntropyLoss(nn.Module):
         stn_preds = preds[:, :, stn_codi[:, 0], stn_codi[:, 1]]
         stn_targets = targets[:, stn_codi[:, 0], stn_codi[:, 1]]
         
-        correct, binary_f1, csi = self._get_stat(stn_preds, stn_targets)
+        correct, binary_f1, csi, pod, bias = self._get_stat(stn_preds, stn_targets)
         #macro_f1, micro_f1 = self._get_f1_score(stn_preds, stn_targets)
         
         loss = F.cross_entropy(stn_preds, stn_targets, weight=class_weights, reduction='none')
@@ -127,8 +128,8 @@ class NIMSCrossEntropyLoss(nn.Module):
         # TODO: fix logger
         if logger:
             logger.update(loss=loss.item(), correct=correct,
-                          binary_f1=binary_f1, csi=csi, test=test,
-                          pred_tensor=stn_preds, target_tensor=stn_targets)
+                          binary_f1=binary_f1, csi=csi, pod=pod, bias=bias,
+                          test=test, pred_tensor=stn_preds, target_tensor=stn_targets)
 
         #print('[cross_entropy] loss: {}'.format(loss.item()))
 
