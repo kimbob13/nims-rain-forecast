@@ -1,3 +1,4 @@
+import os
 import torch
 from torch.utils.data import DataLoader, Subset
 from datetime import datetime, timedelta
@@ -41,15 +42,16 @@ if __name__ == '__main__':
     
     for i in range(finetune_period):
         curr_date = first_date + timedelta(days=i)
-        finetune_test_time_list.append(curr_date.strftime("%Y%m%d%H"))
+        finetune_test_time_list.append(curr_date)
     
     for test_time in finetune_test_time_list:
         # Train dataset
+        test_time_str = test_time.strftime("%Y%m%d%H")        
         nims_train_dataset = NIMSDataset(model=args.model,
                                          model_utc=args.model_utc,
                                          window_size=args.window_size,
                                          root_dir=args.dataset_dir,
-                                         test_time=test_time,
+                                         test_time=test_time_str,
                                          train=True,
                                          finetune=True,
                                          transform=ToTensor())
@@ -58,9 +60,21 @@ if __name__ == '__main__':
         sample, _ = nims_train_dataset[0]
         if args.debug:
             print('[main] one images sample shape:', sample.shape)
+        
+        # Set experiment name and use it as process name if possible
+        experiment_name = set_experiment_name(args)
 
+        if test_time == first_date:
+            pretrained_model = 'nims-utc0-unet_nb6_ch64_ws6_ep200_bs1_sr1.0_adam0.001'
+        else:
+            yesterday_time = test_time - timedelta(days=1)
+            yesterday_time_str = yesterday_time.strftime("%Y%m%d%H")
+            pretrained_model = experiment_name + '_{}'.format(yesterday_time_str[:8])
+        model_path = os.path.join('./results', 'trained_model', '{}.pt'.format(pretrained_model))
+        
         # Create a model and criterion
-        model, criterion, num_lat, num_lon = set_model(sample, device, args)
+        model, criterion, num_lat, num_lon = set_model(sample, device, args, train=True,
+                                                       finetune=True, model_path=model_path)
 
         if args.debug:
             # XXX: Currently, torchsummary doesn't run on ConvLSTM
@@ -92,10 +106,9 @@ if __name__ == '__main__':
         # Set the optimizer
         optimizer = set_optimizer(model, args)
 
-        # Set experiment name and use it as process name if possible
-        experiment_name = set_experiment_name(args)
-
         # Start training
+        print ("fine-tuning for {}".format(test_time_str[:8]))
+        experiment_name += '_{}'.format(test_time_str[:8])
         nims_trainer = NIMSTrainer(model, criterion, optimizer, device,
                                    train_loader, None,
                                    len(nims_train_dataset), 0,
