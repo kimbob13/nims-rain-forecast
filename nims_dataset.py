@@ -119,14 +119,26 @@ class NIMSDataset(Dataset):
                 end_test_time = start_test_time + timedelta(hours=23)
             elif len(self.test_time) == 6:
                 # Consider one month
-                start_test_time = datetime(year=int(self.test_time[0:4]),
-                                           month=int(self.test_time[4:6]),
-                                           day=1,
-                                           hour=0)
-                # Because original OBS files are stored in KST time,
-                # the converted OBS npy file ends at 2020-06-30-14 UTC (2020-06-30-23 KST)
-                end_test_time = start_test_time + timedelta(days=MONTH_DAY[int(self.test_time[4:6])] - 1,
-                                                            hours=14)
+                year = int(self.test_time[0:4])
+                month = int(self.test_time[4:6])
+                if month == 5:
+                    start_test_time = datetime(year=year,
+                                               month=month,
+                                               day=1,
+                                               hour=self.window_size)
+                    end_test_time = datetime(year=year,
+                                             month=month,
+                                             day=MONTH_DAY[month],
+                                             hour=23)
+                elif month == 6:
+                    start_test_time = datetime(year=year,
+                                               month=month,
+                                               day=1,
+                                               hour=0)
+                    # Because original OBS files are stored in KST time,
+                    # the converted OBS npy file ends at 2020-06-30-14 UTC (2020-06-30-23 KST)
+                    end_test_time = start_test_time + timedelta(days=MONTH_DAY[int(self.test_time[4:6])] - 1,
+                                                                hours=14)
             else:
                 raise ValueError
 
@@ -222,7 +234,13 @@ class NIMSDataset(Dataset):
         gt = torch.tensor(np.load(gt_path))
         gt = torch.where(gt >= 0.1, torch.ones(gt.shape), torch.zeros(gt.shape))
 
-        return ldaps_input, gt
+        # Make tensor of current target time for test logging
+        target_time_tensor = torch.tensor([train_end_time.year,
+                                           train_end_time.month,
+                                           train_end_time.day,
+                                           train_end_time.hour])
+
+        return ldaps_input, gt, target_time_tensor
 
     def get_real_gt(self, idx):
         gt_path = self._gt_path_list[idx]

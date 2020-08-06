@@ -26,7 +26,6 @@ class NIMSTrainer:
         self.debug = args.debug
 
         self.stn_codi = self._get_station_coordinate()
-        self.num_stn = len(self.stn_codi)
         self.experiment_name = experiment_name
 
         self.model.to(self.device)
@@ -37,16 +36,14 @@ class NIMSTrainer:
             self.nims_logger = NIMSLogger(loss=True, correct=True, binary_f1=True,
                                           macro_f1=False, micro_f1=False,
                                           csi=True, pod=True, bias=True,
-                                          num_stn=self.num_stn,
-                                          experiment_name=experiment_name,
-                                          args=args)
+                                          stn_codi=self.stn_codi,
+                                          experiment_name=experiment_name)
         elif model.name == 'convlstm':
             self.nims_logger = NIMSLogger(loss=True, correct=False, binary_f1=True,
                                           macro_f1=False, micro_f1=False,
                                           csi=True, pod=True, bias=True,
-                                          num_stn=self.num_stn,
-                                          experiment_name=experiment_name,
-                                          args=None)
+                                          stn_codi=self.stn_codi,
+                                          experiment_name=experiment_name)
 
     def _get_station_coordinate(self):
         codi_aws_df = pd.read_csv('./codi_ldps_aws/codi_ldps_aws_512.csv')
@@ -58,17 +55,21 @@ class NIMSTrainer:
     def train(self):
         self.model.train()
 
+        weight_path = os.path.join('./results', 'trained_model',
+                                   self.experiment_name + '.pt')
+        min_loss = float("inf")
         for epoch in range(1, self.num_epochs + 1):
             # Run one epoch
             print('=' * 25, 'Epoch {} / {}'.format(epoch, self.num_epochs),
                   '=' * 25)
-            self._epoch(self.train_loader, train=True)
+            epoch_loss = self._epoch(self.train_loader, train=True)
             self.nims_logger.print_stat(self.train_len)
 
-        # Save model weight
-        weight_path = os.path.join('./results', 'trained_model',
-                                   self.experiment_name + '.pt')
-        torch.save(self.model.state_dict(), weight_path)
+            if epoch_loss < min_loss:
+                min_loss = epoch_loss
+
+                # Save model weight which has minimum loss
+                torch.save(self.model.state_dict(), weight_path)
 
     def test(self):
         # self.model.eval()
@@ -84,12 +85,13 @@ class NIMSTrainer:
 
     def _epoch(self, data_loader, train):
         pbar = tqdm(data_loader)
-        for images, target in pbar:
+        for images, target, target_time in pbar:
             if self.model.name == 'unet' or \
                self.model.name == 'attn_unet' or \
                self.model.name == 'persistence':
                 images = images.type(torch.FloatTensor).to(self.device)
                 target = target.type(torch.LongTensor).to(self.device)
+                target_time = target_time.squeeze(0).tolist()
             
             elif self.model.name == 'convlstm':
                 # Dataloader for ConvLSTM outputs images and target shape as NSCHW format.
@@ -98,8 +100,9 @@ class NIMSTrainer:
                 target = target.permute(1, 0, 2, 3, 4).to(self.device)
 
             output = self.model(images)
-            loss = self.criterion(output, target, stn_codi=self.stn_codi,
-                                  logger=self.nims_logger, test=(not train))
+            loss = self.criterion(output, target, target_time,
+                                  stn_codi=self.stn_codi, logger=self.nims_logger,
+                                  test=(not train))
             
             if train:
                 self.optimizer.zero_grad()
@@ -107,3 +110,5 @@ class NIMSTrainer:
                 self.optimizer.step()
 
             pbar.set_description(self.nims_logger.latest_stat)
+
+        return loss.item()

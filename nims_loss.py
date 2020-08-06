@@ -98,11 +98,13 @@ class NIMSCrossEntropyLoss(nn.Module):
 
         return torch.from_numpy(weights).type(torch.FloatTensor).to(self.device)
 
-    def forward(self, preds, targets, stn_codi, logger=None, test=False):
+    def forward(self, preds, targets, target_time,
+                stn_codi, logger=None, test=False):
         """
         <Parameter>
         preds [torch.tensor]: NCHW format (N: batch size, C: class num)
         targets [torch.tensor]:  NHW format (same as preds)
+        target_time [torch.tensor]: datetime of current target ([year, month, day, hour])
         stn_codi [np.ndarray]: coordinates of station
         logger [NIMSLogger]: Collect stat for this data instance
         """
@@ -129,7 +131,7 @@ class NIMSCrossEntropyLoss(nn.Module):
         if logger:
             logger.update(loss=loss.item(), correct=correct,
                           binary_f1=binary_f1, csi=csi, pod=pod, bias=bias,
-                          test=test, pred_tensor=stn_preds, target_tensor=stn_targets)
+                          target_time=target_time, test=test)
 
         #print('[cross_entropy] loss: {}'.format(loss.item()))
 

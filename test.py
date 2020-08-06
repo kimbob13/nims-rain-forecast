@@ -15,9 +15,6 @@ if __name__ == '__main__':
 
     # Fix the seed
     fix_seed(2020)
-
-    # Create necessary directory
-    create_results_dir()
     
     # Test dataset
     nims_test_dataset = NIMSDataset(model=args.model,
@@ -29,7 +26,7 @@ if __name__ == '__main__':
                                     transform=ToTensor())
 
     # Get a sample for getting shape of each tensor
-    sample, _ = nims_test_dataset[0]
+    sample, _, _ = nims_test_dataset[0]
     if args.debug:
         print('[main] one images sample shape:', sample.shape)
 
@@ -46,6 +43,9 @@ if __name__ == '__main__':
 
     # Set experiment name and use it as process name if possible
     experiment_name = set_experiment_name(args)
+
+    # Create necessary directory
+    create_results_dir(experiment_name)
 
     # Load trained model weight
     # Persistence model doesn't have trained model

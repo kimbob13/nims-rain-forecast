@@ -36,7 +36,7 @@ if __name__ == '__main__':
                                      transform=ToTensor())
     
     # Get a sample for getting shape of each tensor
-    sample, _ = nims_train_dataset[0]
+    sample, _, _ = nims_train_dataset[0]
     if args.debug:
         print('[main] one images sample shape:', sample.shape)
 

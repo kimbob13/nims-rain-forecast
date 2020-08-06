@@ -25,7 +25,7 @@ except:
 __all__ = ['create_results_dir', 'parse_args', 'set_device', 'undersample',
            'fix_seed', 'set_model', 'set_optimizer', 'set_experiment_name']
 
-def create_results_dir():
+def create_results_dir(experiment_name=None):
     # Base results directory
     results_dir = './results'
     if not os.path.isdir(results_dir):
@@ -35,6 +35,12 @@ def create_results_dir():
     log_dir = os.path.join(results_dir, 'log')
     if not os.path.isdir(log_dir):
         os.mkdir(log_dir)
+
+    # Create experiment-wise directory in log directory
+    if experiment_name:
+        experiment_dir = os.path.join(log_dir, experiment_name)
+        if not os.path.isdir(experiment_dir):
+            os.mkdir(experiment_dir)
 
     # Create evaluation directory if not
     eval_dir = os.path.join(results_dir, 'eval')

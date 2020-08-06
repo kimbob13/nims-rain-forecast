@@ -10,8 +10,7 @@ __all__ = ['NIMSLogger']
 
 class NIMSLogger:
     def __init__(self, loss, correct, binary_f1, macro_f1, micro_f1,
-                 csi, pod, bias, num_stn, experiment_name,
-                 num_classes=2, args=None):
+                 csi, pod, bias, stn_codi, experiment_name, num_classes=2):
         """
         <Parameter>
         loss, correct, macro_f1, micro_f1 [bool]: whether to record each variable
@@ -22,8 +21,10 @@ class NIMSLogger:
         print_stat: Print one epoch stat
         latest_stat: Return straing of one "instance(batch)" stat
         """
-        self.num_stn = num_stn
+        self.stn_codi = stn_codi
+        self.num_stn = len(stn_codi)
         self.num_classes = num_classes
+        self.experiment_name = experiment_name
 
         self.num_update = 0
         self.csi_update = 0
@@ -35,6 +36,10 @@ class NIMSLogger:
 
         # Used for one data instance stat
         self._latest_stat = OneTargetStat(loss, correct, binary_f1, macro_f1, micro_f1, csi, pod, bias)
+
+        # Test stat dataframe
+        self.test_df = pd.DataFrame(index=['acc', 'csi', 'pod', 'bias', 'correct_update', 'csi_update', 'pod_update', 'bias_update'])
+        self.daily_df = pd.DataFrame(index=['acc', 'csi', 'pod', 'bias'], columns=list(range(24)))
 
         # # Store monthly stat for label-wise accuracy for classification model
         # if args:
@@ -56,7 +61,7 @@ class NIMSLogger:
     def update(self, loss=None, correct=None,
                binary_f1=None, macro_f1=None, micro_f1=None,
                csi=None, pod=None, bias=None,
-               test=False, pred_tensor=None, target_tensor=None):
+               target_time=None, test=False):
 
         if loss != None:
             try:
@@ -118,15 +123,40 @@ class NIMSLogger:
 
         self.num_update += 1
 
-        # if test:
-        #     cur_target_time = self.cur_test_time + timedelta(hours=target_idx)
-        #     cur_month = cur_target_time.month
+        if test:
+            target_year = target_time[0]
+            target_month = target_time[1]
+            target_day = target_time[2]
+            target_hour = target_time[3]
 
-        #     self._update_label_stat(target_idx, cur_month, pred_tensor, target_tensor)
-        #     self.cur_test_time += timedelta(hours=self.batch_size)
+            self.daily_df[target_hour] = [(correct / self.num_stn) * 100, csi, pod, bias]
+            if target_hour == 23:
+                daily_t = self.daily_df.T
+                save_dir = os.path.join('./results', 'log', self.experiment_name)
+                daily_t.to_csv(os.path.join(save_dir, '{:4d}{:02d}{:02d}.csv'.format(target_year, target_month, target_day)))
+
+            csi_update = 1
+            pod_update = 1
+            bias_update = 1
+            if csi < 0:
+                csi = 0.0
+                csi_update = 0
+            if pod < 0:
+                pod = 0.0
+                pod_update = 0
+            if bias < 0:
+                bias = 0.0
+                bias_update = 0
+
+            # Update total test dataframe
+            if str(target_day) in self.test_df:
+                self.test_df[str(target_day)] += [correct, csi, pod, bias, self.num_stn,
+                                                  csi_update, pod_update, bias_update]
+            else:
+                self.test_df[str(target_day)] = [correct, csi, pod, bias, self.num_stn,
+                                                 csi_update, pod_update, bias_update]
 
     def print_stat(self, dataset_len, test=False):
-        #total_pixel = dataset_len * self.one_hour_pixel
         total_stn = dataset_len * self.num_stn
 
         stat_str = ''
@@ -173,10 +203,11 @@ class NIMSLogger:
 
         print(stat_str)
         print()
-        self._clear_one_target_stat(self.one_epoch_stat)
 
-        # if test:
-        #     self._save_test_result()
+        if test:
+            self._save_test_result()
+
+        self._clear_one_target_stat(self.one_epoch_stat)
 
     @property
     def latest_stat(self):
@@ -228,38 +259,6 @@ class NIMSLogger:
             pass
 
         return stat_str
-
-    def _update_label_stat(self, target_idx, cur_month, pred_tensor, target_tensor):
-        num_class = pred_tensor.shape[1]
-        _, pred_label  = pred_tensor.topk(1, dim=1, largest=True, sorted=True)
-        pred_label = pred_label.squeeze(1).flatten().detach().cpu().numpy()
-        target = target_tensor.flatten().detach().cpu().numpy()
-
-        # Create new entry if cur_month is not encountered
-        if cur_month not in self.month_label_stat[target_idx + 1]:
-            self.month_label_stat[target_idx + 1][cur_month] = dict()
-            for label in range(self.num_classes):
-                self.month_label_stat[target_idx + 1][cur_month][label] = {'count': 0, 'total': 0}
-
-            # self.month_label_stat[target_idx + 1][cur_month] = {0: {'count': 0, 'total': 0},
-            #                                                     1: {'count': 0, 'total': 0},
-            #                                                     2: {'count': 0, 'total': 0},
-            #                                                     3: {'count': 0, 'total': 0}}
-
-        # 전체 0은 target에 있는 0의 개수여야 하고, 맞춘 건 그중에서 target이 0인 위치를 pred도 0으로 맞춘 개수
-        # 1, 2, 3도 마찬가지
-        for i in range(num_class):
-            cur_label_target_idx = np.where(target == i)[0]
-            cur_label_pred_idx = np.where(pred_label[cur_label_target_idx] == i)[0]
-
-            self.month_label_stat[target_idx + 1][cur_month][i]['count'] += len(cur_label_pred_idx)
-            self.month_label_stat[target_idx + 1][cur_month][i]['total'] += len(cur_label_target_idx)
-
-            # Update macro eval table
-            for j in range(num_class):
-                pred_idx = np.where(pred_label[cur_label_target_idx] == j)[0]
-                self.macro_eval[cur_month - 1][i][j] += len(pred_idx)   # month specific
-                self.macro_eval[-1][i][j] += len(pred_idx)              # year total
 
     def _clear_one_target_stat(self, _stat):
         try:
@@ -316,67 +315,13 @@ class NIMSLogger:
         self.bias_update = 0
 
     def _save_test_result(self):
-        columns = ['label {}'.format(label) for label in range(self.num_classes)]
-        stat_df = pd.DataFrame(columns=columns, index=self.month_name)
+        self.test_df.loc["acc"] /= self.test_df.loc["correct_update"]
+        self.test_df.loc["csi"] /= self.test_df.loc["csi_update"]
+        self.test_df.loc["pod"] /= self.test_df.loc["pod_update"]
+        self.test_df.loc["bias"] /= self.test_df.loc["bias_update"]
 
-        log_file = os.path.join('./results', 'log', 'test-{}.log'.format(self.experiment_name))
-        csv_file = os.path.join('./results', 'log', 'test-{}.csv'.format(self.experiment_name))
-        with open(log_file, 'w') as f:
-            sys.stdout = f
-
-            print('=' * 25, 'Monthly label accuracy', '=' * 25)
-            for hour_after in self.month_label_stat:
-                print('-' * 10, '{} hour after'.format(hour_after), '-' * 10)
-
-                year_count = [0] * self.num_classes
-                year_total = [0] * self.num_classes
-                for month, label_stat in self.month_label_stat[hour_after].items():
-                    print('[{}]'.format(self.month_name[month - 1]))
-
-                    for label, stat in label_stat.items():
-                        count = stat['count']
-                        total = stat['total']
-
-                        if total == 0:
-                            accuracy = 'NO TARGET VALUE'
-                            print('\t(label {}): {} ({:11,d} / {:11,d})'.format(label, accuracy, count, total))
-                            stat_df.loc[self.month_name[month - 1]]['label {}'.format(label)] = np.nan
-
-                        else:
-                            accuracy = (count / total) * 100
-                            print('\t(label {}): {:7.3f}% ({:11,d} / {:11,d})'.format(label, accuracy, count, total))
-                            stat_df.loc[self.month_name[month - 1]]['label {}'.format(label)] = accuracy
-
-                        year_count[label] += count
-                        year_total[label] += total
-
-                print('[Year Total]')
-                for label, (y_count, y_total) in enumerate(zip(year_count, year_total)):
-                    accuracy = (y_count / y_total) * 100
-                    print('\t(label {}): {:7.3f}% ({:11,d} / {:11,d})'.format(label, accuracy, y_count, y_total))
-
-        # Save stat df
-        stat_df = stat_df.T
-        stat_df.to_csv(csv_file, na_rep='nan')
-
-        # Update micro confusion table
-        self.micro_eval[:, 1, 1] = self.macro_eval[:, 0, 0]                        # Correct negative
-        self.micro_eval[:, 1, 0] = np.sum(self.macro_eval[:, 0, 1:], axis=1)       # False Alarm
-        self.micro_eval[:, 0, 1] = np.sum(self.macro_eval[:, 1:, 0], axis=1)       # Misses
-        self.micro_eval[:, 0, 0] = np.sum(self.macro_eval[:, 1:, 1:], axis=(1, 2)) # Hits
-
-        # Save macro confusion table
-        macro_file = os.path.join('./results', 'eval', 'macro-{}.npy'.format(self.experiment_name))
-        with open(macro_file, 'wb') as f:
-            np.save(f, self.macro_eval)
-
-        # Save micro confusion table
-        micro_file = os.path.join('./results', 'eval', 'micro-{}.npy'.format(self.experiment_name))
-        with open(micro_file, 'wb') as f:
-            np.save(f, self.micro_eval)
-
-        # Save metric for NIMS to file
-        save_nims_metric(self.experiment_name, self.baseline_name)
+        self.test_df = self.test_df.T
+        self.test_df.to_csv(os.path.join("./results", "log", self.experiment_name, 'total.csv'))
 
 class OneTargetStat:
     def __init__(self, loss, correct, binary_f1, macro_f1, micro_f1, csi, pod, bias):
