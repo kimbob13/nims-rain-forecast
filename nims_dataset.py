@@ -35,6 +35,7 @@ class NIMSDataset(Dataset):
         self.window_size = window_size
         self.root_dir = root_dir
         self.train = train
+        self.finetune = finetune
         self.transform = transform
 
         # Initial train mode.
@@ -87,10 +88,17 @@ class NIMSDataset(Dataset):
         gt_path_list = os.listdir(gt_dir)
 
         if self.train:
-            gt_path_list = sorted([os.path.join(gt_dir, f) for f in gt_path_list \
-                                if '.npy' in f and
-                                f.split('_')[3][:-2] < end_test_time.strftime("%Y%m%d%H")])
-            gt_path_list = gt_path_list[self.window_size:]
+            if not self.finetune:
+                gt_path_list = sorted([os.path.join(gt_dir, f) for f in gt_path_list \
+                                    if '.npy' in f and
+                                    f.split('_')[3][:-2] < end_test_time.strftime("%Y%m%d%H")])
+                gt_path_list = gt_path_list[self.window_size:]
+                
+            else:
+                gt_path_list = sorted([os.path.join(gt_dir, f) for f in gt_path_list \
+                                    if '.npy' in f and
+                                    (end_test_time-timedelta(days=1)).strftime("%Y%m%d%H") <= f.split('_')[3][:-2] and
+                                    f.split('_')[3][:-2] < end_test_time.strftime("%Y%m%d%H")])
 
         else:
             gt_path_list = sorted([os.path.join(gt_dir, f) \

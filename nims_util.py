@@ -80,7 +80,7 @@ def parse_args():
     hyperparam.add_argument('--lr', default=0.001, type=float, help='learning rate of optimizer')
     
     finetune = parser.add_argument_group('finetune related')
-    finetune.add_argument('--final_date', default=None, type=str, help='the final date of fine-tuning')
+    finetune.add_argument('--final_test_time', default=None, type=str, help='the final date of fine-tuning')
     finetune.add_argument('--finetune_lr_ratio', default=0.1, type=float, help='the ratio of fine-tuning learning rate to the original learning rate')
     finetune.add_argument('--finetune_num_epochs', default=3, type=int, help='# of fine-tuning epochs')
     
@@ -197,7 +197,8 @@ def undersample(train_dataset, sampling_ratio):
 
     return train_dataset
 
-def set_model(sample, device, args, train=True):
+def set_model(sample, device, args, train=True,
+              finetune=False, model_path=None):
     # Create a model and criterion
     num_classes = 2
 
@@ -243,7 +244,11 @@ def set_model(sample, device, args, train=True):
 
         num_lat = sample.shape[1] # the number of latitudes (originally 253)
         num_lon = sample.shape[2] # the number of longitudes (originally 149)
-
+        
+    if finetune:
+        checkpoint = torch.load(model_path)
+        model.load_state_dict(checkpoint, strict=True)
+        
     return model, criterion, num_lat, num_lon
 
 def set_optimizer(model, args):

@@ -1,5 +1,6 @@
 import torch
 from torch.utils.data import DataLoader, Subset
+from datetime import datetime, timedelta
 
 from nims_util import *
 from nims_dataset import NIMSDataset, ToTensor
@@ -15,7 +16,7 @@ if __name__ == '__main__':
     args = parse_args()
     args.num_epochs = args.finetune_num_epochs
     args.lr = args.finetune_lr_ratio * args.lr
-
+    
     # Set device
     device = set_device(args)
 
@@ -28,60 +29,75 @@ if __name__ == '__main__':
     # Parse NIMS dataset variables
     # variables = parse_variables(args.variables)
     
-    # Train dataset
-    nims_train_dataset = NIMSDataset(model=args.model,
-                                     model_utc=args.model_utc,
-                                     window_size=args.window_size,
-                                     root_dir=args.dataset_dir,
-                                     test_time=args.test_time,
-                                     train=True,
-                                     finetune=True,
-                                     transform=ToTensor())
+    # Make finetune list from 20200602 to final test time
+    finetune_test_time_list = []
+    first_date = datetime(year=2020,
+                          month=6,
+                          day=2)
+    final_date = datetime(year=int(args.final_test_time[0:4]),
+                          month=int(args.final_test_time[4:6]),
+                          day=int(args.final_test_time[6:8]))
+    finetune_period = (final_date-first_date).days + 1
     
-    # Get a sample for getting shape of each tensor
-    sample, _ = nims_train_dataset[0]
-    if args.debug:
-        print('[main] one images sample shape:', sample.shape)
+    for i in range(finetune_period):
+        curr_date = first_date + timedelta(days=i)
+        finetune_test_time_list.append(curr_date.strftime("%Y%m%d%H"))
+    
+    for test_time in finetune_test_time_list:
+        # Train dataset
+        nims_train_dataset = NIMSDataset(model=args.model,
+                                         model_utc=args.model_utc,
+                                         window_size=args.window_size,
+                                         root_dir=args.dataset_dir,
+                                         test_time=test_time,
+                                         train=True,
+                                         finetune=True,
+                                         transform=ToTensor())
+    
+        # Get a sample for getting shape of each tensor
+        sample, _ = nims_train_dataset[0]
+        if args.debug:
+            print('[main] one images sample shape:', sample.shape)
 
-    # Create a model and criterion
-    model, criterion, num_lat, num_lon = set_model(sample, device, args)
+        # Create a model and criterion
+        model, criterion, num_lat, num_lon = set_model(sample, device, args)
 
-    if args.debug:
-        # XXX: Currently, torchsummary doesn't run on ConvLSTM
-        print('[main] num_lat: {}, num_lon: {}'.format(num_lat, num_lon))
-        if args.model == 'unet':
-            model.to(device)
-            try:
-                summary(model, input_size=sample.shape)
-            except:
-                print('If you want to see summary of model, install torchsummary')
+        if args.debug:
+            # XXX: Currently, torchsummary doesn't run on ConvLSTM
+            print('[main] num_lat: {}, num_lon: {}'.format(num_lat, num_lon))
+            if args.model == 'unet':
+                model.to(device)
+                try:
+                    summary(model, input_size=sample.shape)
+                except:
+                    print('If you want to see summary of model, install torchsummary')
 
-    # Undersampling
-    if args.sampling_ratio < 1.0:
-        print('=' * 20, 'Under Sampling', '=' * 20)
-        print('Before Under sampling, train len:', len(nims_train_dataset))
+        # Undersampling
+        if args.sampling_ratio < 1.0:
+            print('=' * 20, 'Under Sampling', '=' * 20)
+            print('Before Under sampling, train len:', len(nims_train_dataset))
 
-        print('Please wait...')
-        nims_train_dataset = undersample(nims_train_dataset, args.sampling_ratio)
+            print('Please wait...')
+            nims_train_dataset = undersample(nims_train_dataset, args.sampling_ratio)
 
-        print('After Under sampling, train len:', len(nims_train_dataset))
-        print('=' * 20, 'Finish Under Sampling', '=' * 20)
-        print()
-        
-    # Create dataloaders
-    train_loader = DataLoader(nims_train_dataset, batch_size=args.batch_size,
-                              shuffle=True, num_workers=args.num_workers,
-                              pin_memory=True)
+            print('After Under sampling, train len:', len(nims_train_dataset))
+            print('=' * 20, 'Finish Under Sampling', '=' * 20)
+            print()
 
-    # Set the optimizer
-    optimizer = set_optimizer(model, args)
+        # Create dataloaders
+        train_loader = DataLoader(nims_train_dataset, batch_size=args.batch_size,
+                                  shuffle=False, num_workers=args.num_workers,
+                                  pin_memory=True)
 
-    # Set experiment name and use it as process name if possible
-    experiment_name = set_experiment_name(args)
+        # Set the optimizer
+        optimizer = set_optimizer(model, args)
 
-    # Start training
-    nims_trainer = NIMSTrainer(model, criterion, optimizer, device,
-                               train_loader, None,
-                               len(nims_train_dataset), 0,
-                               num_lat, num_lon, experiment_name, args)
-    nims_trainer.train()
+        # Set experiment name and use it as process name if possible
+        experiment_name = set_experiment_name(args)
+
+        # Start training
+        nims_trainer = NIMSTrainer(model, criterion, optimizer, device,
+                                   train_loader, None,
+                                   len(nims_train_dataset), 0,
+                                   num_lat, num_lon, experiment_name, args)
+        nims_trainer.train()
