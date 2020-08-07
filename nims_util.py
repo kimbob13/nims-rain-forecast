@@ -2,6 +2,7 @@ import torch
 import torch.optim as optim
 from torch.utils.data import Subset
 import numpy as np
+import torchvision.transforms as transforms
 
 from model.unet_model import UNet, AttentionUNet
 from model.conv_lstm import EncoderForecaster
@@ -362,3 +363,130 @@ def set_experiment_name(args):
         pass
 
     return experiment_name
+
+def get_min_max_values(train_dataset, test_dataset=None):
+    '''
+        Return min and max values of ldaps_inputs in train and test dataset
+            Args : NIMS_train_dataset, NIMS_test_dataset
+                (ldaps_input, gt, target_time_tensor = train_dataset[i])
+            Returns :
+                max_values : max_values [features, ]
+                min_values : min_values [features,]
+    '''
+    
+    max_values = None
+    min_values = None
+
+    # Check out training set
+    for i in range(len(train_dataset)):
+        # Pop out data
+        ldaps_input, gt, target_time_tensor = nims_train_dataset[i]
+        
+        # Get a shape
+        features, height, width = ldaps_input.shape
+
+        # Reshape the laps_input
+        features_reshape = ldaps_input.reshape(features, -1)
+        
+        # Evaluate min / max on current data
+        temp_max = torch.max(features_reshape, dim=-1).values
+        temp_min = torch.min(features_reshape, dim=-1).values
+
+        # Edge case
+        if i ==0:
+            max_values = temp_max
+            min_values = temp_min
+
+        # Comparing max / min values
+        max_values = torch.max(max_values, temp_max)
+        min_values = torch.min(max_values, temp_min)
+
+    # Check out test set
+    if test_dataset is not None:
+        for i in range(len(test_dataset)):
+            # Pop out data
+            ldaps_input, gt, target_time_tensor = nims_train_dataset[i]
+
+            # Get a shape
+            features, height, width = ldaps_input.shape
+
+            # Reshape the laps_input
+            features_reshape = ldaps_input.reshape(features, -1)
+
+            # Evaluate min / max on current data
+            temp_max = torch.max(features_reshape, dim=-1).values
+            temp_min = torch.max(features_reshape, dim=-1).values
+
+            # Comparing max / min values
+            max_values = torch.max(max_values, temp_max)
+            min_values = torch.min(max_values, temp_min)
+
+    return max_values, min_values
+
+
+def get_min_max_normalization(max_values, min_values):
+    '''
+        Transform for min_max normalization
+            Args : max_values [features, ] and min_values [features, ]
+            Returns :
+                transform object (for broadcasting, permute is used.)
+    '''
+    
+    transform = transforms.Compose([
+        lambda x : x.permute(1,2,0),\
+        lambda x : (x - min_values) / (max_values - min_values),\
+        lambda x : x.permute(2,0,1)
+    ])
+
+    return transform
+
+
+
+if __name__ == "__main__":
+
+    args = parse_args()
+
+    nims_train_dataset = NIMSDataset(model=args.model,
+                                    model_utc=args.model_utc,
+                                    window_size=args.window_size,
+                                    root_dir=args.dataset_dir,
+                                    test_time=args.test_time,
+                                    train=True,
+                                    transform=ToTensor())
+    '''
+    nims_test_dataset = NIMSDataset(model=args.model,
+                                    model_utc=args.model_utc,
+                                    window_size=args.window_size,
+                                    root_dir=args.dataset_dir,
+                                    test_time=args.test_time,
+                                    train=False,
+                                    transform=ToTensor())
+    '''
+
+    
+    
+    max_values, min_values = get_min_max_values(nims_train_dataset)
+    
+    # Check shape
+    print(max_values.shape)
+    print(min_values.shape)
+
+    # Test
+    ldaps_input, _, _ = nims_train_dataset[0]
+
+    
+    # Min-max transform
+    min_max_transform = get_min_max_normalization(max_values, min_values)
+
+    # Do transform
+    ldaps_input_normalized = min_max_transform(ldaps_input)
+
+    # Compare of this result
+    print(ldaps_input_normalized[0, 0, 0])
+
+    # Compare of this result
+    print(ldaps_input[0, 0, 0])
+
+    # Min
+    print("max_value :", max_values[0,0,0])
+    print("min_value : ", min_values[0,0,0])
