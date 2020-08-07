@@ -31,21 +31,19 @@ if __name__ == '__main__':
     # variables = parse_variables(args.variables)
     
     # Make finetune list from 20200602 to final test time
-    finetune_test_time_list = []
     first_date = datetime(year=2020,
                           month=6,
                           day=2)
+    if int(args.final_test_time) < 20200602 or args.final_test_time is None:
+        args.final_test_time = '20200602'
     final_date = datetime(year=int(args.final_test_time[0:4]),
                           month=int(args.final_test_time[4:6]),
                           day=int(args.final_test_time[6:8]))
     finetune_period = (final_date-first_date).days + 1
     
     for i in range(finetune_period):
-        curr_date = first_date + timedelta(days=i)
-        finetune_test_time_list.append(curr_date)
-    
-    for test_time in finetune_test_time_list:
         # Train dataset
+        test_time = first_date + timedelta(days=i)
         test_time_str = test_time.strftime("%Y%m%d%H")        
         nims_train_dataset = NIMSDataset(model=args.model,
                                          model_utc=args.model_utc,
