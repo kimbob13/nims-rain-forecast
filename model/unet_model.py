@@ -11,12 +11,12 @@ __all__ = ['UNet', 'AttentionUNet']
 
 class UNet(nn.Module):
     def __init__(self, n_channels, n_classes, n_blocks=7,
-                 start_channels=16, bilinear=True):
+                 start_channels=16, pos_dim=0, bilinear=True):
         super(UNet, self).__init__()
 
         self.n_blocks = n_blocks
 
-        self.inc = BasicConv(n_channels, start_channels)
+        self.inc = BasicConv(n_channels + pos_dim, start_channels)
 
         # Create down blocks
         self.down = nn.ModuleList([])
@@ -37,12 +37,19 @@ class UNet(nn.Module):
         # Create out convolution block
         self.outc = OutConv(start_channels, n_classes)
 
+        self.learnable_pos = None
+        if pos_dim > 0:
+            self.learnable_pos = nn.Parameter(torch.zeros(1, pos_dim, 512, 512), requires_grad=True)
+
     @property
     def name(self):
         return 'unet'
 
     def forward(self, x):
         logits = []
+
+        if self.learnable_pos != None:
+            x = torch.cat([x, self.learnable_pos], dim=1)
 
         out = self.inc(x)
 

@@ -50,41 +50,31 @@ class NIMSCrossEntropyLoss(nn.Module):
         target_labels = targets.data.detach().cpu().numpy().squeeze(axis=0)
 
         binary_f1 = f1_score(target_labels, pred_labels, zero_division=0)
+
+        """
+        [Confusion matrix]
+        - tp: Hit
+        - fn: Miss
+        - fp: False Alarm
+        - tn: Correct Negative
+        """
         conf_mat = confusion_matrix(target_labels, pred_labels, labels=self.classes)
         tp, fp, tn, fn = conf_mat[1, 1], conf_mat[0, 1], conf_mat[0, 0], conf_mat[1, 0]
 
         correct = tp + tn
-        if not self.train:
-            ratio = (tp + fp) / (tn + fn)
-            tn *= ratio
-            fn *= ratio
-
-        #conf_mat_met = {'hit': tp, 'miss': fn, 'false alarm': fp, 'correct negative': tn}
         csi = tp / (tp + fn + fp) if tp + fn + fp > 0 else -1.0
         pod = tp / (tp + fn) if tp + fn > 0 else -1.0
         bias = (tp + fp) / (tp + fn) if tp + fn > 0 else -1.0
 
+        # if not self.train:
+        #     ratio = (tp + fp) / (tn + fn)
+        #     tn *= ratio
+        #     fn *= ratio
+        # csi = tp / (tp + fn + fp) if tp + fn + fp > 0 else -1.0
+        # pod = tp / (tp + fn) if tp + fn > 0 else -1.0
+        # bias = (tp + fp) / (tp + fn) if tp + fn > 0 else -1.0
+
         return correct, binary_f1, csi, pod, bias
-
-    def _get_f1_score(self, preds, targets):
-        _, pred_labels = preds.topk(1, dim=1, largest=True, sorted=True)
-        pred_labels = pred_labels.squeeze(1).flatten().detach().cpu().numpy()
-        _targets = targets.flatten().detach().cpu().numpy()
-
-        # Remove 0 class for micro f1 score evaluation.
-        # However, by doing this, macro f1 score becomes nan,
-        # so we just keep 0 class for macro f1 score evaluation.
-        nonzero_target_idx = _targets.nonzero()
-        nonzero_pred_labels = pred_labels[nonzero_target_idx]
-        nonzero_targets = _targets[nonzero_target_idx]
-
-        _macro_f1_score = f1_score(_targets, pred_labels,
-                                   average='macro', zero_division=0)
-        _micro_f1_score = f1_score(nonzero_targets, nonzero_pred_labels,
-                                   average='micro', zero_division=0)
-        #print('[_get_f1_score] macro f1: {}, micro f1: {}'.format(_macro_f1_score, _micro_f1_score))
-
-        return _macro_f1_score, _micro_f1_score
 
     def _get_class_weights(self, targets):
         _targets = targets.flatten().detach().cpu().numpy()

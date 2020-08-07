@@ -4,6 +4,7 @@ from sklearn.metrics import f1_score, confusion_matrix
 from sklearn.utils.class_weight import compute_class_weight
 
 from nims_logger import NIMSLogger
+from nims_util import create_results_dir
 
 from tqdm import tqdm
 import os
@@ -16,18 +17,28 @@ except:
 
 def get_stat(pred, target):
     binary_f1 = f1_score(target, pred, zero_division=0)
+
+    """
+    confusion matrix
+    tp: Hit
+    fn: Miss
+    fp: False Alarm
+    tn: Correct Negative
+    """
     conf_mat = confusion_matrix(target, pred, labels=np.arange(2))
     tp, fp, tn, fn = conf_mat[1, 1], conf_mat[0, 1], conf_mat[0, 0], conf_mat[1, 0]
-
+    
     correct = tp + tn
-    ratio = (tp + fp) / (tn + fn)
-    tn *= ratio
-    fn *= ratio
-
-    #conf_mat_met = {'hit': tp, 'miss': fn, 'false alarm': fp, 'correct negative': tn}
     csi = tp / (tp + fn + fp) if tp + fn + fp > 0 else -1.0
     pod = tp / (tp + fn) if tp + fn > 0 else -1.0
     bias = (tp + fp) / (tp + fn) if tp + fn > 0 else -1.0
+
+    # ratio = (tp + fp) / (tn + fn)
+    # tn *= ratio
+    # fn *= ratio
+    # csi = tp / (tp + fn + fp) if tp + fn + fp > 0 else -1.0
+    # pod = tp / (tp + fn) if tp + fn > 0 else -1.0
+    # bias = (tp + fp) / (tp + fn) if tp + fn > 0 else -1.0
 
     return correct, binary_f1, csi, pod, bias
 
@@ -46,6 +57,7 @@ if __name__ == '__main__':
         setproctitle.setproctitle(experiment_name)
     except:
         pass
+    create_results_dir(experiment_name)
 
     nims_logger = NIMSLogger(loss=False, correct=True, binary_f1=True,
                              macro_f1=False, micro_f1=False,

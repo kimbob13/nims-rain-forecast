@@ -67,6 +67,7 @@ def parse_args():
     unet = parser.add_argument_group('unet related')
     unet.add_argument('--n_blocks', default=6, type=int, help='# of blocks in Down and Up phase')
     unet.add_argument('--start_channels', default=64, type=int, help='# of channels after first block of unet')
+    unet.add_argument('--pos_dim', default=0, type=int, help="# of learnable position channels")
     unet.add_argument('--cross_entropy_weight', default=False, help='use weight for cross entropy loss', action='store_true')
 
     nims_dataset = parser.add_argument_group('nims dataset related')
@@ -207,13 +208,15 @@ def set_model(sample, device, args, train=True):
             model = UNet(n_channels=sample.shape[0],
                          n_classes=num_classes,
                          n_blocks=args.n_blocks,
-                         start_channels=args.start_channels)
+                         start_channels=args.start_channels,
+                         pos_dim=args.pos_dim)
 
         elif args.model == 'attn_unet':
             model = AttentionUNet(n_channels=sample.shape[0],
                                   n_classes=num_classes,
                                   n_blocks=args.n_blocks,
-                                  start_channels=args.start_channels)
+                                  start_channels=args.start_channels,
+                                  pos_dim=args.pos_dim)
 
         criterion = NIMSCrossEntropyLoss(device, num_classes=num_classes,
                                          use_weights=args.cross_entropy_weight,
@@ -307,13 +310,14 @@ def set_experiment_name(args):
         cross_entropy_weight = '_weight'
 
     if args.model == 'unet':            
-        experiment_name = 'nims-utc{}-unet_nb{}_ch{}_ws{}_ep{}_bs{}_sr{}_{}{}{}{}' \
+        experiment_name = 'nims-utc{}-unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}_sr{}_{}{}{}{}' \
                           .format(args.model_utc,
                                   args.n_blocks,
                                   args.start_channels,
                                   args.window_size,
                                   args.num_epochs,
                                   args.batch_size,
+                                  args.pos_dim,
                                   args.sampling_ratio,
                                   args.optimizer,
                                   args.lr,
@@ -321,13 +325,14 @@ def set_experiment_name(args):
                                   test_time)
 
     elif args.model == 'attn_unet':
-        experiment_name = 'nims-utc{}-attn_unet_nb{}_ch{}_ws{}_ep{}_bs{}_sr{}_{}{}{}{}' \
+        experiment_name = 'nims-utc{}-attn_unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}_sr{}_{}{}{}{}' \
                           .format(args.model_utc,
                                   args.n_blocks,
                                   args.start_channels,
                                   args.window_size,
                                   args.num_epochs,
                                   args.batch_size,
+                                  args.pos_dim,
                                   args.sampling_ratio,
                                   args.optimizer,
                                   args.lr,
