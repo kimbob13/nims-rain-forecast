@@ -309,8 +309,12 @@ def set_experiment_name(args):
     if args.cross_entropy_weight:
         cross_entropy_weight = '_weight'
 
+    custom_name = ''
+    if args.custom_name:
+        custom_name = '_' + args.custom_name
+
     if args.model == 'unet':            
-        experiment_name = 'nims-utc{}-unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}_sr{}_{}{}{}{}' \
+        experiment_name = 'nims-utc{}-unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}_sr{}_{}{}{}{}{}' \
                           .format(args.model_utc,
                                   args.n_blocks,
                                   args.start_channels,
@@ -322,10 +326,11 @@ def set_experiment_name(args):
                                   args.optimizer,
                                   args.lr,
                                   cross_entropy_weight,
+                                  custom_name,
                                   test_time)
 
     elif args.model == 'attn_unet':
-        experiment_name = 'nims-utc{}-attn_unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}_sr{}_{}{}{}{}' \
+        experiment_name = 'nims-utc{}-attn_unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}_sr{}_{}{}{}{}{}' \
                           .format(args.model_utc,
                                   args.n_blocks,
                                   args.start_channels,
@@ -337,6 +342,7 @@ def set_experiment_name(args):
                                   args.optimizer,
                                   args.lr,
                                   cross_entropy_weight,
+                                  custom_name,
                                   test_time)
 
     # elif args.model == 'convlstm':
@@ -354,9 +360,6 @@ def set_experiment_name(args):
         experiment_name = 'nims-persistence{}{}' \
                           .format(cross_entropy_weight,
                                   test_time)
-
-    if args.custom_name:
-        experiment_name += ('_' + args.custom_name)
 
     if args.debug:
         experiment_name += '_debug'

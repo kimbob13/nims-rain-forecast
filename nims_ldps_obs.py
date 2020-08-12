@@ -19,7 +19,7 @@ def get_station_coordinate(stn_id):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='LDAPS Observations Converter')
-    parser.add_argument('--root_dir', default='/home/osilab12/ssd/NIMS_LDPS/OBS', type=str, help='root directory of dataset')
+    parser.add_argument('--root_dir', default='/home/osilab12/ssd/OBS', type=str, help='root directory of dataset')
     args = parser.parse_args()
 
     root_dir = args.root_dir

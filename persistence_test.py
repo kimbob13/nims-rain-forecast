@@ -44,7 +44,7 @@ def get_stat(pred, target):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='NIMS rainfall data prediction')
-    parser.add_argument('--dataset_dir', default='/home/osilab12/ssd/NIMS_LDPS', type=str, help='root directory of dataset')
+    parser.add_argument('--dataset_dir', default='/home/osilab12/ssd/OBS', type=str, help='root directory of dataset')
     parser.add_argument('--test_time', default=None, type=str, help='date of test')
     args = parser.parse_args()
 
@@ -65,7 +65,7 @@ if __name__ == '__main__':
                              stn_codi=stn_codi,
                              experiment_name=experiment_name)
 
-    gt_dir = os.path.join(args.dataset_dir, 'OBS')
+    gt_dir = args.dataset_dir
     gt_path_list = os.listdir(gt_dir)
     gt_path_list = sorted([os.path.join(gt_dir, f) \
                            for f in gt_path_list \

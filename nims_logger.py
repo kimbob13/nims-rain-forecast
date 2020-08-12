@@ -129,24 +129,26 @@ class NIMSLogger:
             target_day = target_time[2]
             target_hour = target_time[3]
 
-            self.daily_df[target_hour] = [(correct / self.num_stn) * 100, csi, pod, bias]
-            if target_hour == 23:
-                daily_t = self.daily_df.T
-                save_dir = os.path.join('./results', 'log', self.experiment_name)
-                daily_t.to_csv(os.path.join(save_dir, '{:4d}{:02d}{:02d}.csv'.format(target_year, target_month, target_day)))
-
             csi_update = 1
             pod_update = 1
             bias_update = 1
             if csi < 0:
-                csi = 0.0
+                csi = np.nan
                 csi_update = 0
             if pod < 0:
-                pod = 0.0
+                pod = np.nan
                 pod_update = 0
             if bias < 0:
-                bias = 0.0
+                bias = np.nan
                 bias_update = 0
+
+            self.daily_df[target_hour] = [(correct / self.num_stn) * 100, csi, pod, bias]
+            if target_hour == 23:
+                daily_t = self.daily_df.T
+                daily_t = daily_t.append(daily_t.mean(axis=0, skipna=True), ignore_index=True)
+
+                save_dir = os.path.join('./results', 'log', self.experiment_name)
+                daily_t.to_csv(os.path.join(save_dir, '{:4d}{:02d}{:02d}.csv'.format(target_year, target_month, target_day)))
 
             # Update total test dataframe
             if str(target_day) in self.test_df:

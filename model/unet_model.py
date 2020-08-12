@@ -69,6 +69,9 @@ class UNet(nn.Module):
         for i, up_block in enumerate(self.up):
             out = up_block(out, long_residual[-1 * (i + 2)])
 
+        # if self.learnable_pos != None:
+        #     out = torch.cat([out, self.learnable_pos], dim=1)
+
         logit = self.outc(out)
 
         return logit

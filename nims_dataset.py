@@ -83,13 +83,14 @@ class NIMSDataset(Dataset):
                 if int(p.split('_')[4][8:10]) == self.model_utc:
                     data_path_dict[time].append((os.path.join(data_dir, p), os.path.join(data_dir, u)))
 
-        gt_dir = os.path.join(self.root_dir, 'OBS')
+        gt_dir = os.path.join(self.root_dir, '..', 'OBS')
         gt_path_list = os.listdir(gt_dir)
 
         if self.train:
-            gt_path_list = sorted([os.path.join(gt_dir, f) for f in gt_path_list \
-                                if '.npy' in f and
-                                f.split('_')[3][:-2] < end_test_time.strftime("%Y%m%d%H")])
+            gt_path_list = sorted([os.path.join(gt_dir, f) for f in gt_path_list
+                                   if '.npy' in f and
+                                   f.split('_')[3][:-2] < end_test_time.strftime("%Y%m%d%H")])
+                                   #f.split('_')[3][:-2] >= "2020060100"])
             gt_path_list = gt_path_list[self.window_size:]
 
         else:
