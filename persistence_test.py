@@ -26,21 +26,10 @@ def get_stat(pred, target):
     tn: Correct Negative
     """
     conf_mat = confusion_matrix(target, pred, labels=np.arange(2))
-    tp, fp, tn, fn = conf_mat[1, 1], conf_mat[0, 1], conf_mat[0, 0], conf_mat[1, 0]
-    
-    correct = tp + tn
-    csi = tp / (tp + fn + fp) if tp + fn + fp > 0 else -1.0
-    pod = tp / (tp + fn) if tp + fn > 0 else -1.0
-    bias = (tp + fp) / (tp + fn) if tp + fn > 0 else -1.0
+    hit, miss, fa, cn = conf_mat[1, 1], conf_mat[1, 0], conf_mat[0, 1], conf_mat[0, 0]
+    correct = hit + cn
 
-    # ratio = (tp + fp) / (tn + fn)
-    # tn *= ratio
-    # fn *= ratio
-    # csi = tp / (tp + fn + fp) if tp + fn + fp > 0 else -1.0
-    # pod = tp / (tp + fn) if tp + fn > 0 else -1.0
-    # bias = (tp + fp) / (tp + fn) if tp + fn > 0 else -1.0
-
-    return correct, binary_f1, csi, pod, bias
+    return correct, binary_f1, hit, miss, fa, cn
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='NIMS rainfall data prediction')
@@ -61,7 +50,7 @@ if __name__ == '__main__':
 
     nims_logger = NIMSLogger(loss=False, correct=True, binary_f1=True,
                              macro_f1=False, micro_f1=False,
-                             csi=True, pod=True, bias=True,
+                             hit=True, miss=True, fa=True, cn=True,
                              stn_codi=stn_codi,
                              experiment_name=experiment_name)
 
@@ -86,10 +75,10 @@ if __name__ == '__main__':
         today = today[stn_codi[:, 0], stn_codi[:, 1]]
         tomorrow = tomorrow[stn_codi[:, 0], stn_codi[:, 1]]
 
-        correct, binary_f1, csi, pod, bias = get_stat(today, tomorrow)
+        correct, binary_f1, hit, miss, fa, cn = get_stat(today, tomorrow)
 
         nims_logger.update(correct=correct, binary_f1=binary_f1,
-                           csi=csi, pod=pod, bias=bias,
+                           hit=hit, miss=miss, fa=fa, cn=cn,
                            target_time=target_time, test=True)
         pbar.set_description(nims_logger.latest_stat)
 

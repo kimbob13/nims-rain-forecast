@@ -35,13 +35,13 @@ class NIMSTrainer:
            model.name == 'persistence':
             self.nims_logger = NIMSLogger(loss=True, correct=True, binary_f1=True,
                                           macro_f1=False, micro_f1=False,
-                                          csi=True, pod=True, bias=True,
+                                          hit=True, miss=True, fa=True, cn=True,
                                           stn_codi=self.stn_codi,
                                           experiment_name=experiment_name)
         elif model.name == 'convlstm':
             self.nims_logger = NIMSLogger(loss=True, correct=False, binary_f1=True,
                                           macro_f1=False, micro_f1=False,
-                                          csi=True, pod=True, bias=True,
+                                          hit=True, miss=True, fa=True, cn=True,
                                           stn_codi=self.stn_codi,
                                           experiment_name=experiment_name)
 
@@ -87,8 +87,7 @@ class NIMSTrainer:
         pbar = tqdm(data_loader)
         for images, target, target_time in pbar:
             if self.model.name == 'unet' or \
-               self.model.name == 'attn_unet' or \
-               self.model.name == 'persistence':
+               self.model.name == 'attn_unet':
                 images = images.type(torch.FloatTensor).to(self.device)
                 target = target.type(torch.LongTensor).to(self.device)
                 target_time = target_time.squeeze(0).tolist()

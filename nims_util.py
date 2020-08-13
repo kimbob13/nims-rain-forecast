@@ -56,7 +56,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='NIMS rainfall data prediction')
 
     common = parser.add_argument_group('common')
-    common.add_argument('--model', default='unet', type=str, help='which model to use [unet, attn_unet, convlstm, persistence]')
+    common.add_argument('--model', default='unet', type=str, help='which model to use [unet, attn_unet, convlstm]')
     common.add_argument('--dataset_dir', default='/home/osilab12/ssd/NIMS_LDPS', type=str, help='root directory of dataset')
     common.add_argument('--device', default='0', type=str, help='which device to use')
     common.add_argument('--num_workers', default=6, type=int, help='# of workers for dataloader')
@@ -87,10 +87,6 @@ def parse_args():
     hyperparam.add_argument('--lr', default=0.001, type=float, help='learning rate of optimizer')
 
     args = parser.parse_args()
-    if args.model == 'persistence':
-        args.test_only = True
-        args.window_size = 1
-        args.batch_size = 1
 
     if args.model_utc not in [0, 6, 12, 18]:
         print('model_utc must be one of [0, 6, 12, 18]')
@@ -239,15 +235,6 @@ def set_model(sample, device, args, train=True):
         num_lat = sample.shape[2] # the number of latitudes (originally 253)
         num_lon = sample.shape[3] # the number of longitudes (originally 149)
 
-    elif args.model == 'persistence':
-        model = Persistence(num_classes=num_classes, device=device)
-        criterion = NIMSCrossEntropyLoss(device, num_classes=num_classes,
-                                         use_weights=args.cross_entropy_weight,
-                                         train=train)
-
-        num_lat = sample.shape[1] # the number of latitudes (originally 253)
-        num_lon = sample.shape[2] # the number of longitudes (originally 149)
-
     return model, criterion, num_lat, num_lon
 
 def set_optimizer(model, args):
@@ -345,20 +332,15 @@ def set_experiment_name(args):
                                   custom_name,
                                   test_time)
 
-    # elif args.model == 'convlstm':
-    #     experiment_name = 'nims-convlstm_ws{}_tn{}_ep{}_bs{}_sr{}_{}{}{}' \
-    #                       .format(args.window_size,
-    #                               args.target_num,
-    #                               args.num_epochs,
-    #                               args.batch_size,
-    #                               args.sampling_ratio,
-    #                               args.optimizer,
-    #                               args.lr,
-    #                               test_time)
-
-    elif args.model == 'persistence':
-        experiment_name = 'nims-persistence{}{}' \
-                          .format(cross_entropy_weight,
+    elif args.model == 'convlstm':
+        experiment_name = 'nims-convlstm_ws{}_tn{}_ep{}_bs{}_sr{}_{}{}{}' \
+                          .format(args.window_size,
+                                  args.target_num,
+                                  args.num_epochs,
+                                  args.batch_size,
+                                  args.sampling_ratio,
+                                  args.optimizer,
+                                  args.lr,
                                   test_time)
 
     if args.debug:

@@ -48,11 +48,9 @@ if __name__ == '__main__':
     create_results_dir(experiment_name)
 
     # Load trained model weight
-    # Persistence model doesn't have trained model
-    if not args.model == 'persistence':
-        weight_name = '_'.join(experiment_name.split('_')[:-1])
-        weight_path = os.path.join('./results', 'trained_model', weight_name + '.pt')
-        model.load_state_dict(torch.load(weight_path))
+    weight_name = '_'.join(experiment_name.split('_')[:-1])
+    weight_path = os.path.join('./results', 'trained_model', weight_name + '.pt')
+    model.load_state_dict(torch.load(weight_path))
 
     # Start testing
     nims_trainer = NIMSTrainer(model, criterion, optimizer, device,

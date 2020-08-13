@@ -10,7 +10,7 @@ __all__ = ['NIMSLogger']
 
 class NIMSLogger:
     def __init__(self, loss, correct, binary_f1, macro_f1, micro_f1,
-                 csi, pod, bias, stn_codi, experiment_name, num_classes=2):
+                 hit, miss, fa, cn, stn_codi, experiment_name, num_classes=2):
         """
         <Parameter>
         loss, correct, macro_f1, micro_f1 [bool]: whether to record each variable
@@ -27,40 +27,20 @@ class NIMSLogger:
         self.experiment_name = experiment_name
 
         self.num_update = 0
-        self.csi_update = 0
-        self.pod_update = 0
-        self.bias_update = 0
 
         # Initialize one epoch stat dictionary
-        self.one_epoch_stat = OneTargetStat(loss, correct, binary_f1, macro_f1, micro_f1, csi, pod, bias)
+        self.one_epoch_stat = OneTargetStat(loss, correct, binary_f1, macro_f1, micro_f1, hit, miss, fa, cn)
 
         # Used for one data instance stat
-        self._latest_stat = OneTargetStat(loss, correct, binary_f1, macro_f1, micro_f1, csi, pod, bias)
+        self._latest_stat = OneTargetStat(loss, correct, binary_f1, macro_f1, micro_f1, hit, miss, fa, cn)
 
         # Test stat dataframe
-        self.test_df = pd.DataFrame(index=['acc', 'csi', 'pod', 'bias', 'correct_update', 'csi_update', 'pod_update', 'bias_update'])
-        self.daily_df = pd.DataFrame(index=['acc', 'csi', 'pod', 'bias'], columns=list(range(24)))
-
-        # # Store monthly stat for label-wise accuracy for classification model
-        # if args:
-        #     self.experiment_name = experiment_name
-        #     self.baseline_name = args.baseline_name
-        #     self.month_name = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-        #     self.month_label_stat = dict()
-        #     self.cur_test_time = datetime(year=args.end_train_year + 1,
-        #                                   month=args.start_month,
-        #                                   day=1,
-        #                                   hour=args.window_size)
-
-        #     for target_idx in range(target_num):
-        #         self.month_label_stat[target_idx + 1] = dict()
-            
-        #     self.micro_eval = np.zeros((len(self.month_name) + 1, 2, 2))
-        #     self.macro_eval = np.zeros((len(self.month_name) + 1, 4, 4))                                              
+        self.test_df = pd.DataFrame(index=['acc', 'hit', 'miss', 'false alarm', 'correct negative', 'correct_update'])
+        self.daily_df = pd.DataFrame(index=['acc', 'hit', 'miss', 'false alarm', 'correct negative'], columns=list(range(24)))
 
     def update(self, loss=None, correct=None,
                binary_f1=None, macro_f1=None, micro_f1=None,
-               csi=None, pod=None, bias=None,
+               hit=None, miss=None, fa=None, cn=None,
                target_time=None, test=False):
 
         if loss != None:
@@ -93,33 +73,30 @@ class NIMSLogger:
                 self._latest_stat.micro_f1 = micro_f1
             except:
                 print("You don't specify the micro_f1 to be logged")
-        if csi != None:
+        if hit != None:
             try:
-                if csi >= 0.0:
-                    self.one_epoch_stat.csi += csi
-                    self.csi_update += 1
-                
-                self._latest_stat.csi = csi
+                self.one_epoch_stat.hit += hit
+                self._latest_stat.hit = hit
             except:
-                print("You don't specify the csi to be logged")
-        if pod != None:
+                print("You don't specify the hit to be logged")
+        if miss != None:
             try:
-                if pod >= 0.0:
-                    self.one_epoch_stat.pod += pod
-                    self.pod_update += 1
-                
-                self._latest_stat.pod = pod
+                self.one_epoch_stat.miss += miss           
+                self._latest_stat.miss = miss
             except:
-                print("You don't specify the pod to be logged")
-        if bias != None:
+                print("You don't specify the miss to be logged")
+        if fa != None:
             try:
-                if bias >= 0.0:
-                    self.one_epoch_stat.bias += bias
-                    self.bias_update += 1
-                
-                self._latest_stat.bias = bias
+                self.one_epoch_stat.fa += fa
+                self._latest_stat.fa = fa
             except:
-                print("You don't specify the bias to be logged")
+                print("You don't specify the false alarm to be logged")
+        if cn != None:
+            try:
+                self.one_epoch_stat.cn += cn
+                self._latest_stat.cn = cn
+            except:
+                print("You don't specify the correct negative to be logged")
 
         self.num_update += 1
 
@@ -129,34 +106,30 @@ class NIMSLogger:
             target_day = target_time[2]
             target_hour = target_time[3]
 
-            csi_update = 1
-            pod_update = 1
-            bias_update = 1
-            if csi < 0:
-                csi = np.nan
-                csi_update = 0
-            if pod < 0:
-                pod = np.nan
-                pod_update = 0
-            if bias < 0:
-                bias = np.nan
-                bias_update = 0
-
-            self.daily_df[target_hour] = [(correct / self.num_stn) * 100, csi, pod, bias]
+            save = False
             if target_hour == 23:
+                save = True
+            elif (target_month == 6) and (target_day == 30) and (target_hour == 14):
+                save = True
+
+            self.daily_df[target_hour] = [(correct / self.num_stn) * 100, hit, miss, fa, cn]
+            if save:
                 daily_t = self.daily_df.T
-                daily_t = daily_t.append(daily_t.mean(axis=0, skipna=True), ignore_index=True)
+                # There are only 14 hours for June 30 (because of UTC/KST)
+                if (target_month == 6) and (target_day == 30) and (target_hour == 14):
+                    daily_t = daily_t.iloc[:15, :]
+                acc_mean = daily_t.iloc[:, 0].mean(axis=0)
+                daily_t = daily_t.append(daily_t.sum(axis=0), ignore_index=True)
+                daily_t.iloc[-1, 0] = acc_mean
 
                 save_dir = os.path.join('./results', 'log', self.experiment_name)
-                daily_t.to_csv(os.path.join(save_dir, '{:4d}{:02d}{:02d}.csv'.format(target_year, target_month, target_day)))
+                daily_t.to_csv(os.path.join(save_dir, '{:4d}{:02d}{:02d}.csv'.format(target_year, target_month, target_day)), index=False)
 
             # Update total test dataframe
             if str(target_day) in self.test_df:
-                self.test_df[str(target_day)] += [correct, csi, pod, bias, self.num_stn,
-                                                  csi_update, pod_update, bias_update]
+                self.test_df[str(target_day)] += [correct, hit, miss, fa, cn, self.num_stn]
             else:
-                self.test_df[str(target_day)] = [correct, csi, pod, bias, self.num_stn,
-                                                 csi_update, pod_update, bias_update]
+                self.test_df[str(target_day)] = [correct, hit, miss, fa, cn, self.num_stn]
 
     def print_stat(self, dataset_len, test=False):
         total_stn = dataset_len * self.num_stn
@@ -164,42 +137,38 @@ class NIMSLogger:
         stat_str = ''
         
         try:
-            stat_str += "loss = {:.5f}".format(self.one_epoch_stat.loss / self.num_update)
+            stat_str += "[{:12s}] {:.5f}\n".format('loss', self.one_epoch_stat.loss / self.num_update)
         except:
             pass
 
         try:
-            stat_str += ", accuracy = {:.3f}%".format((self.one_epoch_stat.correct / total_stn) * 100)
+            stat_str += "[{:12s}] {:.3f}%\n".format('accuracy', (self.one_epoch_stat.correct / total_stn) * 100)
         except:
             pass
 
         try:
-            stat_str += ", f1 (binary) = {:.5f}".format(self.one_epoch_stat.binary_f1 / self.num_update)
+            stat_str += "[{:12s}] {:.5f}\n".format('f1 (binary)', self.one_epoch_stat.binary_f1 / self.num_update)
         except:
             pass
 
         try:
-            stat_str += ", f1 (macro) = {:.5f}".format(self.one_epoch_stat.macro_f1 / self.num_update)
+            stat_str += "[{:12s}] {:.5f}\n".format('f1 (macro)', self.one_epoch_stat.macro_f1 / self.num_update)
         except:
             pass
 
         try:
-            stat_str += ", f1 (micro) = {:.5f}".format(self.one_epoch_stat.micro_f1 / self.num_update)
+            stat_str += "[{:12s}] {:.5f}\n".format('f1 (micro)', self.one_epoch_stat.micro_f1 / self.num_update)
         except:
             pass
 
         try:
-            stat_str += ", csi = {:.5f}".format(self.one_epoch_stat.csi / self.csi_update)
-        except:
-            pass
+            pod = self.one_epoch_stat.hit / (self.one_epoch_stat.hit + self.one_epoch_stat.miss)
+            csi = self.one_epoch_stat.hit / (self.one_epoch_stat.hit + self.one_epoch_stat.miss + self.one_epoch_stat.fa)
+            bias = (self.one_epoch_stat.hit + self.one_epoch_stat.fa) / (self.one_epoch_stat.hit + self.one_epoch_stat.miss)
 
-        try:
-            stat_str += ", pod = {:.5f}".format(self.one_epoch_stat.pod / self.pod_update)
-        except:
-            pass
-
-        try:
-            stat_str += ", bias = {:.5f}".format(self.one_epoch_stat.bias / self.bias_update)
+            stat_str += "[{:12s}] {:.5f}\n".format('pod', pod)
+            stat_str += "[{:12s}] {:.5f}\n".format('csi', csi)
+            stat_str += "[{:12s}] {:.5f}\n".format('bias', bias)
         except:
             pass
 
@@ -245,21 +214,6 @@ class NIMSLogger:
         except:
             pass
 
-        try:
-            stat_str += ", csi = {:.5f}".format(self._latest_stat.csi)
-        except:
-            pass
-
-        try:
-            stat_str += ", pod = {:.5f}".format(self._latest_stat.pod)
-        except:
-            pass
-
-        try:
-            stat_str += ", bias = {:.5f}".format(self._latest_stat.bias)
-        except:
-            pass
-
         return stat_str
 
     def _clear_one_target_stat(self, _stat):
@@ -294,39 +248,46 @@ class NIMSLogger:
             pass
 
         try:
-            if _stat.csi:
-                _stat.csi = 0.0
+            if _stat.hit:
+                _stat.hit = 0
         except:
             pass
 
         try:
-            if _stat.pod:
-                _stat.pod = 0.0
+            if _stat.miss:
+                _stat.miss = 0
         except:
             pass
 
         try:
-            if _stat.bias:
-                _stat.bias = 0.0
+            if _stat.fa:
+                _stat.fa = 0
+        except:
+            pass
+
+        try:
+            if _stat.cn:
+                _stat.cn = 0
         except:
             pass
 
         self.num_update = 0
-        self.csi_update = 0
-        self.pod_update = 0
-        self.bias_update = 0
 
     def _save_test_result(self):
-        self.test_df.loc["acc"] /= self.test_df.loc["correct_update"]
-        self.test_df.loc["csi"] /= self.test_df.loc["csi_update"]
-        self.test_df.loc["pod"] /= self.test_df.loc["pod_update"]
-        self.test_df.loc["bias"] /= self.test_df.loc["bias_update"]
+        self.test_df.loc["acc"] = (self.test_df.loc["acc"] / self.test_df.loc["correct_update"]) * 100
 
         self.test_df = self.test_df.T
-        self.test_df.to_csv(os.path.join("./results", "log", self.experiment_name, 'total.csv'))
+        acc_mean = self.test_df.iloc[:, 0].mean(axis=0)
+        self.test_df = self.test_df.append(self.test_df.sum(axis=0), ignore_index=True)
+        self.test_df.iloc[-1, 0] = acc_mean
+
+        # Drop last columns (correct_update)
+        self.test_df = self.test_df.iloc[:, :-1]
+        
+        self.test_df.to_csv(os.path.join("./results", "log", self.experiment_name, 'total.csv'), index=False)
 
 class OneTargetStat:
-    def __init__(self, loss, correct, binary_f1, macro_f1, micro_f1, csi, pod, bias):
+    def __init__(self, loss, correct, binary_f1, macro_f1, micro_f1, hit, miss, fa, cn):
         """
         <Parameter>
         loss, correct, macro_f1, micro_f1 [bool]: whether to record each variable
@@ -341,12 +302,14 @@ class OneTargetStat:
             self._macro_f1 = 0.0
         if micro_f1:
             self._micro_f1 = 0.0
-        if csi:
-            self._csi = 0.0
-        if pod:
-            self._pod = 0.0
-        if bias:
-            self._bias = 0.0
+        if hit:
+            self._hit = 0
+        if miss:
+            self._miss = 0
+        if fa:
+            self._fa = 0
+        if cn:
+            self._cn = 0
     
     @property
     def loss(self):
@@ -389,25 +352,33 @@ class OneTargetStat:
         self._micro_f1 = micro_f1_val
 
     @property
-    def csi(self):
-        return self._csi
+    def hit(self):
+        return self._hit
 
-    @csi.setter
-    def csi(self, csi_val):
-        self._csi = csi_val
-
-    @property
-    def pod(self):
-        return self._pod
-
-    @pod.setter
-    def pod(self, pod_val):
-        self._pod = pod_val
+    @hit.setter
+    def hit(self, hit_val):
+        self._hit = hit_val
 
     @property
-    def bias(self):
-        return self._bias
+    def miss(self):
+        return self._miss
 
-    @bias.setter
-    def bias(self, bias_val):
-        self._bias = bias_val
+    @miss.setter
+    def miss(self, miss_val):
+        self._miss = miss_val
+
+    @property
+    def fa(self):
+        return self._fa
+
+    @fa.setter
+    def fa(self, fa_val):
+        self._fa = fa_val
+
+    @property
+    def cn(self):
+        return self._cn
+
+    @cn.setter
+    def cn(self, cn_val):
+        self._cn = cn_val

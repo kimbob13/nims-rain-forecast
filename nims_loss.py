@@ -59,22 +59,10 @@ class NIMSCrossEntropyLoss(nn.Module):
         - tn: Correct Negative
         """
         conf_mat = confusion_matrix(target_labels, pred_labels, labels=self.classes)
-        tp, fp, tn, fn = conf_mat[1, 1], conf_mat[0, 1], conf_mat[0, 0], conf_mat[1, 0]
+        hit, miss, fa, cn = conf_mat[1, 1], conf_mat[1, 0], conf_mat[0, 1], conf_mat[0, 0]
+        correct = hit + cn
 
-        correct = tp + tn
-        csi = tp / (tp + fn + fp) if tp + fn + fp > 0 else -1.0
-        pod = tp / (tp + fn) if tp + fn > 0 else -1.0
-        bias = (tp + fp) / (tp + fn) if tp + fn > 0 else -1.0
-
-        # if not self.train:
-        #     ratio = (tp + fp) / (tn + fn)
-        #     tn *= ratio
-        #     fn *= ratio
-        # csi = tp / (tp + fn + fp) if tp + fn + fp > 0 else -1.0
-        # pod = tp / (tp + fn) if tp + fn > 0 else -1.0
-        # bias = (tp + fp) / (tp + fn) if tp + fn > 0 else -1.0
-
-        return correct, binary_f1, csi, pod, bias
+        return correct, binary_f1, hit, miss, fa, cn
 
     def _get_class_weights(self, targets):
         _targets = targets.flatten().detach().cpu().numpy()
@@ -112,15 +100,14 @@ class NIMSCrossEntropyLoss(nn.Module):
         stn_preds = preds[:, :, stn_codi[:, 0], stn_codi[:, 1]]
         stn_targets = targets[:, stn_codi[:, 0], stn_codi[:, 1]]
         
-        correct, binary_f1, csi, pod, bias = self._get_stat(stn_preds, stn_targets)
-        #macro_f1, micro_f1 = self._get_f1_score(stn_preds, stn_targets)
+        correct, binary_f1, hit, miss, fa, cn = self._get_stat(stn_preds, stn_targets)
         
         loss = F.cross_entropy(stn_preds, stn_targets, weight=class_weights, reduction='none')
         loss = torch.mean(torch.mean(loss, dim=0))
 
         if logger:
             logger.update(loss=loss.item(), correct=correct,
-                          binary_f1=binary_f1, csi=csi, pod=pod, bias=bias,
+                          binary_f1=binary_f1, hit=hit, miss=miss, fa=fa, cn=cn,
                           target_time=target_time, test=test)
 
         #print('[cross_entropy] loss: {}'.format(loss.item()))
