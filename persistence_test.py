@@ -46,13 +46,17 @@ if __name__ == '__main__':
         setproctitle.setproctitle(experiment_name)
     except:
         pass
-    create_results_dir(experiment_name)
+    create_results_dir()
+
+    test_result_path = os.path.join('./results', 'eval', experiment_name)
+    if not os.path.isdir(test_result_path):
+        os.mkdir(test_result_path)
 
     nims_logger = NIMSLogger(loss=False, correct=True, binary_f1=True,
                              macro_f1=False, micro_f1=False,
                              hit=True, miss=True, fa=True, cn=True,
                              stn_codi=stn_codi,
-                             experiment_name=experiment_name)
+                             test_result_path=test_result_path)
 
     gt_dir = args.dataset_dir
     gt_path_list = os.listdir(gt_dir)

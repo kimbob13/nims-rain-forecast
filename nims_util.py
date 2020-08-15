@@ -22,10 +22,10 @@ try:
 except:
     pass
 
-__all__ = ['create_results_dir', 'parse_args', 'set_device', 'undersample',
+__all__ = ['create_results_dir', 'select_date', 'parse_args', 'set_device', 'undersample',
            'fix_seed', 'set_model', 'set_optimizer', 'set_experiment_name']
 
-def create_results_dir(experiment_name=None):
+def create_results_dir():
     # Base results directory
     results_dir = './results'
     if not os.path.isdir(results_dir):
@@ -35,12 +35,6 @@ def create_results_dir(experiment_name=None):
     log_dir = os.path.join(results_dir, 'log')
     if not os.path.isdir(log_dir):
         os.mkdir(log_dir)
-
-    # Create experiment-wise directory in log directory
-    if experiment_name:
-        experiment_dir = os.path.join(log_dir, experiment_name)
-        if not os.path.isdir(experiment_dir):
-            os.mkdir(experiment_dir)
 
     # Create evaluation directory if not
     eval_dir = os.path.join(results_dir, 'eval')
@@ -52,6 +46,110 @@ def create_results_dir(experiment_name=None):
     if not os.path.isdir(model_dir):
         os.mkdir(model_dir)
 
+def select_date():
+    # Mode selection
+    while True:
+        try:
+            print()
+            print('=' * 20, '1. Stat Type', '=' * 20)
+            print('Which mode do you want to specify date?')
+            date_mode = int(input('[1] Montly    [2] Daily: '))
+
+            if date_mode not in [1, 2]:
+                print('You must enter value between 1 or 2')
+                continue
+
+        except ValueError:
+            print('You must enter integer only')
+            continue
+
+        break
+    
+    # Year selection
+    while True:
+        try:
+            print()
+            print('=' * 20, '2 Year Selection', '=' * 20)
+            year = int(input('Which year do you want to train(test)? (2019, 2020): '))
+
+            if year not in [2019, 2020]:
+                print("You must specify year 2019 or 2020")
+                continue
+
+        except ValueError:
+            print("You must enter integer for year")
+            continue
+
+        break
+
+    MONTH_DAY = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    LEAP_YEAR = (2020)
+    def _check_valid_day(month, day):
+        valid_day = MONTH_DAY[month]
+        if (month == 2) and (year in LEAP_YEAR):
+            valid_day = 29
+
+        if (day < 1) or (day > valid_day):
+            return False
+
+        return True
+
+    # Start date selection
+    while True:
+        try:
+            print()
+            print('=' * 20, '3. Start date Selection', '=' * 20)
+            start_month = int(input('Which month do you want to start train(test)? (1 - 12): '))
+            if (start_month < 1) or (start_month > 12):
+                print("You must specify start month between 1 to 12")
+                continue
+
+            if date_mode == 2:
+                start_day = int(input('Which day do you want to start train(test)?: '))
+                if not _check_valid_day(start_month, start_day):
+                    print("You must specifiy valid day for month '{}'".format(start_month))
+                    continue
+            else:
+                start_day = 1
+
+        except ValueError:
+            print("You must enter integer for month")
+            continue
+
+        break
+
+    # End date selection
+    while True:
+        try:
+            print()
+            print('=' * 20, '4. End date Selection', '=' * 20)
+            end_month = int(input('Which month do you want to end train(test)? (1 - 12): '))
+            if (end_month < start_month) or (end_month > 12):
+                print("You must specify start month between 1 to 12")
+                continue
+
+            if date_mode == 2:
+                end_day = int(input('Which day do you want to end train(test)?: '))
+                if not _check_valid_day(end_month, end_day) or \
+                       ((end_month == start_month) and (end_day < start_day)):
+                    print("You must specifiy valid day for month '{}'".format(end_month))
+                    continue
+            else:
+                end_day = MONTH_DAY[end_month]
+                if (end_month == 2) and (year in LEAP_YEAR):
+                    end_day = 29
+
+        except ValueError:
+            print("You must enter integer for month")
+            continue
+
+        break
+        
+    print()
+
+    return {'year': year, 'start_month': start_month, 'start_day': start_day,
+            'end_month': end_month, 'end_day': end_day}
+
 def parse_args():
     parser = argparse.ArgumentParser(description='NIMS rainfall data prediction')
 
@@ -59,7 +157,7 @@ def parse_args():
     common.add_argument('--model', default='unet', type=str, help='which model to use [unet, attn_unet, convlstm]')
     common.add_argument('--dataset_dir', default='/home/osilab12/ssd/NIMS_LDPS', type=str, help='root directory of dataset')
     common.add_argument('--device', default='0', type=str, help='which device to use')
-    common.add_argument('--num_workers', default=6, type=int, help='# of workers for dataloader')
+    common.add_argument('--num_workers', default=5, type=int, help='# of workers for dataloader')
     common.add_argument('--baseline_name', default=None, type=str, help='name of baseline experiment you want to compare')
     common.add_argument('--custom_name', default=None, type=str, help='add customize experiment name')
     common.add_argument('--debug', help='turn on debugging print', action='store_true')
@@ -71,8 +169,7 @@ def parse_args():
     unet.add_argument('--cross_entropy_weight', default=False, help='use weight for cross entropy loss', action='store_true')
 
     nims_dataset = parser.add_argument_group('nims dataset related')
-    nims_dataset.add_argument('--test_time', default=None, type=str, help='date of test')
-    nims_dataset.add_argument('--window_size', default=10, type=int, help='# of input sequences in time')
+    nims_dataset.add_argument('--window_size', default=6, type=int, help='# of input sequences in time')
     nims_dataset.add_argument('--model_utc', default=0, type=int, help='base UTC time of data (0, 6, 12, 18)')
     # nims_dataset.add_argument('--variables', nargs='+',
     #                           help='which variables to use (rain, cape, etc.). \
@@ -81,7 +178,7 @@ def parse_args():
     nims_dataset.add_argument('--sampling_ratio', default=1.0, type=float, help='the ratio of undersampling')
 
     hyperparam = parser.add_argument_group('hyper-parameters')
-    hyperparam.add_argument('--num_epochs', default=50, type=int, help='# of training epochs')
+    hyperparam.add_argument('--num_epochs', default=200, type=int, help='# of training epochs')
     hyperparam.add_argument('--batch_size', default=1, type=int, help='batch size')
     hyperparam.add_argument('--optimizer', default='adam', type=str, help='which optimizer to use (rmsprop, adam, sgd)')
     hyperparam.add_argument('--lr', default=0.001, type=float, help='learning rate of optimizer')
@@ -235,7 +332,7 @@ def set_model(sample, device, args, train=True):
         num_lat = sample.shape[2] # the number of latitudes (originally 253)
         num_lon = sample.shape[3] # the number of longitudes (originally 149)
 
-    return model, criterion, num_lat, num_lon
+    return model, criterion
 
 def set_optimizer(model, args):
     if args.optimizer == 'sgd':
@@ -251,46 +348,15 @@ def set_optimizer(model, args):
 
     return optimizer
 
-def set_experiment_name(args):
+def set_experiment_name(args, date):
     """
     Set experiment name and assign to process name
 
     <Parameters>
     args [argparse]: parsed argument
     """
-    test_time = ''
-    if args.test_time:
-        if '-' in args.test_time:
-            _start, _end = args.test_time.strip().split('-')
-            start_test_time = ''
-            end_test_time = ''
-            try:
-                start_test_time += '_{}'.format(int(_start[2:4]))
-                start_test_time += '{:02d}'.format(int(_start[4:6]))
-                start_test_time += '{:02d}'.format(int(_start[6:8]))
-                start_test_time += '{:02d}'.format(int(_start[8:10]))
-            except:
-                pass
-                
-            try:
-                end_test_time += '{}'.format(int(_end[2:4]))
-                end_test_time += '{:02d}'.format(int(_end[4:6]))
-                end_test_time += '{:02d}'.format(int(_end[6:8]))
-                end_test_time += '{:02d}'.format(int(_end[8:10]))
-            except:
-                pass
-
-            test_time = start_test_time + '-' + end_test_time
-
-        else:
-            try:
-                test_time += '_{}'.format(int(args.test_time[2:4]))
-                test_time += '{:02d}'.format(int(args.test_time[4:6]))
-                test_time += '{:02d}'.format(int(args.test_time[6:8]))
-                test_time += '{:02d}'.format(int(args.test_time[8:10]))
-            except:
-                pass
-        
+    date_str = ' ({:4d}{:02d}{:02d}-{:04d}{:02d}{:02d})'.format(date['year'], date['start_month'], date['start_day'],
+                                                           date['year'], date['end_month'], date['end_day'])
 
     cross_entropy_weight = ''
     if args.cross_entropy_weight:
@@ -314,7 +380,7 @@ def set_experiment_name(args):
                                   args.lr,
                                   cross_entropy_weight,
                                   custom_name,
-                                  test_time)
+                                  date_str)
 
     elif args.model == 'attn_unet':
         experiment_name = 'nims-utc{}-attn_unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}_sr{}_{}{}{}{}{}' \
@@ -330,7 +396,7 @@ def set_experiment_name(args):
                                   args.lr,
                                   cross_entropy_weight,
                                   custom_name,
-                                  test_time)
+                                  date_str)
 
     elif args.model == 'convlstm':
         experiment_name = 'nims-convlstm_ws{}_tn{}_ep{}_bs{}_sr{}_{}{}{}' \
@@ -341,7 +407,7 @@ def set_experiment_name(args):
                                   args.sampling_ratio,
                                   args.optimizer,
                                   args.lr,
-                                  test_time)
+                                  date_str)
 
     if args.debug:
         experiment_name += '_debug'

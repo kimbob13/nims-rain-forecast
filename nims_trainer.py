@@ -11,7 +11,7 @@ __all__ = ['NIMSTrainer']
 class NIMSTrainer:
     def __init__(self, model, criterion, optimizer, device,
                  train_loader, test_loader, train_len, test_len,
-                 num_lat, num_lon, experiment_name, args):
+                 experiment_name, args, test_result_path=None):
         self.model = model
         self.criterion = criterion
         self.optimizer = optimizer
@@ -28,6 +28,25 @@ class NIMSTrainer:
         self.stn_codi = self._get_station_coordinate()
         self.experiment_name = experiment_name
 
+        self.train_info = {'model': None,
+                           'n_blocks': args.n_blocks,
+                           'start_channels': args.start_channels,
+                           'pos_dim': args.pos_dim,
+                           'cross_entropy_weight': args.cross_entropy_weight,
+                           'window_size': args.window_size,
+                           'model_utc': args.model_utc,
+                           'sampling_ratio': args.sampling_ratio,
+                           'num_epochs': args.num_epochs,
+                           'batch_size': args.batch_size,
+                           'optimizer': args.optimizer,
+                           'lr': args.lr,
+                           'custom_name': args.custom_name,
+                           'best_loss': float("inf"),
+                           'best_epoch': 0,     # epoch num at best_loss
+                           'best_pod': 0.0,     # pod value at best_loss
+                           'best_csi': 0.0,
+                           'best_bias': 0.0}
+
         self.model.to(self.device)
 
         if model.name == 'unet' or \
@@ -37,13 +56,13 @@ class NIMSTrainer:
                                           macro_f1=False, micro_f1=False,
                                           hit=True, miss=True, fa=True, cn=True,
                                           stn_codi=self.stn_codi,
-                                          experiment_name=experiment_name)
+                                          test_result_path=test_result_path)
         elif model.name == 'convlstm':
             self.nims_logger = NIMSLogger(loss=True, correct=False, binary_f1=True,
                                           macro_f1=False, micro_f1=False,
                                           hit=True, miss=True, fa=True, cn=True,
                                           stn_codi=self.stn_codi,
-                                          experiment_name=experiment_name)
+                                          test_result_path=test_result_path)
 
     def _get_station_coordinate(self):
         codi_aws_df = pd.read_csv('./codi_ldps_aws/codi_ldps_aws_512.csv')
@@ -55,21 +74,26 @@ class NIMSTrainer:
     def train(self):
         self.model.train()
 
-        weight_path = os.path.join('./results', 'trained_model',
-                                   self.experiment_name + '.pt')
-        min_loss = float("inf")
+        train_info_path = os.path.join('./results', 'trained_model',
+                                       self.experiment_name + '.pt')
         for epoch in range(1, self.num_epochs + 1):
             # Run one epoch
-            print('=' * 25, 'Epoch {} / {}'.format(epoch, self.num_epochs),
-                  '=' * 25)
+            print('=' * 25, 'Epoch {} / {}'.format(epoch, self.num_epochs), '=' * 25)
             epoch_loss = self._epoch(self.train_loader, train=True)
-            self.nims_logger.print_stat(self.train_len)
+            pod, csi, bias = self.nims_logger.print_stat(self.train_len)
 
-            if epoch_loss < min_loss:
-                min_loss = epoch_loss
+            if epoch_loss < self.train_info['best_loss']:
+                self.train_info['model'] = self.model.state_dict()
+                self.train_info['best_loss'] = epoch_loss
+                self.train_info['best_epoch'] = epoch
+                self.train_info['best_pod'] = pod
+                self.train_info['best_csi'] = csi
+                self.train_info['best_bias'] = bias
 
                 # Save model weight which has minimum loss
-                torch.save(self.model.state_dict(), weight_path)
+                if os.path.isfile(train_info_path):
+                    os.remove(train_info_path)
+                torch.save(self.train_info, train_info_path)
 
     def test(self):
         # self.model.eval()

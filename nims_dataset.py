@@ -23,29 +23,18 @@ MONTH_DAY = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 
 class NIMSDataset(Dataset):
     def __init__(self, model, model_utc, window_size, root_dir,
-                 test_time=None, train=True, transform=None):
-        assert window_size >= 0 and window_size <= 48, \
-            'window_size must be in between 0 and 48'
-        
-        if not train:
-            assert test_time != None, 'You must specify test time in test mode'
+                 date, train=True, transform=None):
+        assert window_size >= 6 and window_size <= 48, \
+            'window_size must be in between 6 and 48'
 
         self.model = model
         self.model_utc = model_utc
         self.window_size = window_size
         self.root_dir = root_dir
+        self.date = date
         self.train = train
         self.transform = transform
 
-        # Initial train mode.
-        # Set test time as 2020-06-01-00 to use whole May data for training
-        if test_time == None:
-            self.test_time = '2020060100'
-        elif '-' in test_time:
-            self.test_time = test_time.strip().split('-')
-        else:
-            self.test_time = test_time
-            
         self._data_path_dict, self._gt_path_list = self.__set_path()
 
     @property
@@ -55,11 +44,30 @@ class NIMSDataset(Dataset):
     def __set_path(self):
         root, dirs, _ = next(os.walk(self.root_dir, topdown=True))
         
-        start_test_time, end_test_time = self.__start_end_test_time()
-
-        data_dirs = sorted([os.path.join(root, d) for d in dirs \
-                            if d.isnumeric() and d <= end_test_time.strftime("%Y%m%d")])
+        # Make datetime object for start and end date
+        start_date = datetime(year=self.date['year'],
+                              month=self.date['start_month'],
+                              day=self.date['start_day'],
+                              hour=0)
+        if self.date['start_month'] == 5 and self.date['start_day'] == 1:
+            start_date += timedelta(hours=self.window_size)
         
+        # Because OBS files are stored in KST time,
+        # converted files are ended in 2020-07-31-14 UTC (2020-07-31-23 KST)
+        if (self.date['end_month'] == 7) and (self.date['end_day'] == 31):
+            end_date = datetime(year=self.date['year'],
+                                month=self.date['end_month'],
+                                day=self.date['end_day'],
+                                hour=14)
+        else:
+            end_date = datetime(year=self.date['year'],
+                                month=self.date['end_month'],
+                                day=self.date['end_day'],
+                                hour=23)
+
+        # Set input data list
+        data_dirs = sorted([os.path.join(root, d) for d in dirs \
+                            if d.isnumeric() and d <= end_date.strftime("%Y%m%d")])
         data_path_dict = defaultdict(list)
         pres_data_path_list = []
         unis_data_path_list = []
@@ -83,97 +91,18 @@ class NIMSDataset(Dataset):
                 if int(p.split('_')[4][8:10]) == self.model_utc:
                     data_path_dict[time].append((os.path.join(data_dir, p), os.path.join(data_dir, u)))
 
+        # Set target data list
         gt_dir = os.path.join(self.root_dir, '..', 'OBS')
         gt_path_list = os.listdir(gt_dir)
+        gt_path_list = sorted([os.path.join(gt_dir, f) for f in gt_path_list
+                               if '.npy' in f and
+                               f.split('_')[3][:-2] >= start_date.strftime("%Y%m%d%H") and
+                               f.split('_')[3][:-2] <= end_date.strftime("%Y%m%d%H")])
 
         if self.train:
-            gt_path_list = sorted([os.path.join(gt_dir, f) for f in gt_path_list
-                                   if '.npy' in f and
-                                   f.split('_')[3][:-2] < end_test_time.strftime("%Y%m%d%H")])
-                                   #f.split('_')[3][:-2] >= "2020060100"])
             gt_path_list = gt_path_list[self.window_size:]
 
-        else:
-            gt_path_list = sorted([os.path.join(gt_dir, f) \
-                                   for f in gt_path_list \
-                                   if f.endswith('.npy') and \
-                                   f.split('_')[3][:-2] >= start_test_time.strftime("%Y%m%d%H") and \
-                                   f.split('_')[3][:-2] <= end_test_time.strftime("%Y%m%d%H")])
-
         return data_path_dict, gt_path_list
-
-    def __start_end_test_time(self):
-        if isinstance(self.test_time, str):
-            if len(self.test_time) == 10:
-                # Consider one hour
-                start_test_time = datetime(year=int(self.test_time[0:4]),
-                                           month=int(self.test_time[4:6]),
-                                           day=int(self.test_time[6:8]),
-                                           hour=int(self.test_time[8:10]))
-                end_test_time = start_test_time
-            elif len(self.test_time) == 8:
-                # Consider one day
-                start_test_time = datetime(year=int(self.test_time[0:4]),
-                                           month=int(self.test_time[4:6]),
-                                           day=int(self.test_time[6:8]),
-                                           hour=0)
-                end_test_time = start_test_time + timedelta(hours=23)
-            elif len(self.test_time) == 6:
-                # Consider one month
-                year = int(self.test_time[0:4])
-                month = int(self.test_time[4:6])
-                if month == 5:
-                    start_test_time = datetime(year=year,
-                                               month=month,
-                                               day=1,
-                                               hour=self.window_size)
-                    end_test_time = datetime(year=year,
-                                             month=month,
-                                             day=MONTH_DAY[month],
-                                             hour=23)
-                elif month == 6:
-                    start_test_time = datetime(year=year,
-                                               month=month,
-                                               day=1,
-                                               hour=0)
-                    # Because original OBS files are stored in KST time,
-                    # the converted OBS npy file ends at 2020-06-30-14 UTC (2020-06-30-23 KST)
-                    end_test_time = start_test_time + timedelta(days=MONTH_DAY[int(self.test_time[4:6])] - 1,
-                                                                hours=14)
-            else:
-                raise ValueError
-
-        elif isinstance(self.test_time, list):
-            _start = self.test_time[0]
-            _end = self.test_time[1]
-            assert len(_start) == len(_end)
-
-            if len(_start) == 10:
-                start_test_time = datetime(year=int(_start[0:4]),
-                                           month=int(_start[4:6]),
-                                           day=int(_start[6:8]),
-                                           hour=int(_start[8:10]))
-
-                end_test_time = datetime(year=int(_end[0:4]),
-                                         month=int(_end[4:6]),
-                                         day=int(_end[6:8]),
-                                         hour=int(_end[8:10]))
-
-            elif len(_start) == 8:
-                start_test_time = datetime(year=int(_start[0:4]),
-                                           month=int(_start[4:6]),
-                                           day=int(_start[6:8]),
-                                           hour=0)
-
-                end_test_time = datetime(year=int(_end[0:4]),
-                                         month=int(_end[4:6]),
-                                         day=int(_end[6:8]),
-                                         hour=23)
-            
-            elif len(_start) == 6:
-                raise NotImplementedError
-
-        return start_test_time, end_test_time
 
     def __len__(self):
         return len(self._gt_path_list)

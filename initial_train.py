@@ -12,6 +12,10 @@ except:
     pass
 
 if __name__ == '__main__':
+    # Select start and end date for train
+    date = select_date()
+
+    # Parsing command line arguments
     args = parse_args()
 
     # Set device
@@ -31,7 +35,7 @@ if __name__ == '__main__':
                                      model_utc=args.model_utc,
                                      window_size=args.window_size,
                                      root_dir=args.dataset_dir,
-                                     test_time=args.test_time,
+                                     date=date,
                                      train=True,
                                      transform=ToTensor())
     
@@ -41,7 +45,7 @@ if __name__ == '__main__':
         print('[main] one images sample shape:', sample.shape)
 
     # Create a model and criterion
-    model, criterion, num_lat, num_lon = set_model(sample, device, args)
+    model, criterion = set_model(sample, device, args)
 
     if args.debug:
         # XXX: Currently, torchsummary doesn't run on ConvLSTM
@@ -74,11 +78,10 @@ if __name__ == '__main__':
     optimizer = set_optimizer(model, args)
 
     # Set experiment name and use it as process name if possible
-    experiment_name = set_experiment_name(args)
+    experiment_name = set_experiment_name(args, date)
 
     # Start training
     nims_trainer = NIMSTrainer(model, criterion, optimizer, device,
-                               train_loader, None,
-                               len(nims_train_dataset), 0,
-                               num_lat, num_lon, experiment_name, args)
+                               train_loader, None, len(nims_train_dataset), 0,
+                               experiment_name, args)
     nims_trainer.train()

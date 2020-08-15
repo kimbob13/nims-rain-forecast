@@ -8,10 +8,39 @@ from nims_trainer import NIMSTrainer
 import os
 
 if __name__ == '__main__':
+    # Parsing command line arguments
     args = parse_args()
 
     # Set device
     device = set_device(args)
+
+    # Specify trained model weight
+    weight_dir = os.path.join('./results', 'trained_model')
+    weight_list = sorted([f for f in os.listdir(weight_dir) if f.endswith('.pt')])
+    print('=' * 25, 'Which model do you want to test', '=' * 25)
+    for i, weight in enumerate(weight_list):
+        print('[{:2d}] {}'.format(i + 1, weight))
+    choice = int(input('\n> '))
+    chosen_info = torch.load(os.path.join(weight_dir, weight_list[choice - 1]), map_location=device)
+    print('Load weight...:', weight_list[choice - 1])
+    print()
+
+    # Select start and end date for train
+    date = select_date()
+
+    # Replace model related arguments to the train info
+    args.n_blocks = chosen_info['n_blocks']
+    args.start_channels = chosen_info['start_channels']
+    args.pos_dim = chosen_info['pos_dim']
+    args.cross_entropy_weight = chosen_info['cross_entropy_weight']
+    args.window_size = chosen_info['window_size']
+    args.model_utc = chosen_info['model_utc']
+    args.sampling_ratio = chosen_info['sampling_ratio']
+    args.num_epochs = chosen_info['num_epochs']
+    args.batch_size = chosen_info['batch_size']
+    args.optimizer = chosen_info['optimizer']
+    args.lr = chosen_info['lr']
+    args.custom_name = chosen_info['custom_name']
 
     # Fix the seed
     fix_seed(2020)
@@ -21,7 +50,7 @@ if __name__ == '__main__':
                                     model_utc=args.model_utc,
                                     window_size=args.window_size,
                                     root_dir=args.dataset_dir,
-                                    test_time=args.test_time,
+                                    date=date,
                                     train=False,
                                     transform=ToTensor())
 
@@ -31,7 +60,7 @@ if __name__ == '__main__':
         print('[main] one images sample shape:', sample.shape)
 
     # Create a model and criterion
-    model, criterion, num_lat, num_lon = set_model(sample, device, args, train=False)
+    model, criterion = set_model(sample, device, args, train=False)
 
     # Create dataloaders
     test_loader = DataLoader(nims_test_dataset, batch_size=args.batch_size,
@@ -42,19 +71,29 @@ if __name__ == '__main__':
     optimizer = set_optimizer(model, args)
 
     # Set experiment name and use it as process name if possible
-    experiment_name = set_experiment_name(args)
+    experiment_name = set_experiment_name(args, date)
 
     # Create necessary directory
-    create_results_dir(experiment_name)
+    create_results_dir()
+
+    # Create directory for eval data based on trained model name
+    weight_name = weight_list[choice - 1][:-3]
+    test_result_path = os.path.join('./results', 'eval', weight_name)
+    if not os.path.isdir(test_result_path):
+        os.mkdir(test_result_path)
+
+    # Create directory for currently tested date for chosen weight
+    current_test_date = '{:4d}{:02d}{:02d}-{:04d}{:02d}{:02d}'.format(date['year'], date['start_month'], date['start_day'],
+                                                                      date['year'], date['end_month'], date['end_day'])
+    current_test_path = os.path.join(test_result_path, current_test_date)
+    if not os.path.isdir(current_test_path):
+        os.mkdir(current_test_path)
 
     # Load trained model weight
-    weight_name = '_'.join(experiment_name.split('_')[:-1])
-    weight_path = os.path.join('./results', 'trained_model', weight_name + '.pt')
-    model.load_state_dict(torch.load(weight_path))
+    model.load_state_dict(chosen_info['model'])
 
     # Start testing
     nims_trainer = NIMSTrainer(model, criterion, optimizer, device,
-                               None, test_loader,
-                               0, len(nims_test_dataset),
-                               num_lat, num_lon, experiment_name, args)
+                               None, test_loader, 0, len(nims_test_dataset),
+                               experiment_name, args, current_test_path)
     nims_trainer.test()

@@ -19,20 +19,18 @@ def get_station_coordinate(stn_id):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='LDAPS Observations Converter')
-    parser.add_argument('--root_dir', default='/home/osilab12/ssd/OBS', type=str, help='root directory of dataset')
+    parser.add_argument('--root_dir', default='/home/osilab12/ssd', type=str, help='root directory of dataset')
     args = parser.parse_args()
 
     root_dir = args.root_dir
 
     KST = tz.gettz('Asia/Seoul')
-    obs_list = sorted(os.listdir(root_dir))
-    for obs_file in obs_list:
-        if obs_file.endswith('.npy'):
-            continue
-
-        print('[current_file]:', obs_file)
+    obs_txt_dir = os.path.join(root_dir, 'AWS')
+    obs_txt_list = sorted(os.listdir(obs_txt_dir))
+    for obs_txt in obs_txt_list:
+        print('[current_file]:',obs_txt)
         result_array = np.zeros([512, 512])
-        with open(os.path.join(root_dir, obs_file), 'r', encoding='euc-kr') as f:
+        with open(os.path.join(obs_txt_dir, obs_txt), 'r', encoding='euc-kr') as f:
             for line in f:
                 if line.startswith('#'):
                     continue
@@ -59,5 +57,5 @@ if __name__ == '__main__':
         file_name = 'AWS_HOUR_ALL_{}_{}.npy'.format(utc_str, utc_str)
 
         # Save npy file
-        with open(os.path.join(root_dir, file_name), 'wb') as npyf:
+        with open(os.path.join(root_dir, 'OBS', file_name), 'wb') as npyf:
             np.save(npyf, result_array)

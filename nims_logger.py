@@ -10,7 +10,8 @@ __all__ = ['NIMSLogger']
 
 class NIMSLogger:
     def __init__(self, loss, correct, binary_f1, macro_f1, micro_f1,
-                 hit, miss, fa, cn, stn_codi, experiment_name, num_classes=2):
+                 hit, miss, fa, cn, stn_codi,
+                 test_result_path=None, num_classes=2):
         """
         <Parameter>
         loss, correct, macro_f1, micro_f1 [bool]: whether to record each variable
@@ -24,7 +25,7 @@ class NIMSLogger:
         self.stn_codi = stn_codi
         self.num_stn = len(stn_codi)
         self.num_classes = num_classes
-        self.experiment_name = experiment_name
+        self.test_result_path = test_result_path
 
         self.num_update = 0
 
@@ -109,21 +110,22 @@ class NIMSLogger:
             save = False
             if target_hour == 23:
                 save = True
-            elif (target_month == 6) and (target_day == 30) and (target_hour == 14):
+            elif (target_month == 7) and (target_day == 31) and (target_hour == 14):
                 save = True
 
             self.daily_df[target_hour] = [(correct / self.num_stn) * 100, hit, miss, fa, cn]
             if save:
                 daily_t = self.daily_df.T
-                # There are only 14 hours for June 30 (because of UTC/KST)
-                if (target_month == 6) and (target_day == 30) and (target_hour == 14):
+                # There are only 14 hours for July 31 (because of UTC/KST)
+                if (target_month == 7) and (target_day == 31) and (target_hour == 14):
                     daily_t = daily_t.iloc[:15, :]
                 acc_mean = daily_t.iloc[:, 0].mean(axis=0)
                 daily_t = daily_t.append(daily_t.sum(axis=0), ignore_index=True)
                 daily_t.iloc[-1, 0] = acc_mean
 
-                save_dir = os.path.join('./results', 'log', self.experiment_name)
-                daily_t.to_csv(os.path.join(save_dir, '{:4d}{:02d}{:02d}.csv'.format(target_year, target_month, target_day)), index=False)
+                daily_t.to_csv(os.path.join(self.test_result_path,
+                                            '{:4d}{:02d}{:02d}.csv'.format(target_year, target_month, target_day)),
+                               index=False)
 
             # Update total test dataframe
             if str(target_day) in self.test_df:
@@ -179,6 +181,8 @@ class NIMSLogger:
             self._save_test_result()
 
         self._clear_one_target_stat(self.one_epoch_stat)
+
+        return pod, csi, bias
 
     @property
     def latest_stat(self):
@@ -284,7 +288,7 @@ class NIMSLogger:
         # Drop last columns (correct_update)
         self.test_df = self.test_df.iloc[:, :-1]
         
-        self.test_df.to_csv(os.path.join("./results", "log", self.experiment_name, 'total.csv'), index=False)
+        self.test_df.to_csv(os.path.join(self.test_result_path, 'total.csv'), index=False)
 
 class OneTargetStat:
     def __init__(self, loss, correct, binary_f1, macro_f1, micro_f1, hit, miss, fa, cn):
