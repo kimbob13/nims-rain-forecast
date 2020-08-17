@@ -2,6 +2,7 @@ import torch
 import torch.optim as optim
 from torch.utils.data import Subset
 import numpy as np
+import torchvision.transforms as transforms
 
 from model.unet_model import UNet, AttentionUNet
 from model.conv_lstm import EncoderForecaster
@@ -418,3 +419,168 @@ def set_experiment_name(args, date):
         pass
 
     return experiment_name
+
+def _get_min_max_values(dataset, indices, queue=None):
+    '''
+        Return min and max values of ldaps_inputs in train and test dataset
+            Args : NIMS_train_dataset, NIMS_test_dataset
+                (ldaps_input, gt, target_time_tensor = train_dataset[i])
+            Returns :
+                max_values : max_values [features, ]
+                min_values : min_values [features,]
+    '''
+    
+    max_values = None
+    min_values = None
+
+    # Check out training set
+    for i, idx in enumerate(indices):
+        # Pop out data
+        ldaps_input, _, _ = nims_train_dataset[idx]
+        ldaps_input = ldaps_input.numpy()
+        
+        # Get a shape
+        features, height, width = ldaps_input.shape
+
+        # Reshape the laps_input
+        features_reshape = np.reshape(ldaps_input, (features, -1))
+        
+        # Evaluate min / max on current data
+        temp_max = np.amax(features_reshape, axis=-1)
+        temp_min = np.amin(features_reshape, axis=-1)
+
+        # Edge case
+        if i == 0:
+            max_values = temp_max
+            min_values = temp_min
+
+        # Comparing max / min values
+        max_values = np.maximum(max_values, temp_max)
+        min_values = np.minimum(max_values, temp_min)
+
+    if queue:
+        queue.put((max_values, min_values))
+    else:
+        return max_values, min_values
+
+def get_min_max_values(dataset):
+    # Make indices list
+    indices = list(range(len(dataset)))
+
+    num_processes = 16
+    num_indices_per_process = len(indices) // num_processes
+
+    # Create queue
+    queues = []
+    for i in range(num_processes):
+        queues.append(Queue())
+
+    # Create processes
+    processes = []
+    for i in range(num_processes):
+        start_idx = i * num_indices_per_process
+        end_idx = start_idx + num_indices_per_process
+
+        if i == num_processes - 1:
+            processes.append(Process(target=_get_min_max_values,
+                                     args=(dataset, indices[start_idx:],
+                                           queues[i])))
+        else:
+            processes.append(Process(target=_get_min_max_values,
+                                     args=(dataset, indices[start_idx:end_idx],
+                                           queues[i])))
+
+    # Start processes
+    for i in range(num_processes):
+        processes[i].start()
+
+    # Get return value of each process
+    max_values, min_values = None, None
+    for i in tqdm(range(num_processes)):
+        proc_result = queues[i].get()
+        
+        if i == 0:
+            max_values = proc_result[0]
+            min_values = proc_result[1]
+        else:
+            max_values = np.maximum(max_values, proc_result[0])
+            min_values = np.minimum(min_values, proc_result[1])
+
+    # Join processes
+    for i in range(num_processes):
+        processes[i].join()
+
+    # Convert to PyTorch tensor
+    max_values = torch.tensor(max_values)
+    min_values = torch.tensor(min_values)
+
+    return max_values, min_values
+
+def get_min_max_normalization(max_values, min_values):
+    '''
+        Transform for min_max normalization
+            Args : max_values [features, ] and min_values [features, ]
+            Returns :
+                transform object (for broadcasting, permute is used.)
+    '''
+    
+    transform = transforms.Compose([
+        lambda x : x.permute(1, 2, 0),\
+        lambda x : (x - min_values) / (max_values - min_values),\
+        lambda x : x.permute(2, 0, 1)
+    ])
+
+    return transform
+
+
+
+if __name__ == "__main__":
+
+    args = parse_args()
+
+    from nims_dataset import NIMSDataset, ToTensor
+    
+    nims_train_dataset = NIMSDataset(model=args.model,
+                                     model_utc=args.model_utc,
+                                     window_size=args.window_size,
+                                     root_dir=args.dataset_dir,
+                                     test_time=args.test_time,
+                                     train=True,
+                                     transform=ToTensor())
+    '''
+    nims_test_dataset = NIMSDataset(model=args.model,
+                                    model_utc=args.model_utc,
+                                    window_size=args.window_size,
+                                    root_dir=args.dataset_dir,
+                                    test_time=args.test_time,
+                                    train=False,
+                                    transform=ToTensor())
+    '''
+
+    
+    
+    max_values, min_values = get_min_max_values(nims_train_dataset)
+    # max_values, min_values = get_min_max_values(nims_test_dataset)
+    
+    # Check shape
+    print('max_values shape:', max_values.shape)
+    print('min_values shape:', min_values.shape)
+
+    # Test
+    ldaps_input, _, _ = nims_train_dataset[0]
+
+    # Min-max transform
+    min_max_transform = get_min_max_normalization(max_values, min_values)
+
+    # Do transform
+    ldaps_input_normalized = min_max_transform(ldaps_input)
+
+    # Compare of this result
+    print('normalized:', ldaps_input_normalized[0, 0, 0])
+
+    # Compare of this result
+    print('original:', ldaps_input[0, 0, 0])
+
+    # Min
+    # print("max_value :", max_values[0,0,0])
+    # print("min_value : ", min_values[0,0,0])
