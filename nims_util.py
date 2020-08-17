@@ -24,7 +24,7 @@ except:
     pass
 
 __all__ = ['create_results_dir', 'select_date', 'parse_args', 'set_device', 'undersample',
-           'fix_seed', 'set_model', 'set_optimizer', 'set_experiment_name']
+           'fix_seed', 'set_model', 'set_optimizer', 'set_experiment_name', 'get_min_max_normalization']
 
 def create_results_dir():
     # Base results directory
@@ -177,6 +177,7 @@ def parse_args():
     #                                 Can be single number which specify how many variables to use \
     #                                 or list of variables name')
     nims_dataset.add_argument('--sampling_ratio', default=1.0, type=float, help='the ratio of undersampling')
+    nims_dataset.add_argument('--normalization', default=False, help='normalize input data', action='store_true')
 
     hyperparam = parser.add_argument_group('hyper-parameters')
     hyperparam.add_argument('--num_epochs', default=200, type=int, help='# of training epochs')
@@ -436,7 +437,7 @@ def _get_min_max_values(dataset, indices, queue=None):
     # Check out training set
     for i, idx in enumerate(indices):
         # Pop out data
-        ldaps_input, _, _ = nims_train_dataset[idx]
+        ldaps_input, _, _ = dataset[idx]
         ldaps_input = ldaps_input.numpy()
         
         # Get a shape
@@ -516,7 +517,7 @@ def get_min_max_values(dataset):
 
     return max_values, min_values
 
-def get_min_max_normalization(max_values, min_values):
+def get_min_max_normalization(dataset):
     '''
         Transform for min_max normalization
             Args : max_values [features, ] and min_values [features, ]
@@ -524,6 +525,12 @@ def get_min_max_normalization(max_values, min_values):
                 transform object (for broadcasting, permute is used.)
     '''
     
+    max_values, min_values = get_min_max_values(dataset)
+
+    # Check shape
+    # print('max_values shape:', max_values.shape)
+    # print('min_values shape:', min_values.shape)
+
     transform = transforms.Compose([
         lambda x : x.permute(1, 2, 0),\
         lambda x : (x - min_values) / (max_values - min_values),\
@@ -531,8 +538,6 @@ def get_min_max_normalization(max_values, min_values):
     ])
 
     return transform
-
-
 
 if __name__ == "__main__":
 
@@ -557,20 +562,11 @@ if __name__ == "__main__":
                                     transform=ToTensor())
     '''
 
-    
-    
-    max_values, min_values = get_min_max_values(nims_train_dataset)
-    # max_values, min_values = get_min_max_values(nims_test_dataset)
-    
-    # Check shape
-    print('max_values shape:', max_values.shape)
-    print('min_values shape:', min_values.shape)
-
     # Test
     ldaps_input, _, _ = nims_train_dataset[0]
 
     # Min-max transform
-    min_max_transform = get_min_max_normalization(max_values, min_values)
+    min_max_transform = get_min_max_normalization(nims_train_dataset)
 
     # Do transform
     ldaps_input_normalized = min_max_transform(ldaps_input)

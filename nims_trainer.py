@@ -11,7 +11,7 @@ __all__ = ['NIMSTrainer']
 class NIMSTrainer:
     def __init__(self, model, criterion, optimizer, device,
                  train_loader, test_loader, train_len, test_len,
-                 experiment_name, args, test_result_path=None):
+                 experiment_name, args, normalization=None, test_result_path=None):
         self.model = model
         self.criterion = criterion
         self.optimizer = optimizer
@@ -27,6 +27,7 @@ class NIMSTrainer:
 
         self.stn_codi = self._get_station_coordinate()
         self.experiment_name = experiment_name
+        self.normalization = normalization
 
         self.train_info = {'model': None,
                            'n_blocks': args.n_blocks,
@@ -112,6 +113,12 @@ class NIMSTrainer:
         for images, target, target_time in pbar:
             if self.model.name == 'unet' or \
                self.model.name == 'attn_unet':
+                if self.normalization:
+                    b, c, h, w = images.shape
+                    images = images.reshape((-1, h, w))
+                    images = self.normalization(images)
+                    images = images.reshape((b, c, h, w))
+                
                 images = images.type(torch.FloatTensor).to(self.device)
                 target = target.type(torch.LongTensor).to(self.device)
                 target_time = target_time.squeeze(0).tolist()

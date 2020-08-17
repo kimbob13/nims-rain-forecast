@@ -38,6 +38,14 @@ if __name__ == '__main__':
                                      date=date,
                                      train=True,
                                      transform=ToTensor())
+
+    # Get normalization transform
+    normalization = None
+    if args.normalization:
+        print('=' * 25, 'Normalization Start...', '=' * 25)
+        normalization = get_min_max_normalization(nims_train_dataset)
+        print('=' * 25, 'Normalization End!', '=' * 25)
+        print()
     
     # Get a sample for getting shape of each tensor
     sample, _, _ = nims_train_dataset[0]
@@ -83,5 +91,6 @@ if __name__ == '__main__':
     # Start training
     nims_trainer = NIMSTrainer(model, criterion, optimizer, device,
                                train_loader, None, len(nims_train_dataset), 0,
-                               experiment_name, args)
+                               experiment_name, args,
+                               normalization=normalization)
     nims_trainer.train()

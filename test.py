@@ -54,6 +54,14 @@ if __name__ == '__main__':
                                     train=False,
                                     transform=ToTensor())
 
+    # Get normalization transform
+    normalization = None
+    if args.normalization:
+        print('=' * 25, 'Normalization Start...', '=' * 25)
+        normalization = get_min_max_normalization(nims_test_dataset)
+        print('=' * 25, 'Normalization End!', '=' * 25)
+        print()
+
     # Get a sample for getting shape of each tensor
     sample, _, _ = nims_test_dataset[0]
     if args.debug:
@@ -95,5 +103,7 @@ if __name__ == '__main__':
     # Start testing
     nims_trainer = NIMSTrainer(model, criterion, optimizer, device,
                                None, test_loader, 0, len(nims_test_dataset),
-                               experiment_name, args, current_test_path)
+                               experiment_name, args,
+                               normalization=normalization,
+                               test_result_path=current_test_path)
     nims_trainer.test()

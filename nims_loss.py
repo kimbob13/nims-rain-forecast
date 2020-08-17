@@ -110,6 +110,6 @@ class NIMSCrossEntropyLoss(nn.Module):
                           binary_f1=binary_f1, hit=hit, miss=miss, fa=fa, cn=cn,
                           target_time=target_time, test=test)
 
-        #print('[cross_entropy] loss: {}'.format(loss.item()))
+        # print('[cross_entropy] loss: {}'.format(loss.item()))
 
         return loss
