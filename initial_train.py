@@ -43,9 +43,14 @@ if __name__ == '__main__':
     normalization = None
     if args.normalization:
         print('=' * 25, 'Normalization Start...', '=' * 25)
-        normalization = get_min_max_normalization(nims_train_dataset)
+        max_values, min_values = get_min_max_values(nims_train_dataset)
+        transform = get_min_max_normalization(max_values, min_values)
         print('=' * 25, 'Normalization End!', '=' * 25)
         print()
+
+        normalization = {'transform': transform,
+                         'max_values': max_values,
+                         'min_values': min_values}
     
     # Get a sample for getting shape of each tensor
     sample, _, _ = nims_train_dataset[0]

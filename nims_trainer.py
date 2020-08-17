@@ -42,6 +42,8 @@ class NIMSTrainer:
                            'optimizer': args.optimizer,
                            'lr': args.lr,
                            'custom_name': args.custom_name,
+                           'norm_max': normalization['max_values'] if normalization else None,
+                           'norm_min': normalization['min_values'] if normalization else None,
                            'best_loss': float("inf"),
                            'best_epoch': 0,     # epoch num at best_loss
                            'best_pod': 0.0,     # pod value at best_loss
@@ -116,7 +118,7 @@ class NIMSTrainer:
                 if self.normalization:
                     b, c, h, w = images.shape
                     images = images.reshape((-1, h, w))
-                    images = self.normalization(images)
+                    images = self.normalization['transform'](images)
                     images = images.reshape((b, c, h, w))
                 
                 images = images.type(torch.FloatTensor).to(self.device)

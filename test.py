@@ -54,13 +54,17 @@ if __name__ == '__main__':
                                     train=False,
                                     transform=ToTensor())
 
-    # Get normalization transform
+    # Get normalization transform base on min/max value from training procedure
     normalization = None
-    if args.normalization:
-        print('=' * 25, 'Normalization Start...', '=' * 25)
-        normalization = get_min_max_normalization(nims_test_dataset)
-        print('=' * 25, 'Normalization End!', '=' * 25)
-        print()
+    if ('norm_max' in chosen_info) and ('norm_min' in chosen_info) and \
+       (chosen_info['norm_max'] != None) and (chosen_info['norm_min'] != None):
+        max_values, min_values = chosen_info['norm_max'], chosen_info['norm_min']
+        transform = get_min_max_normalization(max_values, min_values)
+        print('max_values shape: {}, min_values shape:'.format(max_values.shape, min_values.shape))
+
+        normalization = {'transform': transform,
+                         'max_values': max_values,
+                         'min_values': min_values}
 
     # Get a sample for getting shape of each tensor
     sample, _, _ = nims_test_dataset[0]
