@@ -46,21 +46,40 @@ class NIMSCrossEntropyLoss(nn.Module):
 
     def _get_stat(self, preds, targets):
         _, pred_labels = preds.topk(1, dim=1, largest=True, sorted=True)
-        pred_labels = pred_labels.squeeze(1).detach().cpu().numpy().squeeze(axis=0)
-        target_labels = targets.data.detach().cpu().numpy().squeeze(axis=0)
+        b, _, num_stn = pred_labels.shape
+        assert (b, num_stn) == targets.shape
 
-        binary_f1 = f1_score(target_labels, pred_labels, zero_division=0)
+        correct = [0] * b
+        binary_f1 = [0] * b
+        hit = [0] * b
+        miss = [0] * b
+        fa = [0] * b
+        cn = [0] * b
 
-        """
-        [Confusion matrix]
-        - tp: Hit
-        - fn: Miss
-        - fp: False Alarm
-        - tn: Correct Negative
-        """
-        conf_mat = confusion_matrix(target_labels, pred_labels, labels=self.classes)
-        hit, miss, fa, cn = conf_mat[1, 1], conf_mat[1, 0], conf_mat[0, 1], conf_mat[0, 0]
-        correct = hit + cn
+        pred_labels = pred_labels.squeeze(1).detach().cpu().numpy()
+        target_labels = targets.data.detach().cpu().numpy()
+
+        for i in range(b):
+            pred, target = pred_labels[i], target_labels[i]
+            _binary_f1 = f1_score(target, pred, zero_division=0)
+
+            """
+            [Confusion matrix]
+            - tp: Hit
+            - fn: Miss
+            - fp: False Alarm
+            - tn: Correct Negative
+            """
+            conf_mat = confusion_matrix(target, pred, labels=self.classes)
+            _hit, _miss, _fa, _cn = conf_mat[1, 1], conf_mat[1, 0], conf_mat[0, 1], conf_mat[0, 0]
+            _correct = _hit + _cn
+
+            correct[i] = _correct
+            binary_f1[i] = _binary_f1
+            hit[i] = _hit
+            miss[i] = _miss
+            fa[i] = _fa
+            cn[i] = _cn
 
         return correct, binary_f1, hit, miss, fa, cn
 

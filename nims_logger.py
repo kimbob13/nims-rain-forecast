@@ -52,89 +52,91 @@ class NIMSLogger:
                 print("You don't specify the loss to be logged")
         if correct != None:
             try:
-                self.one_epoch_stat.correct += correct
-                self._latest_stat.correct = correct
+                self.one_epoch_stat.correct += sum(correct)
+                self._latest_stat.correct = sum(correct)
             except:
-                print("You don't specify the coorect to be logged")
+                print("You don't specify the correct to be logged")
         if binary_f1 != None:
             try:
-                self.one_epoch_stat.binary_f1 += binary_f1
-                self._latest_stat.binary_f1 = binary_f1
+                self.one_epoch_stat.binary_f1 += sum(binary_f1)
+                self._latest_stat.binary_f1 = sum(binary_f1)
             except:
                 print("You don't specify the binary_f1 to be logged")
         if macro_f1 != None:
             try:
-                self.one_epoch_stat.macro_f1 += macro_f1
-                self._latest_stat.macro_f1 = macro_f1
+                self.one_epoch_stat.macro_f1 += sum(macro_f1)
+                self._latest_stat.macro_f1 = sum(macro_f1)
             except:
                 print("You don't specify the macro_f1 to be logged")
         if micro_f1 != None:
             try:
-                self.one_epoch_stat.micro_f1 += micro_f1
-                self._latest_stat.micro_f1 = micro_f1
+                self.one_epoch_stat.micro_f1 += sum(micro_f1)
+                self._latest_stat.micro_f1 = sum(micro_f1)
             except:
                 print("You don't specify the micro_f1 to be logged")
         if hit != None:
             try:
-                self.one_epoch_stat.hit += hit
-                self._latest_stat.hit = hit
+                self.one_epoch_stat.hit += sum(hit)
+                self._latest_stat.hit = sum(hit)
             except:
                 print("You don't specify the hit to be logged")
         if miss != None:
             try:
-                self.one_epoch_stat.miss += miss           
-                self._latest_stat.miss = miss
+                self.one_epoch_stat.miss += sum(miss)
+                self._latest_stat.miss = sum(miss)
             except:
                 print("You don't specify the miss to be logged")
         if fa != None:
             try:
-                self.one_epoch_stat.fa += fa
-                self._latest_stat.fa = fa
+                self.one_epoch_stat.fa += sum(fa)
+                self._latest_stat.fa = sum(fa)
             except:
                 print("You don't specify the false alarm to be logged")
         if cn != None:
             try:
-                self.one_epoch_stat.cn += cn
-                self._latest_stat.cn = cn
+                self.one_epoch_stat.cn += sum(cn)
+                self._latest_stat.cn = sum(cn)
             except:
                 print("You don't specify the correct negative to be logged")
 
-        self.num_update += 1
+        num_batch = target_time.shape[0]
+        self.num_update += num_batch
 
         if test:
-            target_year = target_time[0]
-            target_month = target_time[1]
-            target_day = target_time[2]
-            target_hour = target_time[3]
+            for b in range(num_batch):
+                target_year = target_time[b][0]
+                target_month = target_time[b][1]
+                target_day = target_time[b][2]
+                target_hour = target_time[b][3]
 
-            save = False
-            if target_hour == 23:
-                save = True
-            elif (target_month == 7) and (target_day == 31) and (target_hour == 14):
-                save = True
+                save = False
+                if target_hour == 23:
+                    save = True
+                elif (target_month == 7) and (target_day == 31) and (target_hour == 14):
+                    save = True
 
-            self.daily_df[target_hour] = [(correct / self.num_stn) * 100, hit, miss, fa, cn]
-            if save:
-                daily_t = self.daily_df.T
-                # There are only 14 hours for July 31 (because of UTC/KST)
-                if (target_month == 7) and (target_day == 31) and (target_hour == 14):
-                    daily_t = daily_t.iloc[:15, :]
-                acc_mean = daily_t.iloc[:, 0].mean(axis=0)
-                daily_t = daily_t.append(daily_t.sum(axis=0), ignore_index=True)
-                daily_t.iloc[-1, 0] = acc_mean
+                self.daily_df[target_hour] = [(correct[b] / self.num_stn) * 100, hit[b], miss[b], fa[b], cn[b]]
+                if save:
+                    daily_t = self.daily_df.T
+                    # There are only 14 hours for July 31 (because of UTC/KST)
+                    if (target_month == 7) and (target_day == 31) and (target_hour == 14):
+                        daily_t = daily_t.iloc[:15, :]
+                    acc_mean = daily_t.iloc[:, 0].mean(axis=0)
+                    daily_t = daily_t.append(daily_t.sum(axis=0), ignore_index=True)
+                    daily_t.iloc[-1, 0] = acc_mean
 
-                daily_t.to_csv(os.path.join(self.test_result_path,
-                                            '{:4d}{:02d}{:02d}.csv'.format(target_year, target_month, target_day)),
-                               index=False)
+                    daily_t.to_csv(os.path.join(self.test_result_path,
+                                                '{:4d}{:02d}{:02d}.csv'.format(target_year, target_month, target_day)),
+                                   index=False)
 
-            # Update total test dataframe
-            if str(target_day) in self.test_df:
-                self.test_df[str(target_day)] += [correct, hit, miss, fa, cn, self.num_stn]
-            else:
-                self.test_df[str(target_day)] = [correct, hit, miss, fa, cn, self.num_stn]
+                # Update total test dataframe
+                if str(target_day) in self.test_df:
+                    self.test_df[str(target_day)] += [correct[b], hit[b], miss[b], fa[b], cn[b], self.num_stn]
+                else:
+                    self.test_df[str(target_day)] = [correct[b], hit[b], miss[b], fa[b], cn[b], self.num_stn]
 
-    def print_stat(self, dataset_len, test=False):
-        total_stn = dataset_len * self.num_stn
+    def print_stat(self, test=False):
+        total_stn = self.num_update * self.num_stn
 
         stat_str = ''
         
@@ -184,15 +186,27 @@ class NIMSLogger:
 
         return pod, csi, bias
 
-    @property
-    def latest_stat(self):
+    def latest_stat(self, target_time):
+        num_batch = target_time.shape[0]
+        batch_stn = self.num_stn * num_batch
         try:
-            accuracy = (self._latest_stat.correct / self.num_stn) * 100
+            accuracy = (self._latest_stat.correct / batch_stn) * 100
             assert accuracy <= 100.0
         except:
             pass
 
-        stat_str = ""
+        stat_str = '[{:4d}-{:02d}-{:02d}:{:02d}'.format(target_time[0][0],
+                                                        target_time[0][1],
+                                                        target_time[0][2],
+                                                        target_time[0][3])
+        if num_batch > 1:
+            stat_str += ' ~ {:4d}-{:02d}-{:02d}:{:02d}] '.format(target_time[-1][0],
+                                                                 target_time[-1][1],
+                                                                 target_time[-1][2],
+                                                                 target_time[-1][3])
+        else:
+            stat_str += '] '
+
         try:
             stat_str += "loss = {:.5f}".format(self._latest_stat.loss)
         except:
@@ -204,17 +218,17 @@ class NIMSLogger:
             pass
 
         try:
-            stat_str += ", f1 (binary) = {:.5f}".format(self._latest_stat.binary_f1)
+            stat_str += ", f1 (binary) = {:.5f}".format(self._latest_stat.binary_f1 / num_batch)
         except:
             pass
 
         try:
-            stat_str += ", f1 (macro) = {:.5f}".format(self._latest_stat.macro_f1)
+            stat_str += ", f1 (macro) = {:.5f}".format(self._latest_stat.macro_f1 / num_batch)
         except:
             pass
         
         try:
-            stat_str += ", f1 (micro) = {:.5f}".format(self._latest_stat.micro_f1)
+            stat_str += ", f1 (micro) = {:.5f}".format(self._latest_stat.micro_f1 / num_batch)
         except:
             pass
 

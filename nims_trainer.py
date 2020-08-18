@@ -83,7 +83,7 @@ class NIMSTrainer:
             # Run one epoch
             print('=' * 25, 'Epoch {} / {}'.format(epoch, self.num_epochs), '=' * 25)
             epoch_loss = self._epoch(self.train_loader, train=True)
-            pod, csi, bias = self.nims_logger.print_stat(self.train_len)
+            pod, csi, bias = self.nims_logger.print_stat()
 
             if epoch_loss < self.train_info['best_loss']:
                 self.train_info['model'] = self.model.state_dict()
@@ -108,7 +108,7 @@ class NIMSTrainer:
         with torch.no_grad():
             self._epoch(self.test_loader, train=False)
 
-        self.nims_logger.print_stat(self.test_len, test=True)
+        self.nims_logger.print_stat(test=True)
 
     def _epoch(self, data_loader, train):
         pbar = tqdm(data_loader)
@@ -123,7 +123,7 @@ class NIMSTrainer:
                 
                 images = images.type(torch.FloatTensor).to(self.device)
                 target = target.type(torch.LongTensor).to(self.device)
-                target_time = target_time.squeeze(0).tolist()
+                target_time = target_time.numpy()
             
             elif self.model.name == 'convlstm':
                 # Dataloader for ConvLSTM outputs images and target shape as NSCHW format.
@@ -141,6 +141,6 @@ class NIMSTrainer:
                 loss.backward()
                 self.optimizer.step()
 
-            pbar.set_description(self.nims_logger.latest_stat)
+            pbar.set_description(self.nims_logger.latest_stat(target_time))
 
         return loss.item()

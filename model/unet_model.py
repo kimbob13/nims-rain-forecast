@@ -11,7 +11,8 @@ __all__ = ['UNet', 'AttentionUNet']
 
 class UNet(nn.Module):
     def __init__(self, n_channels, n_classes, n_blocks=7,
-                 start_channels=16, pos_dim=0, bilinear=True):
+                 start_channels=16, pos_dim=0, bilinear=True,
+                 batch_size=1):
         super(UNet, self).__init__()
 
         self.n_blocks = n_blocks
@@ -39,7 +40,7 @@ class UNet(nn.Module):
 
         self.learnable_pos = None
         if pos_dim > 0:
-            self.learnable_pos = nn.Parameter(torch.zeros(1, pos_dim, 512, 512), requires_grad=True)
+            self.learnable_pos = nn.Parameter(torch.zeros(batch_size, pos_dim, 512, 512), requires_grad=True)
 
     @property
     def name(self):
@@ -69,16 +70,14 @@ class UNet(nn.Module):
         for i, up_block in enumerate(self.up):
             out = up_block(out, long_residual[-1 * (i + 2)])
 
-        # if self.learnable_pos != None:
-        #     out = torch.cat([out, self.learnable_pos], dim=1)
-
         logit = self.outc(out)
 
         return logit
 
 class AttentionUNet(nn.Module):
     def __init__(self, n_channels, n_classes, n_blocks=7,
-                 start_channels=16, bilinear=True):
+                 start_channels=16, bilinear=True,
+                 batch_size=1):
         super(AttentionUNet, self).__init__()
 
         self.n_blocks = n_blocks
@@ -101,10 +100,13 @@ class AttentionUNet(nn.Module):
         for i in range(n_blocks, 0, -1):
             cur_in_ch = start_channels * (2 ** i)
             self.up.append(Up(cur_in_ch, (cur_in_ch // 2), bilinear, attention=True))
-        # self.up.append(Up(start_channels * 2, start_channels, bilinear))
 
         # Create out convolution block
         self.outc = OutConv(start_channels, n_classes)
+
+        self.learnable_pos = None
+        if pos_dim > 0:
+            self.learnable_pos = nn.Parameter(torch.zeros(batch_size, pos_dim, 512, 512), requires_grad=True)
 
     @property
     def name(self):
@@ -112,6 +114,9 @@ class AttentionUNet(nn.Module):
 
     def forward(self, x):
         logits = []
+
+        if self.learnable_pos != None:
+            x = torch.cat([x, self.learnable_pos], dim=1)
 
         out = self.inc(x)
 

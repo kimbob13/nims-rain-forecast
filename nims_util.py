@@ -164,8 +164,8 @@ def parse_args():
     common.add_argument('--debug', help='turn on debugging print', action='store_true')
 
     unet = parser.add_argument_group('unet related')
-    unet.add_argument('--n_blocks', default=6, type=int, help='# of blocks in Down and Up phase')
-    unet.add_argument('--start_channels', default=64, type=int, help='# of channels after first block of unet')
+    unet.add_argument('--n_blocks', default=7, type=int, help='# of blocks in Down and Up phase')
+    unet.add_argument('--start_channels', default=32, type=int, help='# of channels after first block of unet')
     unet.add_argument('--pos_dim', default=0, type=int, help="# of learnable position channels")
     unet.add_argument('--cross_entropy_weight', default=False, help='use weight for cross entropy loss', action='store_true')
 
@@ -304,21 +304,20 @@ def set_model(sample, device, args, train=True):
                          n_classes=num_classes,
                          n_blocks=args.n_blocks,
                          start_channels=args.start_channels,
-                         pos_dim=args.pos_dim)
+                         pos_dim=args.pos_dim,
+                         batch_size=args.batch_size)
 
         elif args.model == 'attn_unet':
             model = AttentionUNet(n_channels=sample.shape[0],
                                   n_classes=num_classes,
                                   n_blocks=args.n_blocks,
                                   start_channels=args.start_channels,
-                                  pos_dim=args.pos_dim)
+                                  pos_dim=args.pos_dim,
+                                  batch_size=args.batch_size)
 
         criterion = NIMSCrossEntropyLoss(device, num_classes=num_classes,
                                          use_weights=args.cross_entropy_weight,
                                          train=train)
-
-        num_lat = sample.shape[1] # the number of latitudes (originally 253)
-        num_lon = sample.shape[2] # the number of longitudes (originally 149)
 
     elif args.model == 'convlstm':
         assert args.window_size == args.target_num, \
@@ -330,9 +329,6 @@ def set_model(sample, device, args, train=True):
                                   seq_len=args.window_size,
                                   device=device)
         criterion = MSELoss()
-
-        num_lat = sample.shape[2] # the number of latitudes (originally 253)
-        num_lon = sample.shape[3] # the number of longitudes (originally 149)
 
     return model, criterion
 
@@ -558,12 +554,12 @@ if __name__ == "__main__":
     # Test
     ldaps_input, _, _ = nims_train_dataset[0]
 
-    # Check shape
-    # print('max_values shape:', max_values.shape)
-    # print('min_values shape:', min_values.shape)
-
     # Get min/max values
     max_values, min_values = get_min_max_values(nims_train_dataset)
+
+    # Check shape
+    print('max_values shape:', max_values.shape)
+    print('min_values shape:', min_values.shape)
 
     # Min-max transform
     min_max_transform = get_min_max_normalization(max_values, min_values)

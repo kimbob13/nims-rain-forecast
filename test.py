@@ -58,13 +58,17 @@ if __name__ == '__main__':
     normalization = None
     if ('norm_max' in chosen_info) and ('norm_min' in chosen_info) and \
        (chosen_info['norm_max'] != None) and (chosen_info['norm_min'] != None):
-        max_values, min_values = chosen_info['norm_max'], chosen_info['norm_min']
+        max_values = chosen_info['norm_max'].to(torch.device('cpu'))
+        min_values = chosen_info['norm_min'].to(torch.device('cpu'))
         transform = get_min_max_normalization(max_values, min_values)
-        print('max_values shape: {}, min_values shape:'.format(max_values.shape, min_values.shape))
+
+        print('=' * 25, 'Normalization is enabled!', '=' * 25)
+        print('max_values shape: {}, min_values shape: {}\n'.format(max_values.shape, min_values.shape))
 
         normalization = {'transform': transform,
                          'max_values': max_values,
                          'min_values': min_values}
+        args.normalization = True
 
     # Get a sample for getting shape of each tensor
     sample, _, _ = nims_test_dataset[0]

@@ -44,7 +44,7 @@ class NIMSDataset(Dataset):
         return self._gt_path_list
         
     def __set_path(self):
-        root, dirs, _ = next(os.walk(self.root_dir, topdown=True))
+        root, dirs, _ = next(os.walk(os.path.join(self.root_dir, str(self.date['year'])), topdown=True))
         
         # Make datetime object for start and end date
         start_date = datetime(year=self.date['year'],
@@ -100,9 +100,6 @@ class NIMSDataset(Dataset):
                                if '.npy' in f and
                                f.split('_')[3][:-2] >= start_date.strftime("%Y%m%d%H") and
                                f.split('_')[3][:-2] <= end_date.strftime("%Y%m%d%H")])
-
-        if self.train:
-            gt_path_list = gt_path_list[self.window_size:]
 
         return data_path_dict, gt_path_list
 
@@ -174,12 +171,6 @@ class NIMSDataset(Dataset):
 
         return ldaps_input, gt, target_time_tensor
 
-    def get_real_gt(self, idx):
-        gt_path = self._gt_path_list[idx]
-        real_gt = np.load(gt_path)
-
-        return real_gt
-
     def _merge_pres_unis(self, data_list, pres_idx_list=None, unis_idx_list=None):
         p, u = sorted(data_list)[-1]
         pres = np.load(p).reshape(512, 512, 20).transpose()
@@ -191,6 +182,12 @@ class NIMSDataset(Dataset):
             unis = unis[unis_idx_list,:,:]
 
         return np.concatenate((pres, unis), axis=0)
+
+    def get_real_gt(self, idx):
+        gt_path = self._gt_path_list[idx]
+        real_gt = np.load(gt_path)
+
+        return real_gt
     
 class ToTensor(object):
     def __call__(self, images):
