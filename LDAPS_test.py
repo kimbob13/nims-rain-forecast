@@ -5,10 +5,13 @@ from sklearn.utils.class_weight import compute_class_weight
 
 from nims_logger import NIMSLogger
 from nims_util import create_results_dir
+from nims_dataset import NIMSDataset
 
 from tqdm import tqdm
 import os
 import argparse
+
+import datetime
 
 try:
     import setproctitle
@@ -33,7 +36,7 @@ def get_stat(pred, target):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='NIMS rainfall data prediction')
-    parser.add_argument('--dataset_dir', default='/home/osilab12/ssd/OBS', type=str, help='root directory of dataset')
+    parser.add_argument('--dataset_dir', default='/home/osilab12/ssd/OBS/2020', type=str, help='root directory of dataset')
     #parser.add_argument('--test_time', default=None, type=str, help='date of test')
     
     parser.add_argument('--test_time_start', default='20200601', type=str, help='start date of test')
@@ -42,34 +45,31 @@ if __name__ == '__main__':
     
     if int(args.test_time_start) > int(args.test_time_end):
         print("End test time is earlier than start test time, [set] end test time = start test time")
+        args.test_time_end = args.test_time_start    
 
-    codi_aws_df = pd.read_csv('./codi_ldps_aws/codi_ldps_aws_512.csv')
-    dii_info = np.array(codi_aws_df['dii']) - 1
-    stn_codi = np.array([(dii // 512, dii % 512) for dii in dii_info])
-
-    experiment_name = 'nims-persistence_{}'.format(args.test_time[2:])
-    try:
-        setproctitle.setproctitle(experiment_name)
-    except:
-        pass
-    create_results_dir()
-
-    test_result_path = os.path.join('./results', 'eval', experiment_name)
+    LDAPS_root_dir = '/home/osilab12/hdd2/NIMS_LDPS'
+    test_result_path = os.path.join('./results', 'eval', args.test_time_start[0:4])
     if not os.path.isdir(test_result_path):
         os.mkdir(test_result_path)
+    
+    #time range
+    test_time_start = datetime.datetime.strptime(args.test_time_start, "%Y%m%d")
+    test_time_end = datetime.datetime.strptime(args.test_time_end, "%Y%m%d")
+    time_delta = test_time_end - test_time_start
 
-    nims_logger = NIMSLogger(loss=False, correct=True, binary_f1=True,
+    nims_logger = NIMSLogger(loss=False, correct=False, binary_f1=False,
                              macro_f1=False, micro_f1=False,
                              hit=True, miss=True, fa=True, cn=True,
                              stn_codi=stn_codi,
                              test_result_path=test_result_path)
 
+    #get ground truth data for test time
     gt_dir = args.dataset_dir
     gt_path_list = os.listdir(gt_dir)
     gt_path_list = sorted([os.path.join(gt_dir, f) \
                            for f in gt_path_list \
                            if f.endswith('.npy') and \
-                           f.split('_')[3][:6] == args.test_time])
+                           (test_time_end - datetime.datetime.strptime(f.split('_')[3][:8], "%Y%m%d")).days <= time_delta.days]) # when recorded data is located between test time start and end
     dataset_len = len(gt_path_list)
 
     pbar = tqdm(range(dataset_len - 1))
