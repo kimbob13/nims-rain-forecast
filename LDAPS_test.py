@@ -35,6 +35,9 @@ def get_stat(pred, target):
     return correct, binary_f1, hit, miss, fa, cn
 
 if __name__ == '__main__':
+    
+    ### set argument
+
     parser = argparse.ArgumentParser(description='NIMS rainfall data prediction')
     parser.add_argument('--dataset_dir', default='/home/osilab12/ssd/OBS/2020', type=str, help='root directory of dataset')
     #parser.add_argument('--test_time', default=None, type=str, help='date of test')
@@ -46,6 +49,8 @@ if __name__ == '__main__':
     if int(args.test_time_start) > int(args.test_time_end):
         print("End test time is earlier than start test time, [set] end test time = start test time")
         args.test_time_end = args.test_time_start    
+
+    ### set LDAPS dir path
 
     LDAPS_root_dir = '/home/osilab12/hdd2/NIMS_LDPS'
     test_result_path = os.path.join('./results', 'eval', args.test_time_start[0:4])
@@ -63,7 +68,8 @@ if __name__ == '__main__':
                              stn_codi=stn_codi,
                              test_result_path=test_result_path)
 
-    #get ground truth data for test time
+    ### get ground truth data for test time
+    
     gt_dir = args.dataset_dir
     gt_path_list = os.listdir(gt_dir)
     gt_path_list = sorted([os.path.join(gt_dir, f) \
@@ -72,8 +78,22 @@ if __name__ == '__main__':
                            (test_time_end - datetime.datetime.strptime(f.split('_')[3][:8], "%Y%m%d")).days <= time_delta.days]) # when recorded data is located between test time start and end
     dataset_len = len(gt_path_list)
 
-    pbar = tqdm(range(dataset_len - 1))
+    ### get LDPS data (LCPCP)
+
+    pbar = tqdm(range(dataset_len))
     for i in pbar:
+        target_time = gt_path_list[i].split('/')[-1].split('_')[3][:-2]
+        if not # target_time in NIMS_LDPS dataset:
+            continue
+
+        ### preprocessing data
+
+        ### get confusion matrix
+
+        ### update logger
+
+        target_data = np.load(gt_path_list[i])
+
         today = np.load(gt_path_list[i])
         tomorrow = np.load(gt_path_list[i + 1])
         target_time = gt_path_list[i + 1].split('/')[-1].split('_')[3][:-2]
