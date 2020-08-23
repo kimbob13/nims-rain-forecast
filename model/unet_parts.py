@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-__all__ = ['BasicConv', 'DoubleConv', 'Down', 'Up', 'OutConv', 'AttentionGate']
+__all__ = ['BasicConv', 'Down', 'Up', 'OutConv']
 
 class BasicConv(nn.Module):
     def __init__(self, in_channels, out_channels):
@@ -46,8 +46,10 @@ class DoubleConv(nn.Module):
     In downsampling, first convolution is changed to MaxPool
     """
     def __init__(self, in_channels, out_channels,
-                 mid_channels=None, down=True):
+                 mid_channels=None, down=True, dropout=False):
         super(DoubleConv, self).__init__()
+
+        drop_p = 0.2
 
         # Main block
         self.double_conv = nn.Sequential()
@@ -59,6 +61,9 @@ class DoubleConv(nn.Module):
             self.double_conv.add_module("down_relu1",
                                         nn.LeakyReLU(inplace=True))
             self.double_conv.add_module("down_maxpool1", nn.MaxPool2d(2))
+            if dropout:
+                self.double_conv.add_module("down_dropout1",
+                                            nn.Dropout(p=drop_p))
             self.double_conv.add_module("down_bn2",
                                         nn.BatchNorm2d(in_channels))
             self.double_conv.add_module("down_relu2",
@@ -66,6 +71,9 @@ class DoubleConv(nn.Module):
             self.double_conv.add_module("down_conv2",
                                         nn.Conv2d(in_channels, out_channels,
                                                   kernel_size=3, padding=1))
+            if dropout:
+                self.double_conv.add_module("down_dropout2",
+                                            nn.Dropout(p=drop_p))
             self.residual.add_module("down_res_conv",
                                     nn.Conv2d(in_channels, out_channels,
                                             kernel_size=1, stride=1,
@@ -76,6 +84,10 @@ class DoubleConv(nn.Module):
         else:
             if not mid_channels:
                 mid_channels = out_channels
+
+            if dropout:
+                self.double_conv.add_module("up_dropout1",
+                                            nn.Dropout(p=drop_p))
 
             self.double_conv.add_module("up_bn1", nn.BatchNorm2d(in_channels))
             self.double_conv.add_module("up_lrelu1",
@@ -109,9 +121,9 @@ class DoubleConv(nn.Module):
 class Down(nn.Module):
     """Downscaling with maxpool then double conv"""
 
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, in_channels, out_channels, dropout=False):
         super(Down, self).__init__()
-        self.conv = DoubleConv(in_channels, out_channels, down=True)
+        self.conv = DoubleConv(in_channels, out_channels, down=True, dropout=dropout)
 
     def forward(self, x):
         return self.conv(x)
@@ -119,7 +131,7 @@ class Down(nn.Module):
 class Up(nn.Module):
     """Upscaling then double conv"""
 
-    def __init__(self, in_channels, out_channels, bilinear=True, attention=False):
+    def __init__(self, in_channels, out_channels, bilinear=True, dropout=False, attention=False):
         super(Up, self).__init__()
 
         # if bilinear, use the normal convolutions to reduce the number of channels
@@ -129,11 +141,10 @@ class Up(nn.Module):
                                                        mode='bilinear',
                                                        align_corners=True))
         else:
-            self.up.add_module('upsample', nn.ConvTranspose2d(in_channels // 2,
-                                                              in_channels // 2,
+            self.up.add_module('upsample', nn.ConvTranspose2d(in_channels,
+                                                              in_channels,
                                                               kernel_size=2,
                                                               stride=2))
-            # self.conv = DoubleConv(in_channels, out_channels, down=False)
 
         self.up.add_module('upsample_bn', nn.BatchNorm2d(in_channels))
         self.up.add_module('upsample_act', nn.LeakyReLU(inplace=True))
@@ -147,7 +158,8 @@ class Up(nn.Module):
 
         
         self.double_conv = DoubleConv(in_channels, out_channels,
-                                      mid_channels=(in_channels // 2), down=False)
+                                      mid_channels=(in_channels // 2), down=False,
+                                      dropout=dropout)
 
     def forward(self, x, x_res):
         # Upsample

@@ -79,11 +79,14 @@ class NIMSTrainer:
 
         train_info_path = os.path.join('./results', 'trained_model',
                                        self.experiment_name + '.pt')
+        train_log_path = os.path.join('./results', 'log', self.experiment_name + '.csv')
+        train_log = pd.DataFrame(index=list(range(1, self.num_epochs + 1)), columns=['loss', 'pod', 'csi', 'bias'])
+
         for epoch in range(1, self.num_epochs + 1):
             # Run one epoch
             print('=' * 25, 'Epoch {} / {}'.format(epoch, self.num_epochs), '=' * 25)
-            epoch_loss = self._epoch(self.train_loader, train=True)
-            pod, csi, bias = self.nims_logger.print_stat()
+            self._epoch(self.train_loader, train=True)
+            epoch_loss, pod, csi, bias = self.nims_logger.print_stat()
 
             if epoch_loss < self.train_info['best_loss']:
                 self.train_info['model'] = self.model.state_dict()
@@ -97,6 +100,10 @@ class NIMSTrainer:
                 if os.path.isfile(train_info_path):
                     os.remove(train_info_path)
                 torch.save(self.train_info, train_info_path)
+
+            train_log.loc[epoch] = [epoch_loss, pod, csi, bias]
+
+        train_log.to_csv(train_log_path, index=False)
 
     def test(self):
         # self.model.eval()
@@ -142,5 +149,3 @@ class NIMSTrainer:
                 self.optimizer.step()
 
             pbar.set_description(self.nims_logger.latest_stat(target_time))
-
-        return loss.item()

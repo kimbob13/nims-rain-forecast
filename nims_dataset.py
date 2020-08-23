@@ -51,21 +51,18 @@ class NIMSDataset(Dataset):
                               month=self.date['start_month'],
                               day=self.date['start_day'],
                               hour=0)
-        if self.date['start_month'] == 5 and self.date['start_day'] == 1:
-            start_date += timedelta(hours=self.window_size)
-        
-        # Because OBS files are stored in KST time,
-        # converted files are ended in 2020-07-31-14 UTC (2020-07-31-23 KST)
-        if (self.date['end_month'] == 7) and (self.date['end_day'] == 31):
-            end_date = datetime(year=self.date['year'],
-                                month=self.date['end_month'],
-                                day=self.date['end_day'],
-                                hour=14)
-        else:
-            end_date = datetime(year=self.date['year'],
-                                month=self.date['end_month'],
-                                day=self.date['end_day'],
-                                hour=23)
+        if self.date['year'] == 2019:
+            if self.date['start_month'] == 6 and self.date['start_day'] == 1:
+                start_date += timedelta(hours=self.window_size)
+
+        elif self.date['year'] == 2020:
+            if self.date['start_month'] == 5 and self.date['start_day'] == 1:
+                start_date += timedelta(hours=self.window_size)
+            
+        end_date = datetime(year=self.date['year'],
+                            month=self.date['end_month'],
+                            day=self.date['end_day'],
+                            hour=23)
 
         # Set input data list
         data_dirs = sorted([os.path.join(root, d) for d in dirs \
@@ -94,10 +91,9 @@ class NIMSDataset(Dataset):
                     data_path_dict[time].append((os.path.join(data_dir, p), os.path.join(data_dir, u)))
 
         # Set target data list
-        gt_dir = os.path.join(self.root_dir, '..', 'OBS')
+        gt_dir = os.path.join(self.root_dir, '..', 'OBS', str(self.date['year']))
         gt_path_list = os.listdir(gt_dir)
-        gt_path_list = sorted([os.path.join(gt_dir, f) for f in gt_path_list
-                               if '.npy' in f and
+        gt_path_list = sorted([os.path.join(gt_dir, f) for f in gt_path_list if
                                f.split('_')[3][:-2] >= start_date.strftime("%Y%m%d%H") and
                                f.split('_')[3][:-2] <= end_date.strftime("%Y%m%d%H")])
 
@@ -148,7 +144,8 @@ class NIMSDataset(Dataset):
                                                       pres_idx_list=[4, 5, 6, 7, 8, 9],
                                                       unis_idx_list=[0, 2, 3, 5, 6, 7]))
             
-        if self.model == 'unet':
+        if self.model == 'unet' or \
+           self.model == 'attn_unet':
             for idx, l in enumerate(_ldaps_input):
                 if idx == 0:
                     ldaps_input = l

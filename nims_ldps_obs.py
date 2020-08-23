@@ -5,7 +5,9 @@ from dateutil import tz
 
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
+from nims_util import select_date
 
 codi_aws_df = pd.read_csv('./codi_ldps_aws/codi_ldps_aws_512.csv')
 
@@ -20,15 +22,21 @@ def get_station_coordinate(stn_id):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='LDAPS Observations Converter')
     parser.add_argument('--root_dir', default='/home/osilab12/ssd', type=str, help='root directory of dataset')
+    
     args = parser.parse_args()
 
+    date = select_date()
     root_dir = args.root_dir
 
     KST = tz.gettz('Asia/Seoul')
-    obs_txt_dir = os.path.join(root_dir, 'AWS')
-    obs_txt_list = sorted(os.listdir(obs_txt_dir))
-    for obs_txt in obs_txt_list:
-        print('[current_file]:',obs_txt)
+    obs_txt_dir = os.path.join(root_dir, 'AWS', str(date['year']))  
+    obs_txt_list = sorted([f for f in os.listdir(obs_txt_dir) if
+                           f.split('_')[3][:-4] >= '{:4d}{:02d}{:02d}'.format(date['year'], date['start_month'], date['start_day']) and
+                           f.split('_')[3][:-4] <= '{:4d}{:02d}{:02d}'.format(date['year'], date['end_month'], date['end_day'])])
+    pbar = tqdm(obs_txt_list)
+    for obs_txt in pbar:
+        pbar.set_description('[current_file] {}'.format(obs_txt))
+
         result_array = np.zeros([512, 512])
         with open(os.path.join(obs_txt_dir, obs_txt), 'r', encoding='euc-kr') as f:
             for line in f:
@@ -57,5 +65,5 @@ if __name__ == '__main__':
         file_name = 'AWS_HOUR_ALL_{}_{}.npy'.format(utc_str, utc_str)
 
         # Save npy file
-        with open(os.path.join(root_dir, 'OBS', file_name), 'wb') as npyf:
+        with open(os.path.join(root_dir, 'OBS', str(date['year']), file_name), 'wb') as npyf:
             np.save(npyf, result_array)

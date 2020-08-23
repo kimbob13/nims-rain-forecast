@@ -113,8 +113,6 @@ class NIMSCrossEntropyLoss(nn.Module):
 
         # print('[cross_entropy] preds shape:', preds.shape)
         # print('[cross_entropy] targets shape:', targets.shape)
-        # print('[cross_entropy] correct: {}, totalnum: {}'
-        #      .format(correct, preds.shape[0] * preds.shape[2] * preds.shape[3]))
 
         stn_preds = preds[:, :, stn_codi[:, 0], stn_codi[:, 1]]
         stn_targets = targets[:, stn_codi[:, 0], stn_codi[:, 1]]

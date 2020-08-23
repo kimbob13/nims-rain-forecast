@@ -112,14 +112,14 @@ class NIMSLogger:
                 save = False
                 if target_hour == 23:
                     save = True
-                elif (target_month == 7) and (target_day == 31) and (target_hour == 14):
+                elif (target_month == 8) and (target_day == 31) and (target_hour == 14):
                     save = True
 
                 self.daily_df[target_hour] = [(correct[b] / self.num_stn) * 100, hit[b], miss[b], fa[b], cn[b]]
                 if save:
                     daily_t = self.daily_df.T
                     # There are only 14 hours for July 31 (because of UTC/KST)
-                    if (target_month == 7) and (target_day == 31) and (target_hour == 14):
+                    if (target_month == 8) and (target_day == 31) and (target_hour == 14):
                         daily_t = daily_t.iloc[:15, :]
                     acc_mean = daily_t.iloc[:, 0].mean(axis=0)
                     daily_t = daily_t.append(daily_t.sum(axis=0), ignore_index=True)
@@ -141,7 +141,8 @@ class NIMSLogger:
         stat_str = ''
         
         try:
-            stat_str += "[{:12s}] {:.5f}\n".format('loss', self.one_epoch_stat.loss / self.num_update)
+            epoch_loss = self.one_epoch_stat.loss / self.num_update
+            stat_str += "[{:12s}] {:.5f}\n".format('loss', epoch_loss)
         except:
             pass
 
@@ -184,7 +185,7 @@ class NIMSLogger:
 
         self._clear_one_target_stat(self.one_epoch_stat)
 
-        return pod, csi, bias
+        return epoch_loss, pod, csi, bias
 
     def latest_stat(self, target_time):
         num_batch = target_time.shape[0]

@@ -23,7 +23,7 @@ class UNet(nn.Module):
         self.down = nn.ModuleList([])
         for i in range(n_blocks):
             cur_in_ch = start_channels * (2 ** i)
-            self.down.append(Down(cur_in_ch, cur_in_ch * 2))
+            self.down.append(Down(cur_in_ch, cur_in_ch * 2, dropout=False))
 
         # Create bridge block
         bridge_channels = start_channels * (2 ** n_blocks)
@@ -33,7 +33,7 @@ class UNet(nn.Module):
         self.up = nn.ModuleList([])
         for i in range(n_blocks, 0, -1):
             cur_in_ch = start_channels * (2 ** i)
-            self.up.append(Up(cur_in_ch, (cur_in_ch // 2), bilinear))
+            self.up.append(Up(cur_in_ch, (cur_in_ch // 2), bilinear=bilinear, dropout=False))
 
         # Create out convolution block
         self.outc = OutConv(start_channels, n_classes)
@@ -76,14 +76,14 @@ class UNet(nn.Module):
 
 class AttentionUNet(nn.Module):
     def __init__(self, n_channels, n_classes, n_blocks=7,
-                 start_channels=16, bilinear=True,
+                 start_channels=16, pos_dim=0, bilinear=True,
                  batch_size=1):
         super(AttentionUNet, self).__init__()
 
         self.n_blocks = n_blocks
 
         factor = 2 if bilinear else 1
-        self.inc = BasicConv(n_channels, start_channels)
+        self.inc = BasicConv(n_channels + pos_dim, start_channels)
 
         # Create down blocks
         self.down = nn.ModuleList([])
