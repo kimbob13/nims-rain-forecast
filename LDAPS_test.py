@@ -40,27 +40,25 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='NIMS rainfall data prediction')
     parser.add_argument('--dataset_dir', default='/home/osilab12/ssd/OBS/2020', type=str, help='root directory of dataset')
-    #parser.add_argument('--test_time', default=None, type=str, help='date of test')
-    
-    parser.add_argument('--test_time_start', default='20200601', type=str, help='start date of test')
-    parser.add_argument('--test_time_end', default=None, type=str, help='end date of test')
+    parser.add_argument('--test_time', default='20200601', type=str, help='date of test')
+    #parser.add_argument('--test_time_start', default='20200601', type=str, help='start date of test')
+    #parser.add_argument('--test_time_end', default=None, type=str, help='end date of test')
     args = parser.parse_args()
     
-    if int(args.test_time_start) > int(args.test_time_end):
-        print("End test time is earlier than start test time, [set] end test time = start test time")
-        args.test_time_end = args.test_time_start    
+    #if int(args.test_time_start) > int(args.test_time_end):
+    #    print("End test time is earlier than start test time, [set] end test time = start test time")
+    #    args.test_time_end = args.test_time_start    
 
     ### set LDAPS dir path
 
     LDAPS_root_dir = '/home/osilab12/hdd2/NIMS_LDPS'
-    test_result_path = os.path.join('./results', 'eval', args.test_time_start[0:4])
+    test_result_path = os.path.join('./results', 'eval', args.test_time[0:4])
     if not os.path.isdir(test_result_path):
         os.mkdir(test_result_path)
     
-    #time range
-    test_time_start = datetime.datetime.strptime(args.test_time_start, "%Y%m%d")
-    test_time_end = datetime.datetime.strptime(args.test_time_end, "%Y%m%d")
-    time_delta = test_time_end - test_time_start
+    #test_time_start = datetime.datetime.strptime(args.test_time_start, "%Y%m%d")
+    #test_time_end = datetime.datetime.strptime(args.test_time_end, "%Y%m%d")
+    #time_delta = test_time_end - test_time_start
 
     nims_logger = NIMSLogger(loss=False, correct=False, binary_f1=False,
                              macro_f1=False, micro_f1=False,
@@ -75,16 +73,15 @@ if __name__ == '__main__':
     gt_path_list = sorted([os.path.join(gt_dir, f) \
                            for f in gt_path_list \
                            if f.endswith('.npy') and \
-                           (test_time_end - datetime.datetime.strptime(f.split('_')[3][:8], "%Y%m%d")).days <= time_delta.days]) # when recorded data is located between test time start and end
+                           f.split('_')[3][:8] == args.test_time]) # when recorded data is located between test time start and end
     dataset_len = len(gt_path_list)
 
     ### get LDPS data (LCPCP)
 
     pbar = tqdm(range(dataset_len))
     for i in pbar:
-        target_time = gt_path_list[i].split('/')[-1].split('_')[3][:-2]
-        if not # target_time in NIMS_LDPS dataset:
-            continue
+        target_hour = gt_path_list[i].split('/')[-1].split('_')[3][8:10]
+        num_start_hour = int(target_hour) // 6 + 1 # if 2, uses LDAPS data predicted from 00, 06. If 3, use from 00, 06, 12
 
         ### preprocessing data
 
