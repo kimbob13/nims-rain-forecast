@@ -10,6 +10,7 @@ from nims_dataset import NIMSDataset
 from tqdm import tqdm
 import os
 import argparse
+import pdb
 
 import datetime
 from collections import defaultdict
@@ -69,7 +70,12 @@ if __name__ == '__main__':
     
     LDAPS_dir = os.path.join(LDAPS_year_dir, test_time)
     
-    test_result_path = os.path.join('./results', 'eval', args.test_time[0:6])
+    
+    result_path = './results'
+    logger_folder = 'LDAPS_Logger'
+    if not os.path.isdir(result_path):
+        os.mkdir(result_path)
+    test_result_path = os.path.join(result_path, logger_folder)
     if not os.path.isdir(test_result_path):
         os.mkdir(test_result_path)
     
@@ -86,7 +92,8 @@ if __name__ == '__main__':
     ### get ground truth data for test time
     
     gt_dir = OBS_year_dir
-    #ground truth data list(file name)
+    
+    #ground truth data list(file name) /
     gt_path_list = os.listdir(gt_dir)
     gt_path_list = sorted([os.path.join(gt_dir, f) \
                            for f in gt_path_list \
@@ -94,7 +101,7 @@ if __name__ == '__main__':
                            f.split('_')[3][:8] in test_dates]) # when recorded data is located between test time start and end
     dataset_len = len(gt_path_list)
     
-    #load data in dictionary key = time(0~23) / value = np.array
+    #load data in dictionary key = time(0~23) / value = np.array // Total data load
     gt_data_dict = defaultdict(list)
     for i, data_dir in enumerate(gt_path_list):
         tmp_data = np.load(data_dir).reshape(512, 512, 1).transpose()
@@ -122,7 +129,7 @@ if __name__ == '__main__':
 
     for start_hour in range(4):
         start_hour = start_hour * 6 # 0, 6, 12, 18
-        pbar = tqdm(range(48)) # 48h prediction for each start hour
+        pbar = tqdm(range(49)) # 48h prediction for each start hour / h000~h0048
         for i in pbar:
             target_hour = i + start_hour
             target_time = datetime.datetime.strptime(args.test_time, "%Y%m%d") + datetime.timedelta(hours=target_hour)
@@ -137,11 +144,12 @@ if __name__ == '__main__':
             reference_data = reference_data[stn_codi[:, 0], stn_codi[:, 1]]
 
         ### preprocessing LDPS data
-
-            LDPS_data = unis_data_dict["h0{0:2d}_{1:2d}".format(i, start_hour)]
-            LDPS_data = np.asarray(LDPS_data)
-            print(LDPS_data.shape)
-            LDPS_data = np.squeeze(LDPS_data, axis=0)
+            LDPS_data = unis_data_dict["h00{0}_{1}".format(i, '00' if start_hour==0 else start_hour)] if (i//10)==0 \
+            else unis_data_dict["h0{0}_{1}".format(i, '00' if start_hourt==0 else start_hour)]
+            LDPS_data = np.asarray(LDPS_data) #LDPS_Data.size = (512,512)
+#             pdb.set_trace()
+#             print(LDPS_data.shape)
+#             LDPS_data = np.squeeze(LDPS_data, axis=0)
             LDPS_data = np.where(LDPS_data >= 0.1, np.ones(LDPS_data.shape), np.zeros(LDPS_data.shape))
             LDPS_data = LDPS_data[stn_codi[:, 0], stn_codi[:, 1]]
 
