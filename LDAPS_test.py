@@ -46,7 +46,7 @@ if __name__ == '__main__':
     ### set argument
 
     parser = argparse.ArgumentParser(description='NIMS rainfall data prediction')
-    parser.add_argument('--dataset_dir', default='/home/osilab12/ssd/OBS/2020', type=str, help='root directory of dataset')
+#   parser.add_argument('--dataset_dir', default='/home/osilab12/ssd/OBS/2020', type=str, help='root directory of dataset')
     parser.add_argument('--test_time', default='20200601', type=str, help='date of test')
     #parser.add_argument('--test_time_start', default='20200601', type=str, help='start date of test')
     #parser.add_argument('--test_time_end', default=None, type=str, help='end date of test')
@@ -58,9 +58,16 @@ if __name__ == '__main__':
     test_dates.append((test_date + datetime.timedelta(days=1)).strftime("%Y%m%d"))
     test_dates.append((test_date + datetime.timedelta(days=2)).strftime("%Y%m%d")) # Because LDPS data uses 48h after 0, 6, 12, 18h
 
-    ### set LDAPS dir path
-
+    ### set LDAPS, OBS dir path
     LDAPS_root_dir = '/home/osilab12/hdd2/NIMS_LDPS'
+    OBS_root_dir = '/home/osilab12/hdd2/OBS'
+    
+    test_time = args.test_time
+    LDAPS_year_dir = os.path.join(LDAPS_root_dir, test_time[:4])
+    OBS_year_dir = os.path.join(OBS_root_dir, test_time[:4])
+    
+    LDAPS_dir = os.path.join(LDAPS_year_dir, test_time)
+    
     test_result_path = os.path.join('./results', 'eval', args.test_time[0:6])
     if not os.path.isdir(test_result_path):
         os.mkdir(test_result_path)
@@ -77,14 +84,40 @@ if __name__ == '__main__':
 
     ### get ground truth data for test time
     
-    gt_dir = args.dataset_dir
+    gt_dir = OBS_year_dir
+    #ground truth data list(file name)
     gt_path_list = os.listdir(gt_dir)
     gt_path_list = sorted([os.path.join(gt_dir, f) \
                            for f in gt_path_list \
                            if f.endswith('.npy') and \
                            f.split('_')[3][:8] in test_dates]) # when recorded data is located between test time start and end
+    dataset_len = len(gt_path_list)
+    
+    #load data in dictionary key = time(0~23) / value = np.array
+    gt_data_dict = defaultdict(list)
+    for i, data_dir in enumerate(gt_path_list):
+        tmp_data = np.load(data_dir).reshape(512, 512, 1).transpose()
+        gt_data_dict[i] = tmp_data
+        
+    
+    ### get LDAPS data (LCPCP, index=2)
+    
+    LDAPS_path_dir = os.listdir(LDAPS_dir)
+    for LDAPS_data in LDAPS_path_dir:
+        curr_data_path = [f for f in LDAPS_path_dir]
+        unis_data_path_list = sorted([f for f in curr_data_path] if 'unis' in f)
 
-    ### get LDPS data (LCPCP)
+    #load dadta in dictionary key = time(ex h000_00, h000_06) value=  np.array
+    unis_data_dict = defaultdict(list)
+
+    for a in unis_data_path_list:
+        tmp_h, tmp_t =a.split('_')[3], a.split('_')[4][8:10]
+        tmp_list = [tmp_h, tmp_t]
+        tmp_key = '_'.join(tmp_list)
+
+        tmp_data = np.load(os.path.join(LDAPS_dir, a)).reshape(512,512,20).transpose()
+        tmp_data = tmp_data[2, :, :]
+        unis_data_dict[tmp_key] = tmp_data
 
     for start_hour in range(4):
         start_hour = start_hour * 6 # 0, 6, 12, 18
