@@ -12,6 +12,7 @@ import os
 import argparse
 
 import datetime
+from collections import defaultdict
 
 try:
     import setproctitle
@@ -36,7 +37,7 @@ def get_stat(pred, target):
 
 def find_gt_path(gt_path_list, target_time):
     for gt_path in gt_path_list:
-        gt_time = gtpath.split('/')[-1].split('_')[3][:-2]
+        gt_time = gt_path.split('/')[-1].split('_')[3][:-2]
         if gt_time == target_time:
             return gt_path
     raise NotImplemented
@@ -105,7 +106,7 @@ if __name__ == '__main__':
     LDAPS_path_dir = os.listdir(LDAPS_dir)
     for LDAPS_data in LDAPS_path_dir:
         curr_data_path = [f for f in LDAPS_path_dir]
-        unis_data_path_list = sorted([f for f in curr_data_path] if 'unis' in f)
+        unis_data_path_list = sorted([f for f in curr_data_path if 'unis' in f])
 
     #load dadta in dictionary key = time(ex h000_00, h000_06) value=  np.array
     unis_data_dict = defaultdict(list)
@@ -137,7 +138,10 @@ if __name__ == '__main__':
 
         ### preprocessing LDPS data
 
-            LDPS_data = np
+            LDPS_data = unis_data_dict["h0{0:2d}_{1:2d}".format(i, start_hour)]
+            LDPS_data = np.asarray(LDPS_data)
+            print(LDPS_data.shape)
+            LDPS_data = np.squeeze(LDPS_data, axis=0)
             LDPS_data = np.where(LDPS_data >= 0.1, np.ones(LDPS_data.shape), np.zeros(LDPS_data.shape))
             LDPS_data = LDPS_data[stn_codi[:, 0], stn_codi[:, 1]]
 
