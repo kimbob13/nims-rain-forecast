@@ -48,10 +48,7 @@ if __name__ == '__main__':
     ### set argument
 
     parser = argparse.ArgumentParser(description='NIMS rainfall data prediction')
-#   parser.add_argument('--dataset_dir', default='/home/osilab12/ssd/OBS/2020', type=str, help='root directory of dataset')
     parser.add_argument('--test_time', default='20200601', type=str, help='date of test')
-    #parser.add_argument('--test_time_start', default='20200601', type=str, help='start date of test')
-    #parser.add_argument('--test_time_end', default=None, type=str, help='end date of test')
     args = parser.parse_args()
     
     test_dates = []
@@ -73,9 +70,7 @@ if __name__ == '__main__':
     
     result_path = './results'
     logger_folder = 'LDAPS_Logger'
-    if not os.path.isdir(result_path):
-        os.mkdir(result_path)
-    test_result_path = os.path.join(result_path, logger_folder)
+    test_result_path = os.path.join(result_path, logger_folder, args.test_time)
     if not os.path.isdir(test_result_path):
         os.mkdir(test_result_path)
     
@@ -93,15 +88,15 @@ if __name__ == '__main__':
     
     gt_dir = OBS_year_dir
     
-    #ground truth data list(file name) /
+    # ground truth data list(file name) /
     gt_path_list = os.listdir(gt_dir)
     gt_path_list = sorted([os.path.join(gt_dir, f) \
                            for f in gt_path_list \
                            if f.endswith('.npy') and \
-                           f.split('_')[3][:8] in test_dates]) # when recorded data is located between test time start and end
+                           f.split('_')[3][:8] in test_dates])
     dataset_len = len(gt_path_list)
     
-    #load data in dictionary key = time(0~23) / value = np.array // Total data load
+    # load data in dictionary key = time(0~23) / value = np.array // Total data load
     gt_data_dict = defaultdict(list)
     for i, data_dir in enumerate(gt_path_list):
         tmp_data = np.load(data_dir).reshape(512, 512, 1).transpose()
@@ -115,7 +110,7 @@ if __name__ == '__main__':
         curr_data_path = [f for f in LDAPS_path_dir]
         unis_data_path_list = sorted([f for f in curr_data_path if 'unis' in f])
 
-    #load dadta in dictionary key = time(ex h000_00, h000_06) value=  np.array
+    # load dadta in dictionary key = time(ex h000_00, h000_06) value=  np.array
     unis_data_dict = defaultdict(list)
 
     for a in unis_data_path_list:
@@ -144,12 +139,9 @@ if __name__ == '__main__':
             reference_data = reference_data[stn_codi[:, 0], stn_codi[:, 1]]
 
         ### preprocessing LDPS data
-            LDPS_data = unis_data_dict["h00{0}_{1}".format(i, '00' if start_hour==0 else start_hour)] if (i//10)==0 \
-            else unis_data_dict["h0{0}_{1}".format(i, '00' if start_hourt==0 else start_hour)]
+            target_key = "h0{0:02d}_{1:02d}".format(i, start_hour)
+            LDPS_data = unis_data_dict[target_key]
             LDPS_data = np.asarray(LDPS_data) #LDPS_Data.size = (512,512)
-#             pdb.set_trace()
-#             print(LDPS_data.shape)
-#             LDPS_data = np.squeeze(LDPS_data, axis=0)
             LDPS_data = np.where(LDPS_data >= 0.1, np.ones(LDPS_data.shape), np.zeros(LDPS_data.shape))
             LDPS_data = LDPS_data[stn_codi[:, 0], stn_codi[:, 1]]
 
@@ -160,6 +152,3 @@ if __name__ == '__main__':
         ### update logger
 
             ldps_logger.update(hit=hit, miss=miss, fa=fa, cn=cn, target_time=test_time, start_hour=start_hour, target_hour_48=i, test=True)
-            pbar.set_description(nims_logger.latest_stat)
-
-    #nims_logger.print_stat(dataset_len, test=True)

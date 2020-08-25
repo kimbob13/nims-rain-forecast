@@ -36,103 +36,39 @@ class LDPSLogger:
         self._latest_stat = OneTargetStat(loss, correct, binary_f1, macro_f1, micro_f1, hit, miss, fa, cn)
 
         # Test stat dataframe
-        self.test_df = pd.DataFrame(index=['acc', 'hit', 'miss', 'false alarm', 'correct negative', 'correct_update'])
-        self.daily_df = pd.DataFrame(index=['acc', 'hit', 'miss', 'false alarm', 'correct negative'], columns=list(range(48)))
+        self.test_df = pd.DataFrame(index=['hit', 'miss', 'false alarm', 'correct negative', 'correct_update'])
+        self.daily_df = pd.DataFrame(index=['hit', 'miss', 'false alarm', 'correct negative'], columns=list(range(48)))
 
     def update(self, loss=None, correct=None,
                binary_f1=None, macro_f1=None, micro_f1=None,
                hit=None, miss=None, fa=None, cn=None,
                target_time=None, start_hour=0, target_hour_48=1, test=False):
-
-        if loss != None:
-            try:
-                self.one_epoch_stat.loss += loss
-                self._latest_stat.loss = loss
-            except:
-                print("You don't specify the loss to be logged")
-        if correct != None:
-            try:
-                self.one_epoch_stat.correct += sum(correct)
-                self._latest_stat.correct = sum(correct)
-            except:
-                print("You don't specify the correct to be logged")
-        if binary_f1 != None:
-            try:
-                self.one_epoch_stat.binary_f1 += sum(binary_f1)
-                self._latest_stat.binary_f1 = sum(binary_f1)
-            except:
-                print("You don't specify the binary_f1 to be logged")
-        if macro_f1 != None:
-            try:
-                self.one_epoch_stat.macro_f1 += sum(macro_f1)
-                self._latest_stat.macro_f1 = sum(macro_f1)
-            except:
-                print("You don't specify the macro_f1 to be logged")
-        if micro_f1 != None:
-            try:
-                self.one_epoch_stat.micro_f1 += sum(micro_f1)
-                self._latest_stat.micro_f1 = sum(micro_f1)
-            except:
-                print("You don't specify the micro_f1 to be logged")
-        if hit != None:
-            try:
-                self.one_epoch_stat.hit += sum(hit)
-                self._latest_stat.hit = sum(hit)
-            except:
-                print("You don't specify the hit to be logged")
-        if miss != None:
-            try:
-                self.one_epoch_stat.miss += sum(miss)
-                self._latest_stat.miss = sum(miss)
-            except:
-                print("You don't specify the miss to be logged")
-        if fa != None:
-            try:
-                self.one_epoch_stat.fa += sum(fa)
-                self._latest_stat.fa = sum(fa)
-            except:
-                print("You don't specify the false alarm to be logged")
-        if cn != None:
-            try:
-                self.one_epoch_stat.cn += sum(cn)
-                self._latest_stat.cn = sum(cn)
-            except:
-                print("You don't specify the correct negative to be logged")
-
-        num_batch = target_time.shape[0]
+        
+        num_batch = 1
         self.num_update += num_batch
 
         if test:
             for b in range(num_batch):
-                target_year = target_time[b][0]
-                target_month = target_time[b][1]
-                target_day = target_time[b][2]
+                target_year = target_time[0]
+                target_month = target_time[1]
+                target_day = target_time[2]
 
                 save = False
-                if target_hour_48 == 47:
+                if target_hour_48 == 48:
                     save = True
-                elif (target_month == 7) and (target_day == 31) and (target_hour == 14):
+                elif (target_month == 7) and (target_day == 31) and (start_hour == 18):
                     save = True
 
-                self.daily_df[target_hour_48] = [hit[b], miss[b], fa[b], cn[b]]
+                self.daily_df[target_hour_48] = [hit, miss, fa, cn]
                 if save:
                     daily_t = self.daily_df.T
                     # There are only 14 hours for July 31 (because of UTC/KST)
-                    if (target_month == 7) and (target_day == 31) and (target_hour == 14):
+                    if (target_month == 7) and (target_day == 31) and (start_hour == 18):
                         daily_t = daily_t.iloc[:15, :]
-                    acc_mean = daily_t.iloc[:, 0].mean(axis=0)
                     daily_t = daily_t.append(daily_t.sum(axis=0), ignore_index=True)
-                    daily_t.iloc[-1, 0] = acc_mean
-
                     daily_t.to_csv(os.path.join(self.test_result_path,
                         '{:4d}{:02d}{:02d}+{:02d}.csv'.format(target_year, target_month, target_day, start_hour)),
                                    index=False)
-
-                # Update total test dataframe
-                if str(target_day) in self.test_df:
-                    self.test_df[str(target_day)] += [hit[b], miss[b], fa[b], cn[b], self.num_stn]
-                else:
-                    self.test_df[str(target_day)] = [hit[b], miss[b], fa[b], cn[b], self.num_stn]
 
     def print_stat(self, test=False):
         total_stn = self.num_update * self.num_stn
