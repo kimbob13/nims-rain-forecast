@@ -6,9 +6,9 @@ import os
 
 from nims_eval_converter import save_nims_metric
 
-__all__ = ['NIMSLogger']
+__all__ = ['LDPSLogger']
 
-class NIMSLogger:
+class LDPSLogger:
     def __init__(self, loss, correct, binary_f1, macro_f1, micro_f1,
                  hit, miss, fa, cn, stn_codi,
                  test_result_path=None, num_classes=2):
@@ -37,7 +37,7 @@ class NIMSLogger:
 
         # Test stat dataframe
         self.test_df = pd.DataFrame(index=['acc', 'hit', 'miss', 'false alarm', 'correct negative', 'correct_update'])
-        self.daily_df = pd.DataFrame(index=['acc', 'hit', 'miss', 'false alarm', 'correct negative'], columns=list(range(24)))
+        self.daily_df = pd.DataFrame(index=['acc', 'hit', 'miss', 'false alarm', 'correct negative'], columns=list(range(48)))
 
     def update(self, loss=None, correct=None,
                binary_f1=None, macro_f1=None, micro_f1=None,

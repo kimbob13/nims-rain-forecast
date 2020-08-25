@@ -34,8 +34,12 @@ def get_stat(pred, target):
 
     return correct, binary_f1, hit, miss, fa, cn
 
-def find_gt_path():
-
+def find_gt_path(gt_path_list, target_time):
+    for gt_path in gt_path_list:
+        gt_time = gtpath.split('/')[-1].split('_')[3][:-2]
+        if gt_time == target_time:
+            return gt_path
+    raise NotImplemented
 
 if __name__ == '__main__':
     
@@ -91,7 +95,8 @@ if __name__ == '__main__':
             target_hour = i + start_hour
             target_time = datetime.datetime.strptime(args.test_time, "%Y%m%d") + datetime.timedelta(hours=target_hour)
             target_time = target_time.strftime("%Y%m%d%H")
-            gt_path = find_gt_path(gt_path_list, target_hour, args.test_time)
+            target_time_sep = [int(target_time[0:4]), int(target_time[4:6]), int(target_time[6:8]), int(target_time[8:10])]
+            gt_path = find_gt_path(gt_path_list, target_time)
             
         ### preprocessing reference data
 
@@ -111,7 +116,7 @@ if __name__ == '__main__':
 
         ### update logger
 
-            nims_logger.updata(hit=hit, miss=miss, fa=fa, cn=cn, target_time=target_time, test=True)
+            nims_logger.update(hit=hit, miss=miss, fa=fa, cn=cn, target_time=target_time_sep, target_hour_48=i, test=True)
             pbar.set_description(nims_logger.latest_stat)
 
     nims_logger.print_stat(dataset_len, test=True)
