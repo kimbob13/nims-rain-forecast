@@ -82,31 +82,30 @@ if __name__ == '__main__':
     for i in pbar:
         target_hour = gt_path_list[i].split('/')[-1].split('_')[3][8:10]
         num_start_hour = int(target_hour) // 6 + 1 # if 2, uses LDAPS data predicted from 00, 06. If 3, use from 00, 06, 12
+        
+        ### preprocessing reference data
 
-        ### preprocessing data
+        reference_data = np.load(gt_path_list[i])
+        reference_data = np.where(reference_data >= 0.1, np.ones(reference_data.shape), np.zeros(reference_data.shape))
+        reference_data = reference_data[stn_codi[:, 0], stn_codi[:, 1]]
+
+        for start_hour in range(num_start_hour):
+            start_hour = start_hour * 6 # 00, 06, 12, 18
+            prediction_period_hour = int(target_hour) - start_hour # when LDPS 06 + h02 -> target_hour = 8, start_hour = 0, 6, prediction_period_hour = 8, 2
+
+        ### preprocessing LDPS data
+
+            LDPS_data = np
+            LDPS_data = np.where(LDPS_data >= 0.1, np.ones(LDPS_data.shape), np.zeros(LDPS_data.shape))
+            LDPS_data = LDPS_data[stn_codi[:, 0], stn_codi[:, 1]]
 
         ### get confusion matrix
 
+            _, _, hit, miss, fa, cn = get_stat(LDPS_data, reference_data)
+
         ### update logger
 
-        target_data = np.load(gt_path_list[i])
-
-        today = np.load(gt_path_list[i])
-        tomorrow = np.load(gt_path_list[i + 1])
-        target_time = gt_path_list[i + 1].split('/')[-1].split('_')[3][:-2]
-        target_time = [int(target_time[0:4]), int(target_time[4:6]), int(target_time[6:8]), int(target_time[8:10])]
-
-        today = np.where(today >= 0.1, np.ones(today.shape), np.zeros(today.shape))
-        tomorrow = np.where(tomorrow >= 0.1, np.ones(tomorrow.shape), np.zeros(tomorrow.shape))
-
-        today = today[stn_codi[:, 0], stn_codi[:, 1]]
-        tomorrow = tomorrow[stn_codi[:, 0], stn_codi[:, 1]]
-
-        correct, binary_f1, hit, miss, fa, cn = get_stat(today, tomorrow)
-
-        nims_logger.update(correct=correct, binary_f1=binary_f1,
-                           hit=hit, miss=miss, fa=fa, cn=cn,
-                           target_time=target_time, test=True)
-        pbar.set_description(nims_logger.latest_stat)
+            nims_logger.updata(hit=hit, miss=miss, fa=fa, cn=cn, target_time=target_time, prediction_hour=prediction_period_hour, test=True)
+            pbar.set_description(nims_logger.latest_stat)
 
     nims_logger.print_stat(dataset_len, test=True)
