@@ -34,6 +34,9 @@ def get_stat(pred, target):
 
     return correct, binary_f1, hit, miss, fa, cn
 
+def find_gt_path():
+
+
 if __name__ == '__main__':
     
     ### set argument
@@ -45,9 +48,11 @@ if __name__ == '__main__':
     #parser.add_argument('--test_time_end', default=None, type=str, help='end date of test')
     args = parser.parse_args()
     
-    #if int(args.test_time_start) > int(args.test_time_end):
-    #    print("End test time is earlier than start test time, [set] end test time = start test time")
-    #    args.test_time_end = args.test_time_start    
+    test_dates = []
+    test_date = datetime.datetime.strptime(args.test_time, "%Y%m%d")
+    test_dates.append(test_date.strftime("%Y%m%d"))
+    test_dates.append((test_date + datetime.timedelta(days=1)).strftime("%Y%m%d"))
+    test_dates.append((test_date + datetime.timedelta(days=2)).strftime("%Y%m%d"))
 
     ### set LDAPS dir path
 
@@ -56,9 +61,9 @@ if __name__ == '__main__':
     if not os.path.isdir(test_result_path):
         os.mkdir(test_result_path)
     
-    #test_time_start = datetime.datetime.strptime(args.test_time_start, "%Y%m%d")
-    #test_time_end = datetime.datetime.strptime(args.test_time_end, "%Y%m%d")
-    #time_delta = test_time_end - test_time_start
+    codi_aws_df = pd.read_csv('./codi_ldps_aws/codi_ldps_aws_512.csv')
+    dii_info = np.array(codi_aws_df['dii']) - 1
+    stn_codi = np.array([(dii // 512, dii % 512) for dii in dii_info])
 
     nims_logger = NIMSLogger(loss=False, correct=False, binary_f1=False,
                              macro_f1=False, micro_f1=False,
@@ -73,25 +78,26 @@ if __name__ == '__main__':
     gt_path_list = sorted([os.path.join(gt_dir, f) \
                            for f in gt_path_list \
                            if f.endswith('.npy') and \
-                           f.split('_')[3][:8] == args.test_time]) # when recorded data is located between test time start and end
+                           f.split('_')[3][:8] in test_dates]) # when recorded data is located between test time start and end
     dataset_len = len(gt_path_list)
 
     ### get LDPS data (LCPCP)
 
-    pbar = tqdm(range(dataset_len))
-    for i in pbar:
-        target_hour = gt_path_list[i].split('/')[-1].split('_')[3][8:10]
-        num_start_hour = int(target_hour) // 6 + 1 # if 2, uses LDAPS data predicted from 00, 06. If 3, use from 00, 06, 12
-        
+    pbar = tqdm(range(LDPS_dataset_len))
+    for start_hour in range(4):
+        start_hour = start_hour * 6 # 0, 6, 12, 18
+        pbar = tqdm(range(48)) # 48h prediction for each start hour
+        for i in pbar:
+            target_hour = i + start_hour
+            target_time = datetime.datetime.strptime(args.test_time, "%Y%m%d") + datetime.timedelta(hours=target_hour)
+            target_time = target_time.strftime("%Y%m%d%H")
+            gt_path = find_gt_path(gt_path_list, target_hour, args.test_time)
+            
         ### preprocessing reference data
 
-        reference_data = np.load(gt_path_list[i])
-        reference_data = np.where(reference_data >= 0.1, np.ones(reference_data.shape), np.zeros(reference_data.shape))
-        reference_data = reference_data[stn_codi[:, 0], stn_codi[:, 1]]
-
-        for start_hour in range(num_start_hour):
-            start_hour = start_hour * 6 # 00, 06, 12, 18
-            prediction_period_hour = int(target_hour) - start_hour # when LDPS 06 + h02 -> target_hour = 8, start_hour = 0, 6, prediction_period_hour = 8, 2
+            reference_data = np.load(gt_path)
+            reference_data = np.where(reference_data >= 0.1, np.ones(reference_data.shape), np.zeros(reference_data.shape))
+            reference_data = reference_data[stn_codi[:, 0], stn_codi[:, 1]]
 
         ### preprocessing LDPS data
 
@@ -105,7 +111,7 @@ if __name__ == '__main__':
 
         ### update logger
 
-            nims_logger.updata(hit=hit, miss=miss, fa=fa, cn=cn, target_time=target_time, prediction_hour=prediction_period_hour, test=True)
+            nims_logger.updata(hit=hit, miss=miss, fa=fa, cn=cn, target_time=target_time, test=True)
             pbar.set_description(nims_logger.latest_stat)
 
     nims_logger.print_stat(dataset_len, test=True)
