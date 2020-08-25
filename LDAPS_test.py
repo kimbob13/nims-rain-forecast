@@ -3,7 +3,7 @@ import pandas as pd
 from sklearn.metrics import f1_score, confusion_matrix
 from sklearn.utils.class_weight import compute_class_weight
 
-from nims_logger import NIMSLogger
+from LDPS_logger import LDPSLogger
 from nims_util import create_results_dir
 from nims_dataset import NIMSDataset
 
@@ -56,12 +56,12 @@ if __name__ == '__main__':
     test_date = datetime.datetime.strptime(args.test_time, "%Y%m%d")
     test_dates.append(test_date.strftime("%Y%m%d"))
     test_dates.append((test_date + datetime.timedelta(days=1)).strftime("%Y%m%d"))
-    test_dates.append((test_date + datetime.timedelta(days=2)).strftime("%Y%m%d"))
+    test_dates.append((test_date + datetime.timedelta(days=2)).strftime("%Y%m%d")) # Because LDPS data uses 48h after 0, 6, 12, 18h
 
     ### set LDAPS dir path
 
     LDAPS_root_dir = '/home/osilab12/hdd2/NIMS_LDPS'
-    test_result_path = os.path.join('./results', 'eval', args.test_time[0:4])
+    test_result_path = os.path.join('./results', 'eval', args.test_time[0:6])
     if not os.path.isdir(test_result_path):
         os.mkdir(test_result_path)
     
@@ -69,7 +69,7 @@ if __name__ == '__main__':
     dii_info = np.array(codi_aws_df['dii']) - 1
     stn_codi = np.array([(dii // 512, dii % 512) for dii in dii_info])
 
-    nims_logger = NIMSLogger(loss=False, correct=False, binary_f1=False,
+    ldps_logger = LDPSLogger(loss=False, correct=False, binary_f1=False,
                              macro_f1=False, micro_f1=False,
                              hit=True, miss=True, fa=True, cn=True,
                              stn_codi=stn_codi,
@@ -83,11 +83,9 @@ if __name__ == '__main__':
                            for f in gt_path_list \
                            if f.endswith('.npy') and \
                            f.split('_')[3][:8] in test_dates]) # when recorded data is located between test time start and end
-    dataset_len = len(gt_path_list)
 
     ### get LDPS data (LCPCP)
 
-    pbar = tqdm(range(LDPS_dataset_len))
     for start_hour in range(4):
         start_hour = start_hour * 6 # 0, 6, 12, 18
         pbar = tqdm(range(48)) # 48h prediction for each start hour
@@ -95,7 +93,7 @@ if __name__ == '__main__':
             target_hour = i + start_hour
             target_time = datetime.datetime.strptime(args.test_time, "%Y%m%d") + datetime.timedelta(hours=target_hour)
             target_time = target_time.strftime("%Y%m%d%H")
-            target_time_sep = [int(target_time[0:4]), int(target_time[4:6]), int(target_time[6:8]), int(target_time[8:10])]
+            test_time = [int(args.test_time[0:4]), int(args.test_time[4:6]), int(args.test_time[6:8])]
             gt_path = find_gt_path(gt_path_list, target_time)
             
         ### preprocessing reference data
@@ -116,7 +114,7 @@ if __name__ == '__main__':
 
         ### update logger
 
-            nims_logger.update(hit=hit, miss=miss, fa=fa, cn=cn, target_time=target_time_sep, target_hour_48=i, test=True)
+            ldps_logger.update(hit=hit, miss=miss, fa=fa, cn=cn, target_time=test_time, start_hour=start_hour, target_hour_48=i, test=True)
             pbar.set_description(nims_logger.latest_stat)
 
-    nims_logger.print_stat(dataset_len, test=True)
+    #nims_logger.print_stat(dataset_len, test=True)

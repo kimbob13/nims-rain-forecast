@@ -42,7 +42,7 @@ class LDPSLogger:
     def update(self, loss=None, correct=None,
                binary_f1=None, macro_f1=None, micro_f1=None,
                hit=None, miss=None, fa=None, cn=None,
-               target_time=None, test=False):
+               target_time=None, start_hour=0, target_hour_48=1, test=False):
 
         if loss != None:
             try:
@@ -107,15 +107,14 @@ class LDPSLogger:
                 target_year = target_time[b][0]
                 target_month = target_time[b][1]
                 target_day = target_time[b][2]
-                target_hour = target_time[b][3]
 
                 save = False
-                if target_hour == 23:
+                if target_hour_48 == 47:
                     save = True
                 elif (target_month == 7) and (target_day == 31) and (target_hour == 14):
                     save = True
 
-                self.daily_df[target_hour] = [(correct[b] / self.num_stn) * 100, hit[b], miss[b], fa[b], cn[b]]
+                self.daily_df[target_hour_48] = [hit[b], miss[b], fa[b], cn[b]]
                 if save:
                     daily_t = self.daily_df.T
                     # There are only 14 hours for July 31 (because of UTC/KST)
@@ -126,14 +125,14 @@ class LDPSLogger:
                     daily_t.iloc[-1, 0] = acc_mean
 
                     daily_t.to_csv(os.path.join(self.test_result_path,
-                                                '{:4d}{:02d}{:02d}.csv'.format(target_year, target_month, target_day)),
+                        '{:4d}{:02d}{:02d}+{:02d}.csv'.format(target_year, target_month, target_day, start_hour)),
                                    index=False)
 
                 # Update total test dataframe
                 if str(target_day) in self.test_df:
-                    self.test_df[str(target_day)] += [correct[b], hit[b], miss[b], fa[b], cn[b], self.num_stn]
+                    self.test_df[str(target_day)] += [hit[b], miss[b], fa[b], cn[b], self.num_stn]
                 else:
-                    self.test_df[str(target_day)] = [correct[b], hit[b], miss[b], fa[b], cn[b], self.num_stn]
+                    self.test_df[str(target_day)] = [hit[b], miss[b], fa[b], cn[b], self.num_stn]
 
     def print_stat(self, test=False):
         total_stn = self.num_update * self.num_stn
