@@ -159,7 +159,6 @@ def parse_args():
     common.add_argument('--dataset_dir', default='/home/osilab12/ssd/NIMS_LDPS', type=str, help='root directory of dataset')
     common.add_argument('--device', default='0', type=str, help='which device to use')
     common.add_argument('--num_workers', default=5, type=int, help='# of workers for dataloader')
-    common.add_argument('--baseline_name', default=None, type=str, help='name of baseline experiment you want to compare')
     common.add_argument('--custom_name', default=None, type=str, help='add customize experiment name')
     common.add_argument('--debug', help='turn on debugging print', action='store_true')
 
@@ -167,6 +166,7 @@ def parse_args():
     unet.add_argument('--n_blocks', default=7, type=int, help='# of blocks in Down and Up phase')
     unet.add_argument('--start_channels', default=32, type=int, help='# of channels after first block of unet')
     unet.add_argument('--pos_dim', default=0, type=int, help="# of learnable position channels")
+    unet.add_argument('--bilinear', default=False, help='use bilinear for upsample instead of transpose conv', action='store_true')
     unet.add_argument('--cross_entropy_weight', default=False, help='use weight for cross entropy loss', action='store_true')
 
     nims_dataset = parser.add_argument_group('nims dataset related')
@@ -305,6 +305,7 @@ def set_model(sample, device, args, train=True):
                          n_blocks=args.n_blocks,
                          start_channels=args.start_channels,
                          pos_dim=args.pos_dim,
+                         bilinear=args.bilinear,
                          batch_size=args.batch_size)
 
         elif args.model == 'attn_unet':
@@ -313,6 +314,7 @@ def set_model(sample, device, args, train=True):
                                   n_blocks=args.n_blocks,
                                   start_channels=args.start_channels,
                                   pos_dim=args.pos_dim,
+                                  bilinear=args.bilinear,
                                   batch_size=args.batch_size)
 
         criterion = NIMSCrossEntropyLoss(device, num_classes=num_classes,

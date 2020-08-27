@@ -11,7 +11,7 @@ __all__ = ['UNet', 'AttentionUNet']
 
 class UNet(nn.Module):
     def __init__(self, n_channels, n_classes, n_blocks=7,
-                 start_channels=16, pos_dim=0, bilinear=True,
+                 start_channels=16, pos_dim=0, bilinear=False,
                  batch_size=1):
         super(UNet, self).__init__()
 
@@ -76,7 +76,7 @@ class UNet(nn.Module):
 
 class AttentionUNet(nn.Module):
     def __init__(self, n_channels, n_classes, n_blocks=7,
-                 start_channels=16, pos_dim=0, bilinear=True,
+                 start_channels=16, pos_dim=0, bilinear=False,
                  batch_size=1):
         super(AttentionUNet, self).__init__()
 
