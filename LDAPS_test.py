@@ -70,10 +70,16 @@ if __name__ == '__main__':
     
     result_path = './results'
     logger_folder = 'LDAPS_Logger'
-    test_result_path = os.path.join(result_path, logger_folder, args.test_time)
+
+    if not os.path.isdir(result_path):
+        os.mkdir(result_path)
+    next_path = os.path.join(result_path, logger_folder)
+    if not os.path.isdir(next_path):
+        os.mkdir(next_path)
+    test_result_path = os.path.join(next_path, args.test_time)
     if not os.path.isdir(test_result_path):
         os.mkdir(test_result_path)
-    
+        
     codi_aws_df = pd.read_csv('./codi_ldps_aws/codi_ldps_aws_512.csv')
     dii_info = np.array(codi_aws_df['dii']) - 1
     stn_codi = np.array([(dii // 512, dii % 512) for dii in dii_info])
