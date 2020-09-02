@@ -6,6 +6,7 @@ from nims_dataset import NIMSDataset, ToTensor
 from nims_trainer import NIMSTrainer
 
 import os
+import time
 
 if __name__ == '__main__':
     # Parsing command line arguments
@@ -17,9 +18,15 @@ if __name__ == '__main__':
     # Specify trained model weight
     weight_dir = os.path.join('./results', 'trained_model')
     weight_list = sorted([f for f in os.listdir(weight_dir) if f.endswith('.pt')])
-    print('=' * 25, 'Which model do you want to test', '=' * 25)
+    print()
+    print('=' * 33, 'Which model do you want to test?', '=' * 33)
+    print()
+    print('-' * 100)
+    print('{:^4s}| {:^19s} | {:^65s}{:>7s}'.format('Idx', 'Last Modified', 'Trained Weight', '|'))
+    print('-' * 100)
     for i, weight in enumerate(weight_list):
-        print('[{:2d}] {}'.format(i + 1, weight))
+        path_date = time.strftime('%Y/%m/%d %H:%M:%S', time.gmtime(os.path.getmtime(os.path.join(weight_dir, weight))))
+        print('[{:2d}] <{:s}> {}'.format(i + 1, path_date, weight))
     choice = int(input('\n> '))
     chosen_info = torch.load(os.path.join(weight_dir, weight_list[choice - 1]), map_location=device)
     print('Load weight...:', weight_list[choice - 1])
@@ -33,6 +40,7 @@ if __name__ == '__main__':
     args.start_channels = chosen_info['start_channels']
     args.pos_dim = chosen_info['pos_dim']
     args.cross_entropy_weight = chosen_info['cross_entropy_weight']
+    args.bilinear = chosen_info['bilinear']
     args.window_size = chosen_info['window_size']
     args.model_utc = chosen_info['model_utc']
     args.sampling_ratio = chosen_info['sampling_ratio']
@@ -41,6 +49,10 @@ if __name__ == '__main__':
     args.optimizer = chosen_info['optimizer']
     args.lr = chosen_info['lr']
     args.custom_name = chosen_info['custom_name']
+
+    if 'transpose_conv' in args.custom_name:
+        args.bilinear = False
+        args.custom_name = ''
 
     # Fix the seed
     fix_seed(2020)

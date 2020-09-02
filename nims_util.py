@@ -372,12 +372,20 @@ def set_experiment_name(args, date):
     if args.cross_entropy_weight:
         cross_entropy_weight = '_weight'
 
+    bilinear = ''
+    if args.bilinear:
+        bilinear = '_bilinear'
+
+    normalization = ''
+    if args.normalization:
+        normalization = '_norm'
+
     custom_name = ''
     if args.custom_name:
         custom_name = '_' + args.custom_name
 
     if args.model == 'unet':            
-        experiment_name = 'nims-utc{}-unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}_sr{}_{}{}{}{}{}' \
+        experiment_name = 'nims-utc{}-unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}_sr{}_{}{}{}{}{}{}' \
                           .format(args.model_utc,
                                   args.n_blocks,
                                   args.start_channels,
@@ -389,11 +397,13 @@ def set_experiment_name(args, date):
                                   args.optimizer,
                                   args.lr,
                                   cross_entropy_weight,
+                                  normalization,
+                                  bilinear,
                                   custom_name,
                                   date_str)
 
     elif args.model == 'attn_unet':
-        experiment_name = 'nims-utc{}-attn_unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}_sr{}_{}{}{}{}{}' \
+        experiment_name = 'nims-utc{}-attn_unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}_sr{}_{}{}{}{}{}{}' \
                           .format(args.model_utc,
                                   args.n_blocks,
                                   args.start_channels,
@@ -405,6 +415,8 @@ def set_experiment_name(args, date):
                                   args.optimizer,
                                   args.lr,
                                   cross_entropy_weight,
+                                  normalization,
+                                  bilinear,
                                   custom_name,
                                   date_str)
 

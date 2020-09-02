@@ -34,6 +34,7 @@ class NIMSTrainer:
                            'start_channels': args.start_channels,
                            'pos_dim': args.pos_dim,
                            'cross_entropy_weight': args.cross_entropy_weight,
+                           'bilinear': args.bilinear,
                            'window_size': args.window_size,
                            'model_utc': args.model_utc,
                            'sampling_ratio': args.sampling_ratio,
