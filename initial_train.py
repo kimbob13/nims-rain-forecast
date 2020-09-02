@@ -62,7 +62,6 @@ if __name__ == '__main__':
 
     if args.debug:
         # XXX: Currently, torchsummary doesn't run on ConvLSTM
-        print('[main] num_lat: {}, num_lon: {}'.format(num_lat, num_lon))
         if args.model == 'unet':
             model.to(device)
             try:

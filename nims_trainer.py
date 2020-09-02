@@ -102,8 +102,7 @@ class NIMSTrainer:
                 torch.save(self.train_info, train_info_path)
 
             train_log.loc[epoch] = [epoch_loss, pod, csi, bias]
-
-        train_log.to_csv(train_log_path, index=False)
+            train_log.to_csv(train_log_path, index=False)
 
     def test(self):
         # self.model.eval()

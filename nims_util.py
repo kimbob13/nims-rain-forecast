@@ -184,7 +184,12 @@ def parse_args():
     hyperparam.add_argument('--batch_size', default=1, type=int, help='batch size')
     hyperparam.add_argument('--optimizer', default='adam', type=str, help='which optimizer to use (rmsprop, adam, sgd)')
     hyperparam.add_argument('--lr', default=0.001, type=float, help='learning rate of optimizer')
-
+    
+    finetune = parser.add_argument_group('finetune related')
+    finetune.add_argument('--final_test_time', default=None, type=str, help='the final date of fine-tuning')
+    finetune.add_argument('--finetune_lr_ratio', default=0.1, type=float, help='the ratio of fine-tuning learning rate to the original learning rate')
+    finetune.add_argument('--finetune_num_epochs', default=3, type=int, help='# of fine-tuning epochs')
+    
     args = parser.parse_args()
 
     if args.model_utc not in [0, 6, 12, 18]:
@@ -294,7 +299,8 @@ def undersample(train_dataset, sampling_ratio):
 
     return train_dataset
 
-def set_model(sample, device, args, train=True):
+def set_model(sample, device, args, train=True,
+              finetune=False, model_path=None):
     # Create a model and criterion
     num_classes = 2
 
@@ -331,6 +337,10 @@ def set_model(sample, device, args, train=True):
                                   seq_len=args.window_size,
                                   device=device)
         criterion = MSELoss()
+
+    if finetune:
+        checkpoint = torch.load(model_path)
+        model.load_state_dict(checkpoint, strict=True)
 
     return model, criterion
 
