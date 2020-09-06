@@ -50,7 +50,7 @@ if __name__ == '__main__':
     args.lr = chosen_info['lr']
     args.custom_name = chosen_info['custom_name']
 
-    if 'transpose_conv' in args.custom_name:
+    if (args.custom_name != None) and ('transpose_conv' in args.custom_name):
         args.bilinear = False
         args.custom_name = ''
 

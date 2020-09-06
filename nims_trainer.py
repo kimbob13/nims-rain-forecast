@@ -53,9 +53,7 @@ class NIMSTrainer:
 
         self.model.to(self.device)
 
-        if model.name == 'unet' or \
-           model.name == 'attn_unet' or \
-           model.name == 'persistence':
+        if model.name == 'unet' or model.name == 'attn_unet':
             self.nims_logger = NIMSLogger(loss=True, correct=True, binary_f1=True,
                                           macro_f1=False, micro_f1=False,
                                           hit=True, miss=True, fa=True, cn=True,

@@ -37,7 +37,7 @@ class NIMSLogger:
 
         # Test stat dataframe
         self.test_df = pd.DataFrame(index=['acc', 'hit', 'miss', 'false alarm', 'correct negative', 'correct_update'])
-        self.daily_df = pd.DataFrame(index=['acc', 'hit', 'miss', 'false alarm', 'correct negative'], columns=list(range(24)))
+        self.daily_df = pd.DataFrame(0, index=['acc', 'hit', 'miss', 'false alarm', 'correct negative'], columns=list(range(49)))
 
     def update(self, loss=None, correct=None,
                binary_f1=None, macro_f1=None, micro_f1=None,
@@ -104,36 +104,49 @@ class NIMSLogger:
 
         if test:
             for b in range(num_batch):
-                target_year = target_time[b][0]
-                target_month = target_time[b][1]
-                target_day = target_time[b][2]
-                target_hour = target_time[b][3]
+                utc_year = int(target_time[b][0])
+                utc_month = int(target_time[b][1])
+                utc_day = int(target_time[b][2])
+                utc_hour = int(target_time[b][3]) # same as model_utc
+                from_h = int(target_time[b][4])
 
+                target_test_time = datetime(year=utc_year,
+                                            month=utc_month,
+                                            day=utc_day,
+                                            hour=utc_hour) + timedelta(hours=from_h)
+                last_test_time = datetime(year=target_time[b][0],
+                                          month=8, day=31, hour=14)
+
+                # Save daily_df if we reach last prediction for one day(48 hours) or
+                # end of date for current test data (August 31 for both 2019 and 2020)
                 save = False
-                if target_hour == 23:
-                    save = True
-                elif (target_month == 8) and (target_day == 31) and (target_hour == 14):
+                if (from_h == 48) or (target_test_time == last_test_time):
                     save = True
 
-                self.daily_df[target_hour] = [(correct[b] / self.num_stn) * 100, hit[b], miss[b], fa[b], cn[b]]
+                # Update entry for target_test_time and save to file if save == True
+                self.daily_df[from_h] = [(correct[b] / self.num_stn) * 100, hit[b], miss[b], fa[b], cn[b]]
                 if save:
                     daily_t = self.daily_df.T
-                    # There are only 14 hours for July 31 (because of UTC/KST)
-                    if (target_month == 8) and (target_day == 31) and (target_hour == 14):
-                        daily_t = daily_t.iloc[:15, :]
+                    # There are only 14 hours for August 31 (because of UTC/KST)
+                    if target_test_time == last_test_time:
+                        daily_t = daily_t.iloc[:from_h, :]
+
+                    # Add last row that contains one day statistics
                     acc_mean = daily_t.iloc[:, 0].mean(axis=0)
                     daily_t = daily_t.append(daily_t.sum(axis=0), ignore_index=True)
                     daily_t.iloc[-1, 0] = acc_mean
 
+                    # Save to file
                     daily_t.to_csv(os.path.join(self.test_result_path,
-                                                '{:4d}{:02d}{:02d}.csv'.format(target_year, target_month, target_day)),
+                                                '{:4d}{:02d}{:02d}+{:02d}.csv'
+                                                .format(utc_year, utc_month, utc_day, utc_hour)),
                                    index=False)
 
                 # Update total test dataframe
-                if str(target_day) in self.test_df:
-                    self.test_df[str(target_day)] += [correct[b], hit[b], miss[b], fa[b], cn[b], self.num_stn]
+                if str(utc_day) in self.test_df:
+                    self.test_df[str(utc_day)] += [correct[b], hit[b], miss[b], fa[b], cn[b], self.num_stn]
                 else:
-                    self.test_df[str(target_day)] = [correct[b], hit[b], miss[b], fa[b], cn[b], self.num_stn]
+                    self.test_df[str(utc_day)] = [correct[b], hit[b], miss[b], fa[b], cn[b], self.num_stn]
 
     def print_stat(self, test=False):
         total_stn = self.num_update * self.num_stn
@@ -196,15 +209,17 @@ class NIMSLogger:
         except:
             pass
 
-        stat_str = '[{:4d}-{:02d}-{:02d}:{:02d}'.format(target_time[0][0],
+        stat_str = '[{:4d}-{:02d}-{:02d}:{:02d}+{:02d}h'.format(target_time[0][0],
                                                         target_time[0][1],
                                                         target_time[0][2],
-                                                        target_time[0][3])
+                                                        target_time[0][3],
+                                                        target_time[0][4])
         if num_batch > 1:
-            stat_str += ' ~ {:4d}-{:02d}-{:02d}:{:02d}] '.format(target_time[-1][0],
+            stat_str += ' ~ {:4d}-{:02d}-{:02d}:{:02d}+{:02d}h] '.format(target_time[-1][0],
                                                                  target_time[-1][1],
                                                                  target_time[-1][2],
-                                                                 target_time[-1][3])
+                                                                 target_time[-1][3],
+                                                                 target_time[-1][4])
         else:
             stat_str += '] '
 

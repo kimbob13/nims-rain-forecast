@@ -68,11 +68,18 @@ class NIMSDataset(Dataset):
         if self.date['end_month'] == 8 and self.date['end_day'] == 31:
             gt_end_date = end_date - timedelta(hours=9)
         else:
-            gt_end_date = end_date
+            if self.train:
+                gt_end_date = end_date
+            else:
+                # If test mode, add 25 hours to end date
+                # to match the prediction range with LDAPS model
+                gt_end_date = end_date + timedelta(hours=25)
         
         # Set input data list
         data_dirs = sorted([os.path.join(root, d) for d in dirs \
-                            if d.isnumeric() and d <= end_date.strftime("%Y%m%d")])
+                            if d.isnumeric() and \
+                            d >= start_date.strftime("%Y%m%d") and \
+                            d <= end_date.strftime("%Y%m%d")])
         data_path_list = []
         pres_data_path_list = []
         unis_data_path_list = []
@@ -108,7 +115,7 @@ class NIMSDataset(Dataset):
         gt_path_list = os.listdir(gt_dir)
         gt_path_list = sorted([os.path.join(gt_dir, f) for f in gt_path_list if
                                f.split('_')[3][:-2] >= start_date.strftime("%Y%m%d%H") and
-                               f.split('_')[3][:-2] <= end_date.strftime("%Y%m%d%H")])
+                               f.split('_')[3][:-2] <= gt_end_date.strftime("%Y%m%d%H")])
 
         return data_path_list, gt_path_list
 
@@ -119,29 +126,29 @@ class NIMSDataset(Dataset):
         p, u = self._data_path_list[idx]
         
         # train_end_time is also target time for this x, y instance
-        train_end_time = p.split('/')[-1].split('_')
-        from_h = int(train_end_time[3][1:])
-        train_end_time = datetime(year=int(train_end_time[4][0:4]),
-                                  month=int(train_end_time[4][4:6]),
-                                  day=int(train_end_time[4][6:8]),
-                                  hour=int(train_end_time[4][8:10])) + timedelta(hours=from_h)
+        current_utc_date = p.split('/')[-1].split('_')
+        from_h = int(current_utc_date[3][1:])
+        current_utc_date = datetime(year=int(current_utc_date[4][0:4]),
+                                    month=int(current_utc_date[4][4:6]),
+                                    day=int(current_utc_date[4][6:8]),
+                                    hour=int(current_utc_date[4][8:10]))
+        train_end_time = current_utc_date + timedelta(hours=from_h)
         train_start_time = train_end_time - timedelta(hours=self.window_size)
         
         _ldaps_input = []
         
         for t in range(self.window_size + 1):
             curr_p = p.replace('h{}'.format(str(from_h).zfill(3)),
-                               'h{}'.format(str(from_h-self.window_size+t).zfill(3)))
+                               'h{}'.format(str(from_h - self.window_size + t).zfill(3)))
             curr_u = u.replace('h{}'.format(str(from_h).zfill(3)),
-                               'h{}'.format(str(from_h-self.window_size+t).zfill(3)))
+                               'h{}'.format(str(from_h - self.window_size + t).zfill(3)))
             
             # TODO: add pres_idx_list and unis_idx_list arguments using var_name
             _ldaps_input.append(self._merge_pres_unis(data_list=(curr_p, curr_u),
                                                       pres_idx_list=[4, 5, 6, 7, 8, 9],
                                                       unis_idx_list=[0, 2, 3, 5, 6, 7]))
         
-        if self.model == 'unet' or \
-           self.model == 'attn_unet':
+        if self.model == 'unet' or self.model == 'attn_unet':
             for idx, l in enumerate(_ldaps_input):
                 if idx == 0:
                     ldaps_input = l
@@ -159,10 +166,11 @@ class NIMSDataset(Dataset):
         gt = torch.where(gt >= 0.1, torch.ones(gt.shape), torch.zeros(gt.shape))
 
         # Make tensor of current target time for test logging
-        target_time_tensor = torch.tensor([train_end_time.year,
-                                           train_end_time.month,
-                                           train_end_time.day,
-                                           train_end_time.hour])
+        target_time_tensor = torch.tensor([current_utc_date.year,
+                                           current_utc_date.month,
+                                           current_utc_date.day,
+                                           current_utc_date.hour,
+                                           from_h])
 
         return ldaps_input, gt, target_time_tensor
 
