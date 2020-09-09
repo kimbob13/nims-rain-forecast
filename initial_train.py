@@ -87,13 +87,13 @@ if __name__ == '__main__':
                               pin_memory=True)
 
     # Set the optimizer
-    optimizer = set_optimizer(model, args)
+    optimizer, scheduler = set_optimizer(model, args)
 
     # Set experiment name and use it as process name if possible
     experiment_name = set_experiment_name(args, date)
 
     # Start training
-    nims_trainer = NIMSTrainer(model, criterion, optimizer, device,
+    nims_trainer = NIMSTrainer(model, criterion, optimizer, scheduler, device,
                                train_loader, None, len(nims_train_dataset), 0,
                                experiment_name, args,
                                normalization=normalization)

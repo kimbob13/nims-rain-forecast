@@ -9,12 +9,13 @@ import pandas as pd
 __all__ = ['NIMSTrainer']
 
 class NIMSTrainer:
-    def __init__(self, model, criterion, optimizer, device,
+    def __init__(self, model, criterion, optimizer, scheduler, device,
                  train_loader, test_loader, train_len, test_len,
                  experiment_name, args, normalization=None, test_result_path=None):
         self.model = model
         self.criterion = criterion
         self.optimizer = optimizer
+        self.scheduler = scheduler
         self.device = device
 
         self.train_loader = train_loader
@@ -102,6 +103,8 @@ class NIMSTrainer:
 
             train_log.loc[epoch] = [epoch_loss, pod, csi, bias]
             train_log.to_csv(train_log_path, index=False)
+
+            self.scheduler.step()
 
     def test(self):
         # self.model.eval()

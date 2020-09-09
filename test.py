@@ -96,7 +96,7 @@ if __name__ == '__main__':
                              pin_memory=True)
     
     # Set the optimizer
-    optimizer = set_optimizer(model, args)
+    optimizer, _ = set_optimizer(model, args)
 
     # Set experiment name and use it as process name if possible
     experiment_name = set_experiment_name(args, date)
@@ -121,7 +121,7 @@ if __name__ == '__main__':
     model.load_state_dict(chosen_info['model'])
 
     # Start testing
-    nims_trainer = NIMSTrainer(model, criterion, optimizer, device,
+    nims_trainer = NIMSTrainer(model, criterion, optimizer, None, device,
                                None, test_loader, 0, len(nims_test_dataset),
                                experiment_name, args,
                                normalization=normalization,

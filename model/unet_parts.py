@@ -17,18 +17,18 @@ class BasicConv(nn.Module):
         self.basic_conv = nn.Sequential()
         self.basic_conv.add_module('basic_conv1',
                                    nn.Conv2d(in_channels, out_channels,
-                                             kernel_size=3, padding=1))
+                                             kernel_size=3, padding=1, bias=False))
         self.basic_conv.add_module('basic_bn', nn.BatchNorm2d(out_channels))
         self.basic_conv.add_module('basic_relu', nn.LeakyReLU(inplace=True))
         self.basic_conv.add_module('basic_conv2',
                                    nn.Conv2d(out_channels, out_channels,
-                                             kernel_size=3, padding=1))
+                                             kernel_size=3, padding=1, bias=False))
 
         # Residual block
         self.residual = nn.Sequential()
         self.residual.add_module("res_conv",
                                  nn.Conv2d(in_channels, out_channels,
-                                           kernel_size=1, padding=0))
+                                           kernel_size=1, padding=0, bias=False))
         self.residual.add_module("res_bn", nn.BatchNorm2d(out_channels))
 
     def forward(self, x):
@@ -70,14 +70,14 @@ class DoubleConv(nn.Module):
                                         nn.LeakyReLU(inplace=True))
             self.double_conv.add_module("down_conv2",
                                         nn.Conv2d(in_channels, out_channels,
-                                                  kernel_size=3, padding=1))
+                                                  kernel_size=3, padding=1, bias=False))
             if dropout:
                 self.double_conv.add_module("down_dropout2",
                                             nn.Dropout(p=drop_p))
             self.residual.add_module("down_res_conv",
                                     nn.Conv2d(in_channels, out_channels,
                                             kernel_size=1, stride=1,
-                                            padding=0))
+                                            padding=0, bias=False))
             self.residual.add_module("down_res_maxpool", nn.MaxPool2d(2))
             self.residual.add_module("down_res_bn",
                                     nn.BatchNorm2d(out_channels))
@@ -94,17 +94,17 @@ class DoubleConv(nn.Module):
                                         nn.LeakyReLU(inplace=True))
             self.double_conv.add_module("up_conv1",
                                         nn.Conv2d(in_channels, mid_channels,
-                                                  kernel_size=3, padding=1))
+                                                  kernel_size=3, padding=1, bias=False))
             self.double_conv.add_module("up_bn2",
                                         nn.BatchNorm2d(mid_channels))
             self.double_conv.add_module("up_lrelu2",
                                         nn.LeakyReLU(inplace=True))
             self.double_conv.add_module("up_conv2",
                                         nn.Conv2d(mid_channels, out_channels,
-                                                  kernel_size=3, padding=1))
+                                                  kernel_size=3, padding=1, bias=False))
             self.residual.add_module("up_res_conv",
                                     nn.Conv2d(in_channels, out_channels,
-                                            kernel_size=1, padding=0))
+                                            kernel_size=1, padding=0, bias=False))
             self.residual.add_module("up_res_bn",
                                     nn.BatchNorm2d(out_channels))
 

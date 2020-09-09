@@ -356,7 +356,9 @@ def set_optimizer(model, args):
     elif args.optimizer == 'adadelta':
         optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
 
-    return optimizer
+    scheduler = optim.lr_scheduler.StepLR(optimizer, 80)
+
+    return optimizer, scheduler
 
 def set_experiment_name(args, date):
     """

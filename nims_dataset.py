@@ -26,8 +26,8 @@ MONTH_DAY = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 class NIMSDataset(Dataset):
     def __init__(self, model, model_utc, window_size, root_dir,
                  date, train=True, transform=None):
-        assert window_size >= 6 and window_size <= 48, \
-            'window_size must be in between 6 and 48'
+        # assert window_size >= 6 and window_size <= 48, \
+        #     'window_size must be in between 6 and 48'
 
         self.model = model
         self.model_utc = model_utc
@@ -74,6 +74,11 @@ class NIMSDataset(Dataset):
                 # If test mode, add 25 hours to end date
                 # to match the prediction range with LDAPS model
                 gt_end_date = end_date + timedelta(hours=25)
+
+                # If the end date is August 30, add only 15 hours
+                # because of data limitation
+                if self.date['end_month'] == 8 and self.date['end_day'] == 30:
+                    gt_end_date = end_date + timedelta(hours=15)
         
         # Set input data list
         data_dirs = sorted([os.path.join(root, d) for d in dirs \
@@ -145,8 +150,9 @@ class NIMSDataset(Dataset):
             
             # TODO: add pres_idx_list and unis_idx_list arguments using var_name
             _ldaps_input.append(self._merge_pres_unis(data_list=(curr_p, curr_u),
-                                                      pres_idx_list=[4, 5, 6, 7, 8, 9],
-                                                      unis_idx_list=[0, 2, 3, 5, 6, 7]))
+                                                      #pres_idx_list=[4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15],
+                                                      #unis_idx_list=[0, 2, 3, 5, 6, 7, 8, 9, 12, 14, 15, 16]))
+                                                      unis_idx_list=[2]))
         
         if self.model == 'unet' or self.model == 'attn_unet':
             for idx, l in enumerate(_ldaps_input):
@@ -175,16 +181,21 @@ class NIMSDataset(Dataset):
         return ldaps_input, gt, target_time_tensor
 
     def _merge_pres_unis(self, data_list, pres_idx_list=None, unis_idx_list=None):
+        assert (pres_idx_list != None) or (unis_idx_list != None)
+
         p, u = data_list
         pres = np.load(p).reshape(512, 512, 20).transpose()
         unis = np.load(u).reshape(512, 512, 20).transpose()
 
-        if pres_idx_list is not None:
-            pres = pres[pres_idx_list,:,:]
-        if unis_idx_list is not None:
-            unis = unis[unis_idx_list,:,:]
+        if pres_idx_list == None:
+            return unis[unis_idx_list, :, :]
+        elif unis_idx_list == None:
+            return pres[pres_idx_list, :, :]
+        else:
+            pres = pres[pres_idx_list, :, :]
+            unis = unis[unis_idx_list, :, :]
 
-        return np.concatenate((pres, unis), axis=0)
+            return np.concatenate((pres, unis), axis=0)
 
     def get_real_gt(self, idx):
         gt_path = self._gt_path_list[idx]
