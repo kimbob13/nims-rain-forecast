@@ -88,6 +88,20 @@ class NIMSTrainer:
             self._epoch(self.train_loader, train=True)
             epoch_loss, pod, csi, bias = self.nims_logger.print_stat()
 
+            if epoch in [20, 40, 60, 80, 100, 120]:
+                self.train_info['model'] = self.model.state_dict()
+                self.train_info['best_loss'] = epoch_loss
+                self.train_info['best_epoch'] = epoch
+                self.train_info['best_pod'] = pod
+                self.train_info['best_csi'] = csi
+                self.train_info['best_bias'] = bias
+                
+                train_info_epoch_path = train_info_path.replace(self.experiment_name,
+                                                                self.experiment_name+'_'+str(epoch))
+                if os.path.isfile(train_info_epoch_path):
+                    os.remove(train_info_epoch_path)
+                torch.save(self.train_info, train_info_epoch_path)
+
             if epoch_loss < self.train_info['best_loss']:
                 self.train_info['model'] = self.model.state_dict()
                 self.train_info['best_loss'] = epoch_loss
