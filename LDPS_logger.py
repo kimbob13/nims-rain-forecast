@@ -37,7 +37,7 @@ class LDPSLogger:
 
         # Test stat dataframe
         self.test_df = pd.DataFrame(index=['hit', 'miss', 'false alarm', 'correct negative', 'correct_update'])
-        self.daily_df = pd.DataFrame(index=['hit', 'miss', 'false alarm', 'correct negative'], columns=list(range(48)))
+        self.daily_df = pd.DataFrame(0, index=['hit', 'miss', 'false alarm', 'correct negative'], columns=list(range(48)))
 
     def update(self, loss=None, correct=None,
                binary_f1=None, macro_f1=None, micro_f1=None,
@@ -56,19 +56,17 @@ class LDPSLogger:
                 save = False
                 if target_hour_48 == 48:
                     save = True
-                elif (target_month == 7) and (target_day == 31) and (start_hour == 18):
-                    save = True
 
                 self.daily_df[target_hour_48] = [hit, miss, fa, cn]
                 if save:
                     daily_t = self.daily_df.T
-                    # There are only 14 hours for July 31 (because of UTC/KST)
-                    if (target_month == 7) and (target_day == 31) and (start_hour == 18):
-                        daily_t = daily_t.iloc[:15, :]
                     daily_t = daily_t.append(daily_t.sum(axis=0), ignore_index=True)
                     daily_t.to_csv(os.path.join(self.test_result_path,
                         '{:4d}{:02d}{:02d}+{:02d}.csv'.format(target_year, target_month, target_day, start_hour)),
                                    index=False)
+
+                    for col in self.daily_df.columns:
+                        self.daily_df[col].values[:] = 0
 
     def print_stat(self, test=False):
         total_stn = self.num_update * self.num_stn

@@ -41,7 +41,7 @@ def find_gt_path(gt_path_list, target_time):
         gt_time = gt_path.split('/')[-1].split('_')[3][:-2]
         if gt_time == target_time:
             return gt_path
-    raise NotImplemented
+    raise NotImplementedError
 
 if __name__ == '__main__':
     
@@ -58,8 +58,13 @@ if __name__ == '__main__':
     test_dates.append((test_date + datetime.timedelta(days=2)).strftime("%Y%m%d")) # Because LDPS data uses 48h after 0, 6, 12, 18h
 
     ### set LDAPS, OBS dir path
-    LDAPS_root_dir = '/home/osilab12/hdd2/NIMS_LDPS'
-    OBS_root_dir = '/home/osilab12/hdd2/OBS'
+    test_year = int(args.test_time[:4])
+    if test_year == 2019:
+        LDAPS_root_dir = '/home/osilab12/ssd/NIMS_LDPS'
+        OBS_root_dir = '/home/osilab12/ssd/OBS'
+    elif test_year == 2020:
+        LDAPS_root_dir = '/home/osilab12/hdd2/NIMS_LDPS'
+        OBS_root_dir = '/home/osilab12/hdd2/OBS'
     
     test_time = args.test_time
     LDAPS_year_dir = os.path.join(LDAPS_root_dir, test_time[:4])

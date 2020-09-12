@@ -159,6 +159,7 @@ def parse_args():
     common.add_argument('--dataset_dir', default='/home/osilab12/ssd/NIMS_LDPS', type=str, help='root directory of dataset')
     common.add_argument('--device', default='0', type=str, help='which device to use')
     common.add_argument('--num_workers', default=5, type=int, help='# of workers for dataloader')
+    common.add_argument('--eval_only', default=False, help='when enabled, do not run test epoch, only creating graph', action='store_true')
     common.add_argument('--custom_name', default=None, type=str, help='add customize experiment name')
     common.add_argument('--debug', help='turn on debugging print', action='store_true')
 
@@ -192,9 +193,8 @@ def parse_args():
     
     args = parser.parse_args()
 
-    if args.model_utc not in [0, 6, 12, 18]:
-        print('model_utc must be one of [0, 6, 12, 18]')
-        sys.exit()
+    assert args.model_utc in [0, 6, 12, 18], \
+           'model_utc must be one of [0, 6, 12, 18]'
 
     return args
 

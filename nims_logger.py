@@ -114,22 +114,17 @@ class NIMSLogger:
                                             month=utc_month,
                                             day=utc_day,
                                             hour=utc_hour) + timedelta(hours=from_h)
-                last_test_time = datetime(year=target_time[b][0],
-                                          month=8, day=31, hour=14)
 
                 # Save daily_df if we reach last prediction for one day(48 hours) or
                 # end of date for current test data (August 31 for both 2019 and 2020)
                 save = False
-                if (from_h == 48) or (target_test_time == last_test_time):
+                if from_h == 48:
                     save = True
 
-                # Update entry for target_test_time and save to file if save == True
+                # Update entry for target test time and save to file if save == True
                 self.daily_df[from_h] = [(correct[b] / self.num_stn) * 100, hit[b], miss[b], fa[b], cn[b]]
                 if save:
                     daily_t = self.daily_df.T
-                    # There are only 14 hours for August 31 (because of UTC/KST)
-                    if target_test_time == last_test_time:
-                        daily_t = daily_t.iloc[:from_h, :]
 
                     # Add last row that contains one day statistics
                     acc_mean = daily_t.iloc[:, 0].mean(axis=0)
@@ -141,6 +136,9 @@ class NIMSLogger:
                                                 '{:4d}{:02d}{:02d}+{:02d}.csv'
                                                 .format(utc_year, utc_month, utc_day, utc_hour)),
                                    index=False)
+
+                    for col in self.daily_df.columns:
+                        self.daily_df[col].values[:] = 0
 
                 # Update total test dataframe
                 if str(utc_day) in self.test_df:

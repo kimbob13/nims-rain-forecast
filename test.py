@@ -5,8 +5,85 @@ from nims_util import *
 from nims_dataset import NIMSDataset, ToTensor
 from nims_trainer import NIMSTrainer
 
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
 import os
 import time
+from collections import namedtuple
+
+NIMSStat = namedtuple('NIMSStat', 'acc, csi, pod, bias')
+
+def get_ldaps_eval_date_files(model_utc, date):
+    assert date['start_month'] == date['end_month']
+
+    ldaps_eval_dir = os.path.join('./results', 'LDAPS_Logger')
+    ldaps_eval_list = sorted([f for f in os.listdir(ldaps_eval_dir)])
+
+    ldaps_eval_date_files = []
+    for l in ldaps_eval_list:
+        ldaps_eval_date = os.path.join(ldaps_eval_dir, l)
+        ldaps_eval_date_files += sorted([os.path.join(ldaps_eval_date, f) \
+                                         for f in os.listdir(ldaps_eval_date) if f.endswith('.csv')])
+
+    date_str = '{:4d}{:02d}'.format(date['year'], date['start_month'])
+    ldaps_eval_date_files = [f for f in ldaps_eval_date_files \
+                             if int(f.split('/')[-1][9:11]) == int(model_utc) and \
+                             f.split('/')[-1][:6] == date_str]
+
+    return ldaps_eval_date_files
+
+def get_nims_stat(eval_date_files):
+    for i, eval_date in enumerate(eval_date_files):
+        df = pd.read_csv(eval_date)
+        
+        if i == 0:
+            df_according_h = df
+        else:
+            df_according_h += df
+
+    hit = np.array(df_according_h['hit'])[6: -1]
+    miss = np.array(df_according_h['miss'])[6: -1]
+    fa = np.array(df_according_h['false alarm'])[6: -1]
+    cn = np.array(df_according_h['correct negative'])[6: -1]
+
+    csi = np.where((hit + miss + fa) > 0, hit / (hit + miss + fa), -0.1)
+    pod = np.where((hit + miss) > 0, hit / (hit + miss), -0.1)
+    bias = np.where((hit + miss) > 0, (hit + fa) / (hit + miss), 1)
+    acc = ((hit + cn) / (hit + miss + fa + cn)) * 100
+
+    nims_stat = NIMSStat(acc, csi, pod, bias)
+
+    return nims_stat
+
+def plot_stat_graph(ldaps_stat, model_stat, date, model_name):
+    stat_list = ldaps_stat._fields
+    assert stat_list == model_stat._fields
+
+    # Create necessary directories
+    graph_dir = os.path.join('./results', 'comparison_graph')
+    if not os.path.isdir(graph_dir):
+        os.mkdir(graph_dir)
+
+    for stat_name in stat_list:
+        stat_dir = os.path.join(graph_dir, stat_name)
+        if not os.path.isdir(stat_dir):
+            os.mkdir(stat_dir)
+
+
+    for stat_name in stat_list:
+        _ldaps = getattr(ldaps_stat, stat_name)
+        _model = getattr(model_stat, stat_name)
+
+        plt.grid()
+        plt.plot(range(6, 49), _ldaps, label='LDAPS', marker='o', markersize=4)
+        plt.plot(range(6, 49), _model, label='ours', marker='o', markersize=4)
+        plt.legend()
+        plt.title('{:4d}-{:02d} {}'.format(date['year'], date['start_month'], stat_name.upper()))
+        plt.savefig('./results/comparison_graph/{}/{:4d}{:02d}-{}.pdf'
+                    .format(stat_name, date['year'], date['start_month'], model_name), dpi=300)
+        plt.close()
 
 if __name__ == '__main__':
     # Parsing command line arguments
@@ -28,8 +105,9 @@ if __name__ == '__main__':
         path_date = time.strftime('%Y/%m/%d %H:%M:%S', time.gmtime(os.path.getmtime(os.path.join(weight_dir, weight))))
         print('[{:2d}] <{:s}> {}'.format(i + 1, path_date, weight))
     choice = int(input('\n> '))
+    model_name = weight_list[choice - 1][:-3]
     chosen_info = torch.load(os.path.join(weight_dir, weight_list[choice - 1]), map_location=device)
-    print('Load weight...:', weight_list[choice - 1])
+    print('Load weight...:', model_name)
     print()
 
     # Select start and end date for train
@@ -126,4 +204,18 @@ if __name__ == '__main__':
                                experiment_name, args,
                                normalization=normalization,
                                test_result_path=current_test_path)
-    nims_trainer.test()
+    if not args.eval_only:
+        nims_trainer.test()
+
+    # Start evaluation with LDAPS
+    ldaps_eval_date_files = get_ldaps_eval_date_files(args.model_utc, date)
+    ldaps_stat = get_nims_stat(ldaps_eval_date_files)
+
+    # Load evaluate results from test model
+    model_eval_date_files = sorted([os.path.join(current_test_path, f) \
+                                    for f in os.listdir(current_test_path) \
+                                    if 'ipynb' not in f and 'total' not in f])
+    model_stat = get_nims_stat(model_eval_date_files)
+
+    # Plot graph for each stat
+    plot_stat_graph(ldaps_stat, model_stat, date, model_name)

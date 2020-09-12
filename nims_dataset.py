@@ -16,10 +16,8 @@ import copy
 
 __all__ = ['NIMSDataset', 'ToTensor']
 
-START_YEAR = 2009
-END_YEAR = 2018
-NORMAL_YEAR_DAY = 365
-LEAP_YEAR_DAY = 366
+VALID_YEAR = [2019, 2020]
+VALID_MONTH = [5, 6, 7, 8]
 MONTH_DAY = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 
 
@@ -47,6 +45,10 @@ class NIMSDataset(Dataset):
         root, dirs, _ = next(os.walk(os.path.join(self.root_dir, str(self.date['year'])), topdown=True))
         
         # Make datetime object for start and end date
+        assert self.date['year']        in VALID_YEAR
+        assert self.date['start_month'] in VALID_MONTH
+        assert self.date['end_month']   in VALID_MONTH
+
         start_date = datetime(year=self.date['year'],
                               month=self.date['start_month'],
                               day=self.date['start_day'],
@@ -65,20 +67,13 @@ class NIMSDataset(Dataset):
                             hour=23)
 
         # Ground truth end date
-        if self.date['end_month'] == 8 and self.date['end_day'] == 31:
-            gt_end_date = end_date - timedelta(hours=9)
+        if self.train:
+            gt_end_date = end_date
         else:
-            if self.train:
-                gt_end_date = end_date
-            else:
-                # If test mode, add 25 hours to end date
-                # to match the prediction range with LDAPS model
-                gt_end_date = end_date + timedelta(hours=25)
-
-                # If the end date is August 30, add only 15 hours
-                # because of data limitation
-                if self.date['end_month'] == 8 and self.date['end_day'] == 30:
-                    gt_end_date = end_date + timedelta(hours=15)
+            # If test mode, add (25 + model_utc) hours to end date
+            # to match the prediction range with LDAPS model
+            add_hour = 25 + self.model_utc
+            gt_end_date = end_date + timedelta(hours=add_hour)
         
         # Set input data list
         data_dirs = sorted([os.path.join(root, d) for d in dirs \
@@ -152,7 +147,7 @@ class NIMSDataset(Dataset):
             _ldaps_input.append(self._merge_pres_unis(data_list=(curr_p, curr_u),
                                                       #pres_idx_list=[4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15],
                                                       #unis_idx_list=[0, 2, 3, 5, 6, 7, 8, 9, 12, 14, 15, 16]))
-                                                      unis_idx_list=[2]))
+                                                      unis_idx_list=[2, 14, 17]))
         
         if self.model == 'unet' or self.model == 'attn_unet':
             for idx, l in enumerate(_ldaps_input):
