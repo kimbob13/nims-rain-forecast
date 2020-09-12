@@ -211,6 +211,7 @@ def set_device(args):
     if args.device == 'cpu':
         device = torch.device('cpu')
     else:
+        os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
         os.environ['CUDA_VISIBLE_DEVICES'] = args.device
         device = torch.device('cuda:0')
 
