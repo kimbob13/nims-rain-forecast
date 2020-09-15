@@ -147,7 +147,8 @@ class NIMSDataset(Dataset):
             _ldaps_input.append(self._merge_pres_unis(data_list=(curr_p, curr_u),
                                                       #pres_idx_list=[4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15],
                                                       #unis_idx_list=[0, 2, 3, 5, 6, 7, 8, 9, 12, 14, 15, 16]))
-                                                      unis_idx_list=[2, 14, 17]))
+                                                      unis_idx_list=[2, 14, 17],
+                                                      use_kindex=True))
         
         if self.model == 'unet' or self.model == 'attn_unet':
             for idx, l in enumerate(_ldaps_input):
@@ -175,22 +176,45 @@ class NIMSDataset(Dataset):
 
         return ldaps_input, gt, target_time_tensor
 
-    def _merge_pres_unis(self, data_list, pres_idx_list=None, unis_idx_list=None):
+    def _merge_pres_unis(self, data_list, pres_idx_list=None, unis_idx_list=None, use_kindex=True):
         assert (pres_idx_list != None) or (unis_idx_list != None)
 
         p, u = data_list
         pres = np.load(p).reshape(512, 512, 20).transpose()
         unis = np.load(u).reshape(512, 512, 20).transpose()
+        
+        if use_kindex:
+            T_850 = np.expand_dims(pres[9], axis=0)
+            T_700 = np.expand_dims(pres[10], axis=0)
+            T_500 = np.expand_dims(pres[11], axis=0)
 
+            rh_850 = np.expand_dims(np.where(pres[13]>0, pres[13], 0.), axis=0)
+            rh_700 = np.expand_dims(np.where(pres[14]>0, pres[14], 0.), axis=0)
+
+            t_850 = T_850 - 273.15
+            t_700 = T_700 - 273.15
+
+            D_850 = (rh_850/100)**(1/8) * (112+(0.9*t_850)) - 112+(0.1*t_850) + 273.15
+            D_700 = (rh_700/100)**(1/8) * (112+(0.9*t_700)) - 112+(0.1*t_700) + 273.15
+            kindex = (T_850 - T_500) + D_850 - (T_700 - D_700)
+        
         if pres_idx_list == None:
-            return unis[unis_idx_list, :, :]
+            if use_kindex:
+                return np.concatenate((unis[unis_idx_list, :, :], kindex), axis=0)
+            else:
+                return unis[unis_idx_list, :, :]
         elif unis_idx_list == None:
-            return pres[pres_idx_list, :, :]
+            if use_kindex:
+                return np.concatenate((pres[pres_idx_list, :, :], kindex), axis=0)
+            else:
+                return pres[pres_idx_list, :, :]
         else:
             pres = pres[pres_idx_list, :, :]
             unis = unis[unis_idx_list, :, :]
-
-            return np.concatenate((pres, unis), axis=0)
+            if use_kindex:
+                return np.concatenate((pres, unis, kindex), axis=0)
+            else:
+                return np.concatenate((pres, unis), axis=0)
 
     def get_real_gt(self, idx):
         gt_path = self._gt_path_list[idx]
