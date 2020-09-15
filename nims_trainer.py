@@ -11,7 +11,7 @@ __all__ = ['NIMSTrainer']
 class NIMSTrainer:
     def __init__(self, model, criterion, optimizer, scheduler, device,
                  train_loader, test_loader, train_len, test_len,
-                 experiment_name, args, normalization=None, test_result_path=None):
+                 experiment_name, args, normalization=None, test_date_list=None):
         self.model = model
         self.criterion = criterion
         self.optimizer = optimizer
@@ -59,13 +59,13 @@ class NIMSTrainer:
                                           macro_f1=False, micro_f1=False,
                                           hit=True, miss=True, fa=True, cn=True,
                                           stn_codi=self.stn_codi,
-                                          test_result_path=test_result_path)
+                                          test_date_list=test_date_list)
         elif model.name == 'convlstm':
             self.nims_logger = NIMSLogger(loss=True, correct=False, binary_f1=True,
                                           macro_f1=False, micro_f1=False,
                                           hit=True, miss=True, fa=True, cn=True,
                                           stn_codi=self.stn_codi,
-                                          test_result_path=test_result_path)
+                                          test_date_list=test_date_list)
 
     def _get_station_coordinate(self):
         codi_aws_df = pd.read_csv('./codi_ldps_aws/codi_ldps_aws_512.csv')
@@ -88,7 +88,7 @@ class NIMSTrainer:
             self._epoch(self.train_loader, train=True)
             epoch_loss, pod, csi, bias = self.nims_logger.print_stat()
 
-            if epoch in [20, 40, 60, 80, 100, 120]:
+            if epoch in [10, 20, 30, 40, 50, 60]:
                 self.train_info['model'] = self.model.state_dict()
                 self.train_info['best_loss'] = epoch_loss
                 self.train_info['best_epoch'] = epoch

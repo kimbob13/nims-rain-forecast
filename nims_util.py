@@ -47,7 +47,7 @@ def create_results_dir():
     if not os.path.isdir(model_dir):
         os.mkdir(model_dir)
 
-def select_date():
+def select_date(test=False):
     # Mode selection
     while True:
         try:
@@ -58,6 +58,9 @@ def select_date():
 
             if date_mode not in [1, 2]:
                 print('You must enter value between 1 or 2')
+                continue
+            elif test == True and date_mode == 2:
+                print('You must select [Monthly] mode for test')
                 continue
 
         except ValueError:
@@ -357,7 +360,7 @@ def set_optimizer(model, args):
     elif args.optimizer == 'adadelta':
         optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
 
-    scheduler = optim.lr_scheduler.StepLR(optimizer, 80)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, 40)
 
     return optimizer, scheduler
 

@@ -10,14 +10,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 import os
+import shutil
 import time
 from collections import namedtuple
 
 NIMSStat = namedtuple('NIMSStat', 'acc, csi, pod, bias')
 
 def get_ldaps_eval_date_files(model_utc, date):
-    assert date['start_month'] == date['end_month']
-
     ldaps_eval_dir = os.path.join('./results', 'LDAPS_Logger')
     ldaps_eval_list = sorted([f for f in os.listdir(ldaps_eval_dir)])
 
@@ -80,9 +79,17 @@ def plot_stat_graph(ldaps_stat, model_stat, date, model_name):
         plt.plot(range(6, 49), _ldaps, label='LDAPS', marker='o', markersize=4)
         plt.plot(range(6, 49), _model, label='ours', marker='o', markersize=4)
         plt.legend()
-        plt.title('{:4d}-{:02d} {}'.format(date['year'], date['start_month'], stat_name.upper()))
-        plt.savefig('./results/comparison_graph/{}/{:4d}{:02d}-{}.pdf'
-                    .format(stat_name, date['year'], date['start_month'], model_name), dpi=300)
+        if date['end_month'] != None:
+            plt.title('{:4d}-{:02d} ~ {:4d}-{:02d} {}'
+                      .format(date['year'], date['start_month'],
+                              date['year'], date['end_month'], stat_name.upper()))
+            plt.savefig('./results/comparison_graph/{}/{:4d}{:02d}-{:4d}{:02d}-{}.pdf'
+                        .format(stat_name, date['year'], date['start_month'],
+                                date['year'], date['end_month'], model_name), dpi=300)
+        else:
+            plt.title('{:4d}-{:02d} {}'.format(date['year'], date['start_month'], stat_name.upper()))
+            plt.savefig('./results/comparison_graph/{}/{:4d}{:02d}-{}.pdf'
+                        .format(stat_name, date['year'], date['start_month'], model_name), dpi=300)
         plt.close()
 
 if __name__ == '__main__':
@@ -111,7 +118,7 @@ if __name__ == '__main__':
     print()
 
     # Select start and end date for train
-    date = select_date()
+    date = select_date(test=True)
 
     # Replace model related arguments to the train info
     args.n_blocks = chosen_info['n_blocks']
@@ -188,12 +195,28 @@ if __name__ == '__main__':
     if not os.path.isdir(test_result_path):
         os.mkdir(test_result_path)
 
-    # Create directory for currently tested date for chosen weight
-    current_test_date = '{:4d}{:02d}{:02d}-{:04d}{:02d}{:02d}'.format(date['year'], date['start_month'], date['start_day'],
-                                                                      date['year'], date['end_month'], date['end_day'])
-    current_test_path = os.path.join(test_result_path, current_test_date)
-    if not os.path.isdir(current_test_path):
-        os.mkdir(current_test_path)
+    # Create directory for each month currently tested date for chosen weight
+    test_date_list = []
+    MONTH_DAY = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    test_months = list(range(date['start_month'], date['end_month'] + 1))
+    for i, month in enumerate(test_months):
+        if i == 0:
+            start_day = date['start_day']
+            end_day = MONTH_DAY[month]
+        elif i == len(test_months) - 1:
+            start_day = 1
+            end_day = date['end_day']
+        else:
+            start_day = 1
+            end_day = MONTH_DAY[month]
+
+        current_test_date = '{:4d}{:02d}{:02d}-{:04d}{:02d}{:02d}'.format(date['year'], month, start_day,
+                                                                          date['year'], month, end_day)
+        current_test_path = os.path.join(test_result_path, current_test_date)
+        if not os.path.isdir(current_test_path):
+            os.mkdir(current_test_path)
+
+        test_date_list.append(current_test_path)
 
     # Load trained model weight
     model.load_state_dict(chosen_info['model'])
@@ -203,19 +226,48 @@ if __name__ == '__main__':
                                None, test_loader, 0, len(nims_test_dataset),
                                experiment_name, args,
                                normalization=normalization,
-                               test_result_path=current_test_path)
+                               test_date_list=test_date_list)
     if not args.eval_only:
-        nims_trainer.test()
-
-    # Start evaluation with LDAPS
-    ldaps_eval_date_files = get_ldaps_eval_date_files(args.model_utc, date)
-    ldaps_stat = get_nims_stat(ldaps_eval_date_files)
+        nims_trainer.test()        
 
     # Load evaluate results from test model
-    model_eval_date_files = sorted([os.path.join(current_test_path, f) \
-                                    for f in os.listdir(current_test_path) \
-                                    if 'ipynb' not in f and 'total' not in f])
-    model_stat = get_nims_stat(model_eval_date_files)
+    for current_test_path in test_date_list:
+        _curr_date = current_test_path.split('/')[-1].split('-')[0]
+        year, month = int(_curr_date[:4]), int(_curr_date[4:6])
+        curr_date = {'year': year, 'start_month': month, 'end_month': None}
 
-    # Plot graph for each stat
-    plot_stat_graph(ldaps_stat, model_stat, date, model_name)
+        # Start evaluation with LDAPS
+        ldaps_eval_date_files = get_ldaps_eval_date_files(args.model_utc, curr_date)
+        ldaps_stat = get_nims_stat(ldaps_eval_date_files)
+
+        model_eval_date_files = sorted([os.path.join(current_test_path, f) \
+                                        for f in os.listdir(current_test_path) \
+                                        if 'ipynb' not in f and 'total' not in f])
+        model_stat = get_nims_stat(model_eval_date_files)
+
+        # Plot graph for each stat
+        plot_stat_graph(ldaps_stat, model_stat, curr_date, model_name)
+
+    # Create directory for whole test date if start and end month is different
+    if date['start_month'] != date['end_month']:
+        total_test_date = '{:4d}{:02d}{:02d}-{:04d}{:02d}{:02d}'.format(date['year'], date['start_month'], date['start_day'],
+                                                                        date['year'], date['end_month'], date['end_day'])
+        total_test_path = os.path.join(test_result_path, total_test_date)
+        if not os.path.isdir(total_test_path):
+            os.mkdir(total_test_path)
+
+        # Copy monthly eval file to total path
+        for current_test_path in test_date_list:
+            for f in os.listdir(current_test_path):
+                if 'ipynb' in f or 'total' in f:
+                    continue
+                shutil.copy(os.path.join(current_test_path, f), total_test_path)
+        
+        total_eval_date_files = sorted([os.path.join(total_test_path, f) \
+                                        for f in os.listdir(total_test_path) \
+                                        if 'ipynb' not in f and 'total' not in f])
+        total_stat = get_nims_stat(total_eval_date_files)
+
+        # Plot graph for each stat
+        plot_stat_graph(ldaps_stat, total_stat, date, model_name)
+        

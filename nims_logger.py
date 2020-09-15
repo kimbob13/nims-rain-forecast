@@ -11,7 +11,7 @@ __all__ = ['NIMSLogger']
 class NIMSLogger:
     def __init__(self, loss, correct, binary_f1, macro_f1, micro_f1,
                  hit, miss, fa, cn, stn_codi,
-                 test_result_path=None, num_classes=2):
+                 test_date_list=None, num_classes=2):
         """
         <Parameter>
         loss, correct, macro_f1, micro_f1 [bool]: whether to record each variable
@@ -25,7 +25,11 @@ class NIMSLogger:
         self.stn_codi = stn_codi
         self.num_stn = len(stn_codi)
         self.num_classes = num_classes
-        self.test_result_path = test_result_path
+        self.test_date_dict = dict()
+
+        for test_date_path in test_date_list:
+            month = int(test_date_path.split('/')[-1][4:6])
+            self.test_date_dict[month] = test_date_path
 
         self.num_update = 0
 
@@ -132,7 +136,7 @@ class NIMSLogger:
                     daily_t.iloc[-1, 0] = acc_mean
 
                     # Save to file
-                    daily_t.to_csv(os.path.join(self.test_result_path,
+                    daily_t.to_csv(os.path.join(self.test_date_dict[utc_month],
                                                 '{:4d}{:02d}{:02d}+{:02d}.csv'
                                                 .format(utc_year, utc_month, utc_day, utc_hour)),
                                    index=False)
@@ -191,8 +195,8 @@ class NIMSLogger:
         print(stat_str)
         print()
 
-        if test:
-            self._save_test_result()
+        # if test:
+        #     self._save_test_result()
 
         self._clear_one_target_stat(self.one_epoch_stat)
 
