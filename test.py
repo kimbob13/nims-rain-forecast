@@ -16,6 +16,34 @@ from collections import namedtuple
 
 NIMSStat = namedtuple('NIMSStat', 'acc, csi, pod, bias')
 
+def recreate_total_stat(total_test_path):
+    one_day_stat_list = sorted([os.path.join(total_test_path, f) for f in os.listdir(total_test_path) if f.endswith('.csv')])
+    total_df = pd.DataFrame(columns=['date', 'acc', 'hit', 'miss', 'false alarm', 'correct negative'])
+
+    for one_day_stat in one_day_stat_list:
+        date = one_day_stat.split('/')[-1]
+        year, month, day = date[:4], date[4:6], date[6:8]
+
+        one_day_df = pd.read_csv(one_day_stat)
+        total_df = total_df.append({'date': '{}-{}-{}'.format(year, month, day),
+                                    'acc': one_day_df.iloc[-1, 0],
+                                    'hit': one_day_df.iloc[-1, 1],
+                                    'miss': one_day_df.iloc[-1, 2],
+                                    'false alarm': one_day_df.iloc[-1, 3],
+                                    'correct negative': one_day_df.iloc[-1, 4]},
+                                   ignore_index=True)
+
+    total_df = total_df.append(total_df.iloc[:, 2:].sum(axis=0), ignore_index=True)
+    total_hit = total_df.iloc[-1, 2]
+    total_miss = total_df.iloc[-1, 3]
+    total_fa = total_df.iloc[-1, 4]
+    total_cn = total_df.iloc[-1, 5]
+
+    total_df.iloc[-1, 1] = (total_hit + total_cn) / (total_hit + total_miss + total_fa + total_cn)
+    total_df.iloc[-1, 0] = 'Total'
+
+    total_df.to_csv(os.path.join(total_test_path, '..', 'total.csv'), index=False)
+
 def get_ldaps_eval_date_files(model_utc, date):
     ldaps_eval_dir = os.path.join('./results', 'LDAPS_Logger')
     ldaps_eval_list = sorted([f for f in os.listdir(ldaps_eval_dir)])
@@ -226,6 +254,10 @@ if __name__ == '__main__':
         current_test_date = '{:4d}{:02d}{:02d}-{:04d}{:02d}{:02d}'.format(date['year'], month, start_day,
                                                                           date['year'], month, end_day)
         current_test_path = os.path.join(test_result_path, current_test_date)
+        if args.eval_only:
+            assert os.path.isdir(current_test_path), \
+                   'You have to run test for this date range before running eval_only mode'
+        
         if not os.path.isdir(current_test_path):
             os.mkdir(current_test_path)
 
@@ -275,7 +307,11 @@ if __name__ == '__main__':
                 if 'ipynb' in f or 'total' in f:
                     continue
                 shutil.copy(os.path.join(current_test_path, f), total_test_path)
-        
+
+        # Recreate total test stat file in eval_only mode
+        if args.eval_only:
+            recreate_total_stat(total_test_path)
+            
         total_eval_date_files = sorted([os.path.join(total_test_path, f) \
                                         for f in os.listdir(total_test_path) \
                                         if 'ipynb' not in f and 'total' not in f])
@@ -287,3 +323,4 @@ if __name__ == '__main__':
         # Plot graph for each stat
         plot_stat_graph(total_ldaps_stat, total_stat, date, model_name)
         
+    print('FINISHED')
