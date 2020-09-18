@@ -86,6 +86,7 @@ def plot_stat_graph(ldaps_stat, model_stat, date, model_name):
         plt.grid()
         plt.plot(range(6, 49), _ldaps, label='LDAPS', marker='o', markersize=4)
         plt.plot(range(6, 49), _model, label='ours', marker='o', markersize=4)
+        plt.xticks(range(6, 49, 6))
         plt.legend()
         if date['end_month'] != None:
             plt.title('{:4d}-{:02d} ~ {:4d}-{:02d} {}'
@@ -156,6 +157,7 @@ if __name__ == '__main__':
                                     window_size=args.window_size,
                                     root_dir=args.dataset_dir,
                                     date=date,
+                                    lite=args.lite,
                                     train=False,
                                     transform=ToTensor())
 

@@ -23,7 +23,7 @@ MONTH_DAY = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 
 class NIMSDataset(Dataset):
     def __init__(self, model, model_utc, window_size, root_dir,
-                 date, train=True, transform=None):
+                 date, lite=False, train=True, transform=None):
         # assert window_size >= 6 and window_size <= 48, \
         #     'window_size must be in between 6 and 48'
 
@@ -32,6 +32,7 @@ class NIMSDataset(Dataset):
         self.window_size = window_size
         self.root_dir = root_dir
         self.date = date
+        self.lite = lite
         self.train = train
         self.transform = transform
         
@@ -85,30 +86,37 @@ class NIMSDataset(Dataset):
         unis_data_path_list = []
         for data_dir in data_dirs:
             curr_data_path_list = [f for f in os.listdir(data_dir)]
-            pres_data_path_list = sorted([f for f in curr_data_path_list \
-                                          if 'pres' in f and int(f.split('_')[4][8:10]) == self.model_utc])
             unis_data_path_list = sorted([f for f in curr_data_path_list \
                                           if 'unis' in f and int(f.split('_')[4][8:10]) == self.model_utc])
-            assert len(pres_data_path_list) == len(unis_data_path_list)
+            if self.lite:
+                pres_data_path_list = unis_data_path_list
+            else:
+                pres_data_path_list = sorted([f for f in curr_data_path_list \
+                                              if 'pres' in f and int(f.split('_')[4][8:10]) == self.model_utc])
+                assert len(pres_data_path_list) == len(unis_data_path_list)
             
             for p, u in list(zip(pres_data_path_list, unis_data_path_list)):
                 # p name: ldps_pres_sp_h0xx_yyyymmddhh
+                # u name: ldps_unis_sp_h0xx_yyyymmddhh
                 # hh: LDAPS prediction start hour (00, 06, 12, 18)
                 # xx: xx hour prediction from hh
                 
                 # Considering the calculation time of LDAPS model (5 hours)
-                from_h = int(p.split('_')[3][1:])
+                from_h = int(u.split('_')[3][1:])
                 if from_h < 6:
                     continue
                 else:
-                    curr_time = datetime(year=int(p.split('_')[4][0:4]),
-                                         month=int(p.split('_')[4][4:6]),
-                                         day=int(p.split('_')[4][6:8]),
-                                         hour=int(p.split('_')[4][8:10])) + timedelta(hours=from_h)
+                    curr_time = datetime(year=int(u.split('_')[4][0:4]),
+                                         month=int(u.split('_')[4][4:6]),
+                                         day=int(u.split('_')[4][6:8]),
+                                         hour=int(u.split('_')[4][8:10])) + timedelta(hours=from_h)
                     if curr_time > gt_end_date:
                         continue
-                    else:                    
-                        data_path_list.append((os.path.join(data_dir, p), os.path.join(data_dir, u)))
+                    else:
+                        if self.lite:
+                            data_path_list.append(os.path.join(data_dir, u))
+                        else:
+                            data_path_list.append((os.path.join(data_dir, p), os.path.join(data_dir, u)))
             
         # Set target data list
         gt_dir = os.path.join(self.root_dir, '..', 'OBS', str(self.date['year']))
@@ -123,10 +131,13 @@ class NIMSDataset(Dataset):
         return len(self._data_path_list)
 
     def __getitem__(self, idx):
-        p, u = self._data_path_list[idx]
+        if self.lite:
+            u = self._data_path_list[idx]
+        else:
+            p, u = self._data_path_list[idx]
         
         # train_end_time is also target time for this x, y instance
-        current_utc_date = p.split('/')[-1].split('_')
+        current_utc_date = u.split('/')[-1].split('_')
         from_h = int(current_utc_date[3][1:])
         current_utc_date = datetime(year=int(current_utc_date[4][0:4]),
                                     month=int(current_utc_date[4][4:6]),
@@ -138,13 +149,16 @@ class NIMSDataset(Dataset):
         _ldaps_input = []
         
         for t in range(self.window_size + 1):
-            curr_p = p.replace('h{}'.format(str(from_h).zfill(3)),
-                               'h{}'.format(str(from_h - self.window_size + t).zfill(3)))
             curr_u = u.replace('h{}'.format(str(from_h).zfill(3)),
                                'h{}'.format(str(from_h - self.window_size + t).zfill(3)))
+            data_list = [curr_u]
+            if not self.lite:
+                curr_p = p.replace('h{}'.format(str(from_h).zfill(3)),
+                                   'h{}'.format(str(from_h - self.window_size + t).zfill(3)))
+                data_list.insert(0, curr_p)
             
             # TODO: add pres_idx_list and unis_idx_list arguments using var_name
-            _ldaps_input.append(self._merge_pres_unis(data_list=(curr_p, curr_u),
+            _ldaps_input.append(self._merge_pres_unis(data_list=data_list,
                                                       #pres_idx_list=[4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15],
                                                       #unis_idx_list=[0, 2, 3, 5, 6, 7, 8, 9, 12, 14, 15, 16]))
                                                       unis_idx_list=[2, 14, 17],
@@ -179,42 +193,42 @@ class NIMSDataset(Dataset):
     def _merge_pres_unis(self, data_list, pres_idx_list=None, unis_idx_list=None, use_kindex=True):
         assert (pres_idx_list != None) or (unis_idx_list != None)
 
-        p, u = data_list
-        pres = np.load(p).reshape(512, 512, 20).transpose()
-        unis = np.load(u).reshape(512, 512, 20).transpose()
-        
-        if use_kindex:
-            T_850 = np.expand_dims(pres[9], axis=0)
-            T_700 = np.expand_dims(pres[10], axis=0)
-            T_500 = np.expand_dims(pres[11], axis=0)
+        if self.lite:
+            u = data_list[0]
+            unis = np.load(u)
 
-            rh_850 = np.expand_dims(np.where(pres[13]>0, pres[13], 0.), axis=0)
-            rh_700 = np.expand_dims(np.where(pres[14]>0, pres[14], 0.), axis=0)
-
-            t_850 = T_850 - 273.15
-            t_700 = T_700 - 273.15
-
-            D_850 = (rh_850/100)**(1/8) * (112+(0.9*t_850)) - 112+(0.1*t_850) + 273.15
-            D_700 = (rh_700/100)**(1/8) * (112+(0.9*t_700)) - 112+(0.1*t_700) + 273.15
-            kindex = (T_850 - T_500) + D_850 - (T_700 - D_700)
-        
-        if pres_idx_list == None:
-            if use_kindex:
-                return np.concatenate((unis[unis_idx_list, :, :], kindex), axis=0)
-            else:
-                return unis[unis_idx_list, :, :]
-        elif unis_idx_list == None:
-            if use_kindex:
-                return np.concatenate((pres[pres_idx_list, :, :], kindex), axis=0)
-            else:
-                return pres[pres_idx_list, :, :]
+            return unis
         else:
-            pres = pres[pres_idx_list, :, :]
-            unis = unis[unis_idx_list, :, :]
+            p, u = data_list
+            pres = np.load(p).reshape(512, 512, 20).transpose()
+            unis = np.load(u).reshape(512, 512, 20).transpose()
+
             if use_kindex:
-                return np.concatenate((pres, unis, kindex), axis=0)
-            else:
-                return np.concatenate((pres, unis), axis=0)
+                T_850 = np.expand_dims(pres[9], axis=0)
+                T_700 = np.expand_dims(pres[10], axis=0)
+                T_500 = np.expand_dims(pres[11], axis=0)
+
+                rh_850 = np.expand_dims(np.where(pres[13] > 0, pres[13], 0.), axis=0)
+                rh_700 = np.expand_dims(np.where(pres[14] > 0, pres[14], 0.), axis=0)
+
+                t_850 = T_850 - 273.15
+                t_700 = T_700 - 273.15
+
+                D_850 = (rh_850 / 100) ** (1 / 8) * (112 + (0.9 * t_850)) - 112 + (0.1 * t_850) + 273.15
+                D_700 = (rh_700 / 100) ** (1 / 8) * (112 + (0.9 * t_700)) - 112 + (0.1 * t_700) + 273.15
+                kindex = (T_850 - T_500) + D_850 - (T_700 - D_700)
+
+            concat_list = []
+            if pres_idx_list != None:
+                pres = pres[pres_idx_list, :, :]
+                concat_list.append(pres)
+            if unis_idx_list != None:
+                unis = unis[unis_idx_list, :, :]
+                concat_list.append(unis)
+            if use_kindex:
+                concat_list.append(kindex)
+
+            return np.concatenate(concat_list, axis=0)
 
     def get_real_gt(self, idx):
         gt_path = self._gt_path_list[idx]

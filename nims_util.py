@@ -176,6 +176,7 @@ def parse_args():
     nims_dataset = parser.add_argument_group('nims dataset related')
     nims_dataset.add_argument('--window_size', default=6, type=int, help='# of input sequences in time')
     nims_dataset.add_argument('--model_utc', default=0, type=int, help='base UTC time of data (0, 6, 12, 18)')
+    nims_dataset.add_argument('--lite', default=False, help='lite version of nims dataset', action='store_true')
     # nims_dataset.add_argument('--variables', nargs='+',
     #                           help='which variables to use (rain, cape, etc.). \
     #                                 Can be single number which specify how many variables to use \
