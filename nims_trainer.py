@@ -88,7 +88,7 @@ class NIMSTrainer:
             self._epoch(self.train_loader, train=True)
             epoch_loss, pod, csi, bias = self.nims_logger.print_stat()
 
-            if epoch in [10, 20, 30, 40, 50, 60]:
+            if epoch in range(10, self.num_epochs + 1, 10):
                 self.train_info['model'] = self.model.state_dict()
                 self.train_info['best_loss'] = epoch_loss
                 self.train_info['best_epoch'] = epoch

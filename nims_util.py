@@ -189,6 +189,7 @@ def parse_args():
     hyperparam.add_argument('--batch_size', default=1, type=int, help='batch size')
     hyperparam.add_argument('--optimizer', default='adam', type=str, help='which optimizer to use (rmsprop, adam, sgd)')
     hyperparam.add_argument('--lr', default=0.001, type=float, help='learning rate of optimizer')
+    hyperparam.add_argument('--wd', default=5e-4, type=float, help='weight decay')
     
     finetune = parser.add_argument_group('finetune related')
     finetune.add_argument('--final_test_time', default=None, type=str, help='the final date of fine-tuning')
@@ -352,9 +353,9 @@ def set_model(sample, device, args, train=True,
 def set_optimizer(model, args):
     if args.optimizer == 'sgd':
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.99,
-                              weight_decay=5e-4, nesterov=True)
+                              weight_decay=args.wd, nesterov=True)
     elif args.optimizer == 'adam':
-        optimizer = optim.Adam(model.parameters(), lr=args.lr)
+        optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.wd)
     elif args.optimizer == 'rmsprop':
         optimizer = optim.RMSprop(model.parameters(), lr=args.lr,
                                   alpha=0.9, eps=1e-6)
@@ -375,6 +376,11 @@ def set_experiment_name(args, date):
     date_str = ' ({:4d}{:02d}{:02d}-{:04d}{:02d}{:02d})'.format(date['year'], date['start_month'], date['start_day'],
                                                            date['year'], date['end_month'], date['end_day'])
 
+    if args.wd != 0:
+        wd_str = '{:1.0e}'.format(args.wd)
+    else:
+        wd_str = '0'
+
     cross_entropy_weight = ''
     if args.cross_entropy_weight:
         cross_entropy_weight = '_weight'
@@ -392,7 +398,7 @@ def set_experiment_name(args, date):
         custom_name = '_' + args.custom_name
 
     if args.model == 'unet':            
-        experiment_name = 'nims-utc{}-unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}_sr{}_{}{}{}{}{}{}' \
+        experiment_name = 'nims-utc{}-unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}_sr{}_{}{}_wd{}{}{}{}{}' \
                           .format(args.model_utc,
                                   args.n_blocks,
                                   args.start_channels,
@@ -403,6 +409,7 @@ def set_experiment_name(args, date):
                                   args.sampling_ratio,
                                   args.optimizer,
                                   args.lr,
+                                  wd_str,
                                   cross_entropy_weight,
                                   normalization,
                                   bilinear,
@@ -410,7 +417,7 @@ def set_experiment_name(args, date):
                                   date_str)
 
     elif args.model == 'attn_unet':
-        experiment_name = 'nims-utc{}-attn_unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}_sr{}_{}{}{}{}{}{}' \
+        experiment_name = 'nims-utc{}-attn_unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}_sr{}_{}{}_wd{}{}{}{}{}' \
                           .format(args.model_utc,
                                   args.n_blocks,
                                   args.start_channels,
@@ -421,6 +428,7 @@ def set_experiment_name(args, date):
                                   args.sampling_ratio,
                                   args.optimizer,
                                   args.lr,
+                                  wd_str,
                                   cross_entropy_weight,
                                   normalization,
                                   bilinear,
