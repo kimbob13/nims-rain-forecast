@@ -27,9 +27,10 @@ class NIMSLogger:
         self.num_classes = num_classes
         self.test_date_dict = dict()
 
-        for test_date_path in test_date_list:
-            month = int(test_date_path.split('/')[-1][4:6])
-            self.test_date_dict[month] = test_date_path
+        if test_date_list != None:
+            for test_date_path in test_date_list:
+                month = int(test_date_path.split('/')[-1][4:6])
+                self.test_date_dict[month] = test_date_path
 
         self.num_update = 0
 

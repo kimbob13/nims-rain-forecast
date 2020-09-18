@@ -119,7 +119,7 @@ class NIMSDataset(Dataset):
 
         return data_path_list, gt_path_list
 
-    def __len__(self):            
+    def __len__(self):
         return len(self._data_path_list)
 
     def __getitem__(self, idx):

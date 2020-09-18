@@ -26,10 +26,18 @@ def get_ldaps_eval_date_files(model_utc, date):
         ldaps_eval_date_files += sorted([os.path.join(ldaps_eval_date, f) \
                                          for f in os.listdir(ldaps_eval_date) if f.endswith('.csv')])
 
-    date_str = '{:4d}{:02d}'.format(date['year'], date['start_month'])
-    ldaps_eval_date_files = [f for f in ldaps_eval_date_files \
-                             if int(f.split('/')[-1][9:11]) == int(model_utc) and \
-                             f.split('/')[-1][:6] == date_str]
+    if date['end_month'] == None:
+        date_str = '{:4d}{:02d}'.format(date['year'], date['start_month'])
+        ldaps_eval_date_files = [f for f in ldaps_eval_date_files \
+                                 if int(f.split('/')[-1][9:11]) == int(model_utc) and \
+                                 f.split('/')[-1][:6] == date_str]
+    else:
+        start_date_str = '{:4d}{:02d}'.format(date['year'], date['start_month'])
+        end_date_str = '{:4d}{:02d}'.format(date['year'], date['end_month'])
+        ldaps_eval_date_files = [f for f in ldaps_eval_date_files \
+                                 if int(f.split('/')[-1][9:11]) == int(model_utc) and \
+                                 f.split('/')[-1][:6] >= start_date_str and \
+                                 f.split('/')[-1][:6] <= end_date_str]
 
     return ldaps_eval_date_files
 
@@ -268,6 +276,9 @@ if __name__ == '__main__':
                                         if 'ipynb' not in f and 'total' not in f])
         total_stat = get_nims_stat(total_eval_date_files)
 
+        total_ldaps_eval_date_files = get_ldaps_eval_date_files(args.model_utc, date)
+        total_ldaps_stat = get_nims_stat(total_ldaps_eval_date_files)
+
         # Plot graph for each stat
-        plot_stat_graph(ldaps_stat, total_stat, date, model_name)
+        plot_stat_graph(total_ldaps_stat, total_stat, date, model_name)
         
