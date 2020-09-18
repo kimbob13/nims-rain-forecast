@@ -126,22 +126,25 @@ if __name__ == '__main__':
     print('Load weight...:', model_name)
     print()
 
+    # Print trained weight info
+    print('=' * 25, 'Trained Weight Information', '=' * 25)
+    print('[best epoch]:', chosen_info['best_epoch'])
+    print('[best loss ]: {:5f}'.format(chosen_info['best_loss']))
+    print('[best csi  ]: {:5f}'.format(chosen_info['best_csi']))
+    print('[best pod  ]: {:5f}'.format(chosen_info['best_pod']))
+    print('[best bias ]: {:5f}'.format(chosen_info['best_bias']))
+
     # Select start and end date for train
     date = select_date(test=True)
 
     # Replace model related arguments to the train info
     args.n_blocks = chosen_info['n_blocks']
     args.start_channels = chosen_info['start_channels']
+    args.window_size = chosen_info['window_size']
+    args.model_utc = chosen_info['model_utc']
     args.pos_dim = chosen_info['pos_dim']
     args.cross_entropy_weight = chosen_info['cross_entropy_weight']
     args.bilinear = chosen_info['bilinear']
-    args.window_size = chosen_info['window_size']
-    args.model_utc = chosen_info['model_utc']
-    args.sampling_ratio = chosen_info['sampling_ratio']
-    args.num_epochs = chosen_info['num_epochs']
-    args.batch_size = chosen_info['batch_size']
-    args.optimizer = chosen_info['optimizer']
-    args.lr = chosen_info['lr']
     args.custom_name = chosen_info['custom_name']
 
     if (args.custom_name != None) and ('transpose_conv' in args.custom_name):

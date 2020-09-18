@@ -28,6 +28,8 @@ class NIMSLogger:
         self.test_date_dict = dict()
 
         if test_date_list != None:
+            self.test_result_path = '/'.join(test_date_list[0].split('/')[:-1])
+
             for test_date_path in test_date_list:
                 month = int(test_date_path.split('/')[-1][4:6])
                 self.test_date_dict[month] = test_date_path
@@ -41,7 +43,7 @@ class NIMSLogger:
         self._latest_stat = OneTargetStat(loss, correct, binary_f1, macro_f1, micro_f1, hit, miss, fa, cn)
 
         # Test stat dataframe
-        self.test_df = pd.DataFrame(index=['acc', 'hit', 'miss', 'false alarm', 'correct negative', 'correct_update'])
+        self.test_df = pd.DataFrame(columns=['date', 'acc', 'hit', 'miss', 'false alarm', 'correct negative'])
         self.daily_df = pd.DataFrame(0, index=['acc', 'hit', 'miss', 'false alarm', 'correct negative'], columns=list(range(49)))
 
     def update(self, loss=None, correct=None,
@@ -115,11 +117,6 @@ class NIMSLogger:
                 utc_hour = int(target_time[b][3]) # same as model_utc
                 from_h = int(target_time[b][4])
 
-                target_test_time = datetime(year=utc_year,
-                                            month=utc_month,
-                                            day=utc_day,
-                                            hour=utc_hour) + timedelta(hours=from_h)
-
                 # Save daily_df if we reach last prediction for one day(48 hours) or
                 # end of date for current test data (August 31 for both 2019 and 2020)
                 save = False
@@ -142,15 +139,23 @@ class NIMSLogger:
                                                 .format(utc_year, utc_month, utc_day, utc_hour)),
                                    index=False)
 
+                    # Update total test dataframe
+                    initial_test_time = datetime(year=utc_year,
+                                                 month=utc_month,
+                                                 day=utc_day,
+                                                 hour=utc_hour)
+                    self.test_df = self.test_df.append({'date': initial_test_time.strftime('%Y-%m-%d'),
+                                                        'acc': daily_t.iloc[-1, 0],
+                                                        'hit': daily_t.iloc[-1, 1],
+                                                        'miss': daily_t.iloc[-1, 2],
+                                                        'false alarm': daily_t.iloc[-1, 3],
+                                                        'correct negative': daily_t.iloc[-1, 4]},
+                                                       ignore_index=True)
+
+                    # Reset all of daily_df values to 0
                     for col in self.daily_df.columns:
                         self.daily_df[col].values[:] = 0
-
-                # Update total test dataframe
-                if str(utc_day) in self.test_df:
-                    self.test_df[str(utc_day)] += [correct[b], hit[b], miss[b], fa[b], cn[b], self.num_stn]
-                else:
-                    self.test_df[str(utc_day)] = [correct[b], hit[b], miss[b], fa[b], cn[b], self.num_stn]
-
+    
     def print_stat(self, test=False):
         total_stn = self.num_update * self.num_stn
 
@@ -196,8 +201,8 @@ class NIMSLogger:
         print(stat_str)
         print()
 
-        # if test:
-        #     self._save_test_result()
+        if test:
+            self._save_test_result()
 
         self._clear_one_target_stat(self.one_epoch_stat)
 
@@ -311,16 +316,15 @@ class NIMSLogger:
         self.num_update = 0
 
     def _save_test_result(self):
-        self.test_df.loc["acc"] = (self.test_df.loc["acc"] / self.test_df.loc["correct_update"]) * 100
+        self.test_df = self.test_df.append(self.test_df.iloc[:, 2:].sum(axis=0), ignore_index=True)
+        total_hit = self.test_df.iloc[-1, 2]
+        total_miss = self.test_df.iloc[-1, 3]
+        total_fa = self.test_df.iloc[-1, 4]
+        total_cn = self.test_df.iloc[-1, 5]
 
-        self.test_df = self.test_df.T
-        acc_mean = self.test_df.iloc[:, 0].mean(axis=0)
-        self.test_df = self.test_df.append(self.test_df.sum(axis=0), ignore_index=True)
-        self.test_df.iloc[-1, 0] = acc_mean
+        self.test_df.iloc[-1, 1] = (total_hit + total_cn) / (total_hit + total_miss + total_fa + total_cn)
+        self.test_df.iloc[-1, 0] = 'Total'
 
-        # Drop last columns (correct_update)
-        self.test_df = self.test_df.iloc[:, :-1]
-        
         self.test_df.to_csv(os.path.join(self.test_result_path, 'total.csv'), index=False)
 
 class OneTargetStat:
