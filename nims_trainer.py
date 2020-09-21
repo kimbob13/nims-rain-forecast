@@ -1,4 +1,5 @@
 import torch
+from nims_util import get_min_max_normalization
 from nims_logger import NIMSLogger
 
 from tqdm import tqdm
@@ -118,7 +119,8 @@ class NIMSTrainer:
             train_log.loc[epoch] = [epoch_loss, pod, csi, bias]
             train_log.to_csv(train_log_path, index=False)
 
-            self.scheduler.step()
+            if self.scheduler:
+                self.scheduler.step()
 
     def test(self):
         # self.model.eval()
@@ -140,7 +142,12 @@ class NIMSTrainer:
                 if self.normalization:
                     b, c, h, w = images.shape
                     images = images.reshape((-1, h, w))
-                    images = self.normalization['transform'](images)
+
+                    max_values_batch = self.normalization['max_values'].unsqueeze(0).repeat(b, 1).reshape(-1)
+                    min_values_batch = self.normalization['min_values'].unsqueeze(0).repeat(b, 1).reshape(-1)
+                    transform = get_min_max_normalization(max_values_batch, min_values_batch)
+
+                    images = transform(images)
                     images = images.reshape((b, c, h, w))
                 
                 images = images.type(torch.FloatTensor).to(self.device)

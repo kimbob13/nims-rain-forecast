@@ -203,8 +203,7 @@ if __name__ == '__main__':
         print('=' * 25, 'Normalization is enabled!', '=' * 25)
         print('max_values shape: {}, min_values shape: {}\n'.format(max_values.shape, min_values.shape))
 
-        normalization = {'transform': transform,
-                         'max_values': max_values,
+        normalization = {'max_values': max_values,
                          'min_values': min_values}
         args.normalization = True
 
@@ -225,7 +224,9 @@ if __name__ == '__main__':
     optimizer, _ = set_optimizer(model, args)
 
     # Set experiment name and use it as process name if possible
+    args.batch_size = chosen_info['batch_size']
     experiment_name = set_experiment_name(args, date)
+    args.batch_size = 1
 
     # Create necessary directory
     create_results_dir()
