@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from tqdm import tqdm
 from torch.utils.data import DataLoader, Subset
 
 from nims_util import *
@@ -41,14 +42,21 @@ if __name__ == '__main__':
                                      train=True,
                                      transform=ToTensor())
     
-    # Undersampling (the raining points >= 40)
+    # Undersampling
     if date['year'] == 2019 and \
        date['start_month'] == 6 and \
        date['start_day'] == 1 and \
        date['end_month'] == 8 and \
        date['end_day'] == 31:
-        subset_indices = np.load('./subset_indcies.npy')
+        print('=' * 25, 'Undersampling Start...', '=' * 25)
+        rain_points = []
+        for i in tqdm(range(len(nims_train_dataset))):
+            rain_points.append(torch.sum(nims_train_dataset[i][1]).item())
+            
+        subset_indices = np.where(np.array(rain_points)>=np.quantile(rain_points, 0.6))[0]
         nims_train_dataset = Subset(nims_train_dataset, subset_indices)
+        print('=' * 25, 'Undersampling End!', '=' * 25)
+        print()
 
     # Get normalization transform
     normalization = None
