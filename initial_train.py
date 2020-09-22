@@ -1,5 +1,6 @@
+import numpy as np
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 
 from nims_util import *
 from nims_dataset import NIMSDataset, ToTensor
@@ -39,6 +40,15 @@ if __name__ == '__main__':
                                      lite=args.lite,
                                      train=True,
                                      transform=ToTensor())
+    
+    # Undersampling (the raining points >= 40)
+    if date['year'] == 2019 and \
+       date['start_month'] == 6 and \
+       date['start_day'] == 1 and \
+       date['end_month'] == 8 and \
+       date['end_day'] == 31:
+        subset_indices = np.load('./subset_indcies.npy')
+        nims_train_dataset = Subset(nims_train_dataset, subset_indices)
 
     # Get normalization transform
     normalization = None
