@@ -181,7 +181,7 @@ def parse_args():
     #                           help='which variables to use (rain, cape, etc.). \
     #                                 Can be single number which specify how many variables to use \
     #                                 or list of variables name')
-    nims_dataset.add_argument('--sampling_ratio', default=1.0, type=float, help='the ratio of undersampling')
+    nims_dataset.add_argument('--sampling_ratio', default=0.0, type=float, help='the ratio of undersampling')
     nims_dataset.add_argument('--normalization', default=False, help='normalize input data', action='store_true')
 
     hyperparam = parser.add_argument_group('hyper-parameters')
