@@ -8,7 +8,7 @@ from model.unet_model import UNet, AttentionUNet
 from model.conv_lstm import EncoderForecaster
 from model.persistence import Persistence
 
-from nims_loss import MSELoss, NIMSCrossEntropyLoss
+from nims_loss import *
 
 import os
 import sys
@@ -329,9 +329,11 @@ def set_model(sample, device, args, train=True,
                                   bilinear=args.bilinear,
                                   batch_size=args.batch_size)
 
-        criterion = NIMSCrossEntropyLoss(device, num_classes=num_classes,
-                                         use_weights=args.cross_entropy_weight,
-                                         train=train)
+        # criterion = NIMSCrossEntropyLoss(device=device,
+        #                                  num_classes=num_classes,
+        #                                  use_weights=args.cross_entropy_weight)
+
+        criterion = NIMSBinaryFocalLoss()
 
     elif args.model == 'convlstm':
         assert args.window_size == args.target_num, \
