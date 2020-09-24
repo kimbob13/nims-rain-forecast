@@ -43,17 +43,18 @@ if __name__ == '__main__':
                                      transform=ToTensor())
     
     # Undersampling
-    if args.sampling_ratio > 0:
+    if args.sampling_ratio < 1.0:
         print('=' * 25, 'Undersampling Start...', '=' * 25)
         rain_points = []
         for i in tqdm(range(len(nims_train_dataset))):
             rain_points.append(torch.sum(nims_train_dataset[i][1]).item())
             
-        subset_indices = np.where(np.array(rain_points) >= np.quantile(rain_points, args.sampling_ratio))[0]
+        subset_indices = np.where(np.array(rain_points) >= np.quantile(rain_points, 1 - args.sampling_ratio))[0]
         nims_train_dataset = Subset(nims_train_dataset, subset_indices)
         print('=' * 25, 'Undersampling End!', '=' * 25)
         print()
-
+        
+        
     # Get normalization transform
     normalization = None
     if args.normalization:
@@ -64,7 +65,7 @@ if __name__ == '__main__':
 
         normalization = {'max_values': max_values,
                          'min_values': min_values}
-    
+        
     # Get a sample for getting shape of each tensor
     sample, _, _ = nims_train_dataset[0]
     if args.debug:
@@ -81,18 +82,6 @@ if __name__ == '__main__':
                 summary(model, input_size=sample.shape)
             except:
                 print('If you want to see summary of model, install torchsummary')
-
-    # Undersampling
-    if args.sampling_ratio < 1.0:
-        print('=' * 20, 'Under Sampling', '=' * 20)
-        print('Before Under sampling, train len:', len(nims_train_dataset))
-
-        print('Please wait...')
-        nims_train_dataset = undersample(nims_train_dataset, args.sampling_ratio)
-
-        print('After Under sampling, train len:', len(nims_train_dataset))
-        print('=' * 20, 'Finish Under Sampling', '=' * 20)
-        print()
         
     # Create dataloaders
     train_loader = DataLoader(nims_train_dataset, batch_size=args.batch_size,
