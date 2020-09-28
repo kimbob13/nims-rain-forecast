@@ -453,9 +453,6 @@ def set_experiment_name(args, date):
                                   args.lr,
                                   date_str)
 
-    if args.debug:
-        experiment_name += '_debug'
-
     try:
         setproctitle.setproctitle(experiment_name)
     except:

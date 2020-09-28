@@ -18,14 +18,12 @@ class NIMSTrainer:
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.device = device
+        self.num_epochs = args.num_epochs
 
         self.train_loader = train_loader
         self.test_loader = test_loader
         self.train_len = train_len
         self.test_len = test_len
-
-        self.num_epochs = args.num_epochs
-        self.debug = args.debug
 
         self.stn_codi = self._get_station_coordinate()
         self.experiment_name = experiment_name

@@ -155,7 +155,8 @@ def plot_stat_graph(ldaps_stat, model_stat, date, model_name):
         else:
             plt.title('{:4d}-{:02d} {}'.format(date['year'], date['start_month'], stat_name.upper()))
             plt.savefig('./results/comparison_graph/{}/{:4d}{:02d}-{}.pdf'
-                        .format(stat_name, date['year'], date['start_month'], model_name), dpi=300)
+                        .format(stat_name, date['year'], date['start_month'], model_name),
+                        dpi=300, bbox_inches='tight')
         plt.close()
 
 if __name__ == '__main__':

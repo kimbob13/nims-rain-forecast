@@ -76,8 +76,6 @@ if __name__ == '__main__':
     
         # Get a sample for getting shape of each tensor
         sample, _ = nims_train_dataset[0]
-        if args.debug:
-            print('[main] one images sample shape:', sample.shape)
         
         # Set experiment name and use it as process name if possible
         experiment_name = set_experiment_name(args)
@@ -94,16 +92,6 @@ if __name__ == '__main__':
         # Create a model and criterion
         model, criterion = set_model(sample, device, args, train=True,
                                      finetune=True, model_path=model_path)
-
-        if args.debug:
-            # XXX: Currently, torchsummary doesn't run on ConvLSTM
-            print('[main] num_lat: {}, num_lon: {}'.format(num_lat, num_lon))
-            if args.model == 'unet':
-                model.to(device)
-                try:
-                    summary(model, input_size=sample.shape)
-                except:
-                    print('If you want to see summary of model, install torchsummary')
 
         # Undersampling
         if args.sampling_ratio < 1.0:
