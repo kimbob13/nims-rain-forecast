@@ -39,7 +39,6 @@ class UNet(nn.Module):
                 down_with_pos.add_module('down{}_pos'.format(i),
                                          LearnablePosition(batch_size, pos_dim, 512 // (2 ** i), 512 // (2 ** i)))
                 down_with_pos.add_module('down{}'.format(i), Down(cur_in_ch_pos, cur_in_ch * 2))
-                print('down_with_pos:\n', down_with_pos)
 
                 self.down.append(down_with_pos)
             else:
@@ -53,7 +52,6 @@ class UNet(nn.Module):
             self.bridge.add_module('bridge_pos',
                                    LearnablePosition(batch_size, pos_dim, 512 // (2 ** n_blocks), 512 // (2 ** n_blocks)))
             self.bridge.add_module('bridge_conv', BasicConv(bridge_channels_pos, bridge_channels))
-            print('bridge_pos:\n', self.bridge)
         else:
             self.bridge.add_module('bridge_conv', BasicConv(bridge_channels, bridge_channels))
 
@@ -77,7 +75,7 @@ class UNet(nn.Module):
         if pos_loc == pos_loc_max:
             start_channels_pos = start_channels + pos_dim
             self.outc.add_module('out_pos', LearnablePosition(batch_size, pos_dim, 512, 512))
-            self.outc.add_module('out_conv', OutConv(start_channels, n_classes))
+            self.outc.add_module('out_conv', OutConv(start_channels_pos, n_classes))
         else:
             self.outc.add_module('out_conv', OutConv(start_channels, n_classes))
 
