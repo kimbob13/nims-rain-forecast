@@ -164,11 +164,12 @@ def parse_args():
     common.add_argument('--num_workers', default=6, type=int, help='# of workers for dataloader')
     common.add_argument('--eval_only', default=False, help='when enabled, do not run test epoch, only creating graph', action='store_true')
     common.add_argument('--custom_name', default=None, type=str, help='add customize experiment name')
-    common.add_argument('--debug', help='turn on debugging print', action='store_true')
+    # common.add_argument('--debug', help='turn on debugging print', action='store_true')
 
     unet = parser.add_argument_group('unet related')
     unet.add_argument('--n_blocks', default=5, type=int, help='# of blocks in Down and Up phase')
     unet.add_argument('--start_channels', default=64, type=int, help='# of channels after first block of unet')
+    unet.add_argument('--pos_loc', default=0, type=int, help='index of position where learnable position inserted')
     unet.add_argument('--pos_dim', default=0, type=int, help="# of learnable position channels")
     unet.add_argument('--bilinear', default=False, help='use bilinear for upsample instead of transpose conv', action='store_true')
     unet.add_argument('--cross_entropy_weight', default=False, help='use weight for cross entropy loss', action='store_true')
@@ -185,7 +186,7 @@ def parse_args():
     nims_dataset.add_argument('--normalization', default=False, help='normalize input data', action='store_true')
 
     hyperparam = parser.add_argument_group('hyper-parameters')
-    hyperparam.add_argument('--num_epochs', default=60, type=int, help='# of training epochs')
+    hyperparam.add_argument('--num_epochs', default=100, type=int, help='# of training epochs')
     hyperparam.add_argument('--batch_size', default=1, type=int, help='batch size')
     hyperparam.add_argument('--optimizer', default='adam', type=str, help='which optimizer to use (rmsprop, adam, sgd)')
     hyperparam.add_argument('--lr', default=0.001, type=float, help='learning rate of optimizer')
@@ -316,6 +317,7 @@ def set_model(sample, device, args, train=True,
                          n_classes=num_classes,
                          n_blocks=args.n_blocks,
                          start_channels=args.start_channels,
+                         pos_loc=args.pos_loc,
                          pos_dim=args.pos_dim,
                          bilinear=args.bilinear,
                          batch_size=args.batch_size)
@@ -325,6 +327,7 @@ def set_model(sample, device, args, train=True,
                                   n_classes=num_classes,
                                   n_blocks=args.n_blocks,
                                   start_channels=args.start_channels,
+                                  pos_loc=args.pos_loc,
                                   pos_dim=args.pos_dim,
                                   bilinear=args.bilinear,
                                   batch_size=args.batch_size)
@@ -364,9 +367,9 @@ def set_optimizer(model, args):
     elif args.optimizer == 'adadelta':
         optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
 
-    # scheduler = optim.lr_scheduler.StepLR(optimizer, 60)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, 60)
 
-    return optimizer, None
+    return optimizer, scheduler
 
 def set_experiment_name(args, date):
     """
@@ -400,13 +403,14 @@ def set_experiment_name(args, date):
         custom_name = '_' + args.custom_name
 
     if args.model == 'unet':            
-        experiment_name = 'nims-utc{}-unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}_sr{}_{}{}_wd{}{}{}{}{}' \
+        experiment_name = 'nims-utc{}-unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}-{}_sr{}_{}{}_wd{}{}{}{}{}' \
                           .format(args.model_utc,
                                   args.n_blocks,
                                   args.start_channels,
                                   args.window_size,
                                   args.num_epochs,
                                   args.batch_size,
+                                  args.pos_loc,
                                   args.pos_dim,
                                   args.sampling_ratio,
                                   args.optimizer,
@@ -419,13 +423,14 @@ def set_experiment_name(args, date):
                                   date_str)
 
     elif args.model == 'attn_unet':
-        experiment_name = 'nims-utc{}-attn_unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}_sr{}_{}{}_wd{}{}{}{}{}' \
+        experiment_name = 'nims-utc{}-attn_unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}-{}_sr{}_{}{}_wd{}{}{}{}{}' \
                           .format(args.model_utc,
                                   args.n_blocks,
                                   args.start_channels,
                                   args.window_size,
                                   args.num_epochs,
                                   args.batch_size,
+                                  args.pos_loc,
                                   args.pos_dim,
                                   args.sampling_ratio,
                                   args.optimizer,

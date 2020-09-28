@@ -241,8 +241,6 @@ if __name__ == '__main__':
 
     # Get a sample for getting shape of each tensor
     sample, _, _ = nims_test_dataset[0]
-    if args.debug:
-        print('[main] one images sample shape:', sample.shape)
 
     # Create a model and criterion
     model, criterion = set_model(sample, device, args, train=False)

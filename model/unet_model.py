@@ -10,37 +10,76 @@ from .unet_parts import *
 __all__ = ['UNet', 'AttentionUNet']
 
 class UNet(nn.Module):
-    def __init__(self, n_channels, n_classes, n_blocks=7,
-                 start_channels=16, pos_dim=0, bilinear=False,
-                 batch_size=1):
+    def __init__(self, n_channels, n_classes, n_blocks, start_channels,
+                 pos_loc=0, pos_dim=0, bilinear=False, batch_size=1):
         super(UNet, self).__init__()
 
-        self.n_blocks = n_blocks
+        # Learnable position related
+        pos_loc_max = (2 * n_blocks) + 3
+        assert (pos_loc >= 0) and (pos_loc <= pos_loc_max)
+        if pos_loc == 0:
+            assert pos_dim == 0
+        if pos_dim == 0:
+            assert pos_loc == 0
 
-        self.inc = BasicConv(n_channels + pos_dim, start_channels)
+        # Model entrance block
+        self.inc = nn.Sequential()
+        if pos_loc == 1:
+            n_channels += pos_dim
+            self.inc.add_module('inc_pos', LearnablePosition(batch_size, pos_dim, 512, 512))
+        self.inc.add_module('inc', BasicConv(n_channels, start_channels))
 
         # Create down blocks
         self.down = nn.ModuleList([])
         for i in range(n_blocks):
             cur_in_ch = start_channels * (2 ** i)
-            self.down.append(Down(cur_in_ch, cur_in_ch * 2))
+            if pos_loc == i + 2:
+                cur_in_ch_pos = cur_in_ch + pos_dim
+                down_with_pos = nn.Sequential()
+                down_with_pos.add_module('down{}_pos'.format(i),
+                                         LearnablePosition(batch_size, pos_dim, 512 // (2 ** i), 512 // (2 ** i)))
+                down_with_pos.add_module('down{}'.format(i), Down(cur_in_ch_pos, cur_in_ch * 2))
+                print('down_with_pos:\n', down_with_pos)
+
+                self.down.append(down_with_pos)
+            else:
+                self.down.append(Down(cur_in_ch, cur_in_ch * 2))
 
         # Create bridge block
+        self.bridge = nn.Sequential()
         bridge_channels = start_channels * (2 ** n_blocks)
-        self.bridge = BasicConv(bridge_channels, bridge_channels)
+        if pos_loc == n_blocks + 2:
+            bridge_channels_pos = bridge_channels + pos_dim
+            self.bridge.add_module('bridge_pos',
+                                   LearnablePosition(batch_size, pos_dim, 512 // (2 ** n_blocks), 512 // (2 ** n_blocks)))
+            self.bridge.add_module('bridge_conv', BasicConv(bridge_channels_pos, bridge_channels))
+            print('bridge_pos:\n', self.bridge)
+        else:
+            self.bridge.add_module('bridge_conv', BasicConv(bridge_channels, bridge_channels))
 
         # Create up blocks
         self.up = nn.ModuleList([])
         for i in range(n_blocks, 0, -1):
             cur_in_ch = start_channels * (2 ** i)
-            self.up.append(Up(cur_in_ch, (cur_in_ch // 2), bilinear=bilinear))
+            if pos_loc + i == pos_loc_max:
+                cur_in_ch_pos = cur_in_ch + pos_dim
+                self.up.append(Up(cur_in_ch_pos, (cur_in_ch // 2),
+                                  learnable_pos=LearnablePosition(batch_size,
+                                                                  pos_dim,
+                                                                  512 // (2 ** (i - 1)),
+                                                                  512 // (2 ** (i - 1))),
+                                  bilinear=bilinear))
+            else:
+                self.up.append(Up(cur_in_ch, (cur_in_ch // 2), bilinear=bilinear))
 
         # Create out convolution block
-        self.outc = OutConv(start_channels, n_classes)
-
-        self.learnable_pos = None
-        if pos_dim > 0:
-            self.learnable_pos = nn.Parameter(torch.zeros(batch_size, pos_dim, 512, 512), requires_grad=True)
+        self.outc = nn.Sequential()
+        if pos_loc == pos_loc_max:
+            start_channels_pos = start_channels + pos_dim
+            self.outc.add_module('out_pos', LearnablePosition(batch_size, pos_dim, 512, 512))
+            self.outc.add_module('out_conv', OutConv(start_channels, n_classes))
+        else:
+            self.outc.add_module('out_conv', OutConv(start_channels, n_classes))
 
     @property
     def name(self):
@@ -48,10 +87,6 @@ class UNet(nn.Module):
 
     def forward(self, x):
         logits = []
-
-        if self.learnable_pos != None:
-            x = torch.cat([x, self.learnable_pos], dim=1)
-
         out = self.inc(x)
 
         # Long residual list for Up phase
@@ -74,68 +109,39 @@ class UNet(nn.Module):
 
         return logit
 
-class AttentionUNet(nn.Module):
-    def __init__(self, n_channels, n_classes, n_blocks=7,
-                 start_channels=16, pos_dim=0, bilinear=False,
-                 batch_size=1):
-        super(AttentionUNet, self).__init__()
+class AttentionUNet(UNet):
+    def __init__(self, n_channels, n_classes, n_blocks, start_channels,
+                 pos_loc=0, pos_dim=0, bilinear=False, batch_size=1):
+        super(AttentionUNet, self).__init__(n_channels=n_channels, n_classes=n_classes,
+                                            n_blocks=n_blocks, start_channels=start_channels,
+                                            pos_loc=pos_loc, pos_dim=pos_dim,
+                                            bilinear=bilinear, batch_size=batch_size)
 
-        self.n_blocks = n_blocks
-
-        factor = 2 if bilinear else 1
-        self.inc = BasicConv(n_channels + pos_dim, start_channels)
-
-        # Create down blocks
-        self.down = nn.ModuleList([])
-        for i in range(n_blocks):
-            cur_in_ch = start_channels * (2 ** i)
-            self.down.append(Down(cur_in_ch, cur_in_ch * 2))
-
-        # Create bridge block
-        bridge_channels = start_channels * (2 ** n_blocks)
-        self.bridge = BasicConv(bridge_channels, bridge_channels)
+        # Learnable position related
+        pos_loc_max = (2 * n_blocks) + 3
+        assert (pos_loc >= 0) and (pos_loc <= pos_loc_max)
+        if pos_loc == 0:
+            assert pos_dim == 0
+        if pos_dim == 0:
+            assert pos_loc == 0
 
         # Create up blocks
         self.up = nn.ModuleList([])
         for i in range(n_blocks, 0, -1):
             cur_in_ch = start_channels * (2 ** i)
-            self.up.append(Up(cur_in_ch, (cur_in_ch // 2), bilinear, attention=True))
-
-        # Create out convolution block
-        self.outc = OutConv(start_channels, n_classes)
-
-        self.learnable_pos = None
-        if pos_dim > 0:
-            self.learnable_pos = nn.Parameter(torch.zeros(batch_size, pos_dim, 512, 512), requires_grad=True)
+            if pos_loc + i == pos_loc_max:
+                cur_in_ch_pos = cur_in_ch + pos_dim
+                self.up.append(Up(cur_in_ch_pos, (cur_in_ch // 2),
+                                  learnable_pos=LearnablePosition(batch_size,
+                                                                  pos_dim,
+                                                                  512 // (2 ** (i - 1)),
+                                                                  512 // (2 ** (i - 1))),
+                                  bilinear=bilinear,
+                                  attention=True))
+            else:
+                self.up.append(Up(cur_in_ch, (cur_in_ch // 2),
+                                  bilinear=bilinear, attention=True))
 
     @property
     def name(self):
         return 'attn_unet'
-
-    def forward(self, x):
-        logits = []
-
-        if self.learnable_pos != None:
-            x = torch.cat([x, self.learnable_pos], dim=1)
-
-        out = self.inc(x)
-
-        # Long residual list for Up phase
-        long_residual = []
-        long_residual.append(out.clone())
-
-        # Down blocks
-        for down_block in self.down:
-            out = down_block(out)
-            long_residual.append(out.clone())
-
-        # Bridge block
-        out = self.bridge(out)
-
-        # Up blocks
-        for i, up_block in enumerate(self.up):
-            out = up_block(out, long_residual[-1 * (i + 2)])
-
-        logit = self.outc(out)
-
-        return logit

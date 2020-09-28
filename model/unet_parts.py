@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-__all__ = ['BasicConv', 'Down', 'Up', 'OutConv']
+__all__ = ['BasicConv', 'Down', 'Up', 'OutConv', 'LearnablePosition']
 
 class BasicConv(nn.Module):
     def __init__(self, in_channels, out_channels):
@@ -120,20 +120,31 @@ class Down(nn.Module):
 class Up(nn.Module):
     """Upscaling then double conv"""
 
-    def __init__(self, in_channels, out_channels, bilinear=True, attention=False):
+    def __init__(self, in_channels, out_channels,
+                 learnable_pos=None, bilinear=True, attention=False):
         super(Up, self).__init__()
 
+        # Learnable position setting
+        pos_dim = in_channels - (out_channels * 2)
+        if pos_dim == 0:
+            assert learnable_pos == None
+        
+        self.learnable_pos = learnable_pos
+
         # if bilinear, use the normal convolutions to reduce the number of channels
-        self.up = nn.Sequential()
+        self.upsample = nn.Sequential()
         if bilinear:
-            self.up.add_module('upsample', nn.Upsample(scale_factor=2,
-                                                       mode='bilinear',
-                                                       align_corners=True))
+            self.upsample.add_module('upsample', nn.Upsample(scale_factor=2,
+                                                             mode='bilinear',
+                                                             align_corners=True))
+            self.upsample.add_module('upsample_conv', nn.Conv2d(in_channels - pos_dim, out_channels,
+                                                                kernel_size=3, stride=1,
+                                                                padding=1, bias=False))
         else:
-            self.up.add_module('upsample', nn.ConvTranspose2d(in_channels,
-                                                              out_channels,
-                                                              kernel_size=2,
-                                                              stride=2))
+            self.upsample.add_module('upsample', nn.ConvTranspose2d(in_channels - pos_dim,
+                                                                    out_channels,
+                                                                    kernel_size=2,
+                                                                    stride=2))
 
         self.attn_gate = None
         if attention:
@@ -144,7 +155,7 @@ class Up(nn.Module):
 
     def forward(self, x, x_res):
         # Upsample
-        x = self.up(x)
+        x = self.upsample(x)
 
         # input is CHW
         diffY = torch.tensor([x_res.size()[2] - x.size()[2]])
@@ -163,6 +174,10 @@ class Up(nn.Module):
         # Concat skip connection with previous feature map
         out = torch.cat([x_res, x], dim=1)
 
+        # Concat with learnalble position if any
+        if self.learnable_pos:
+            out = self.learnable_pos(out)
+
         out = self.double_conv(out)
 
         return out
@@ -174,6 +189,16 @@ class OutConv(nn.Module):
 
     def forward(self, x):
         return self.conv(x)
+
+class LearnablePosition(nn.Module):
+    def __init__(self, batch_size, pos_dim, height, width):
+        super(LearnablePosition, self).__init__()
+        self.learnable_pos = nn.Parameter(torch.zeros(batch_size, pos_dim, height, width), requires_grad=True)
+
+    def forward(self, x):
+        x = torch.cat([x, self.learnable_pos], dim=1)
+
+        return x
 
 class AttentionGate(nn.Module):
     def __init__(self, feature_x, feature_g, inter):

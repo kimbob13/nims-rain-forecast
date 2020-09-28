@@ -99,7 +99,7 @@ class NIMSTrainer:
                 self.train_info['best_bias'] = bias
                 
                 train_info_epoch_path = train_info_path.replace(self.experiment_name,
-                                                                self.experiment_name+'_'+str(epoch))
+                                                                self.experiment_name + '_' + str(epoch))
                 if os.path.isfile(train_info_epoch_path):
                     os.remove(train_info_epoch_path)
                 torch.save(self.train_info, train_info_epoch_path)

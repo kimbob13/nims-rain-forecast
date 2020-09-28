@@ -68,21 +68,10 @@ if __name__ == '__main__':
         
     # Get a sample for getting shape of each tensor
     sample, _, _ = nims_train_dataset[0]
-    if args.debug:
-        print('[main] one images sample shape:', sample.shape)
 
     # Create a model and criterion
     model, criterion = set_model(sample, device, args)
 
-    if args.debug:
-        # XXX: Currently, torchsummary doesn't run on ConvLSTM
-        if args.model == 'unet':
-            model.to(device)
-            try:
-                summary(model, input_size=sample.shape)
-            except:
-                print('If you want to see summary of model, install torchsummary')
-        
     # Create dataloaders
     train_loader = DataLoader(nims_train_dataset, batch_size=args.batch_size,
                               shuffle=True, num_workers=args.num_workers,
