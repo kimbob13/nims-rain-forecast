@@ -23,7 +23,7 @@ class UNet(nn.Module):
         self.down = nn.ModuleList([])
         for i in range(n_blocks):
             cur_in_ch = start_channels * (2 ** i)
-            self.down.append(Down(cur_in_ch, cur_in_ch * 2, dropout=False))
+            self.down.append(Down(cur_in_ch, cur_in_ch * 2))
 
         # Create bridge block
         bridge_channels = start_channels * (2 ** n_blocks)
@@ -33,7 +33,7 @@ class UNet(nn.Module):
         self.up = nn.ModuleList([])
         for i in range(n_blocks, 0, -1):
             cur_in_ch = start_channels * (2 ** i)
-            self.up.append(Up(cur_in_ch, (cur_in_ch // 2), bilinear=bilinear, dropout=False))
+            self.up.append(Up(cur_in_ch, (cur_in_ch // 2), bilinear=bilinear))
 
         # Create out convolution block
         self.outc = OutConv(start_channels, n_classes)

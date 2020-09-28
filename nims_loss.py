@@ -8,24 +8,6 @@ from sklearn.utils.class_weight import compute_class_weight
 
 __all__ = ['MSELoss', 'NIMSCrossEntropyLoss', 'NIMSBinaryFocalLoss']
 
-class MSELoss(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.mse = nn.MSELoss()
-
-    def forward(self, yhat, y, logger=None, test=False):
-        #print('[mse_loss] yhat shape: {}, y shape: {}'.format(yhat.shape, y.shape))
-        loss = self.mse(yhat, y)
-        
-        if logger:
-            target_num = y.shape[0]
-            for target_idx in range(target_num):
-                one_target_loss = self.mse(yhat[target_idx, ...],
-                                           y[target_idx, ...])
-                logger.update(target_idx, loss=one_target_loss.item())
-
-        return loss
-
 class RMSELoss(nn.Module):
     def __init__(self, eps=1e-6):
         super().__init__()
@@ -36,7 +18,7 @@ class RMSELoss(nn.Module):
         loss = torch.sqrt(self.mse(yhat, y) + self.eps)
         return loss
 
-class ClassificationLoss(nn.Module):
+class ClassificationStat(nn.Module):
     def __init__(self, num_classes=2):
         super().__init__()
         self.classes = np.arange(num_classes)
@@ -80,7 +62,30 @@ class ClassificationLoss(nn.Module):
 
         return correct, binary_f1, hit, miss, fa, cn
 
-class NIMSCrossEntropyLoss(ClassificationLoss):
+class MSELoss(ClassificationStat):
+    def __init__(self, device):
+        super().__init__(num_classes=2)
+        self.device = device
+
+    def forward(self, preds, targets, target_time,
+                stn_codi, logger=None, test=False):
+        stn_preds = preds[:, :, stn_codi[:, 0], stn_codi[:, 1]]
+        stn_preds = stn_preds.squeeze(0)
+        stn_targets = targets[:, stn_codi[:, 0], stn_codi[:, 1]]
+
+        # stn_targets_label = torch.where(stn_targets >= 0.1,
+        #                                 torch.ones(stn_targets.shape).to(self.device),
+        #                                 torch.zeros(stn_targets.shape).to(self.device)).to(self.device)
+        # correct, binary_f1, hit, miss, fa, cn = self.get_stat(stn_preds, stn_targets_label)
+
+        loss = F.mse_loss(stn_preds, stn_targets)
+        
+        if logger:
+            logger.update(loss=loss.item(), target_time=target_time, test=test)
+
+        return loss
+
+class NIMSCrossEntropyLoss(ClassificationStat):
     def __init__(self, device, num_classes=2, use_weights=False):
         super().__init__(num_classes=num_classes)
         self.device = device
@@ -134,7 +139,7 @@ class NIMSCrossEntropyLoss(ClassificationLoss):
 
         return loss
 
-class NIMSBinaryFocalLoss(ClassificationLoss):
+class NIMSBinaryFocalLoss(ClassificationStat):
     """
     This is a implementation of Focal Loss with smooth label cross entropy supported which is proposed in
     'Focal Loss for Dense Object Detection. (https://arxiv.org/abs/1708.02002)'

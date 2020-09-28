@@ -44,6 +44,7 @@ class NIMSTrainer:
                            'batch_size': args.batch_size,
                            'optimizer': args.optimizer,
                            'lr': args.lr,
+                           'wd': args.wd,
                            'custom_name': args.custom_name,
                            'norm_max': normalization['max_values'] if normalization else None,
                            'norm_min': normalization['min_values'] if normalization else None,

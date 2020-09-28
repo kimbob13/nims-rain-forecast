@@ -15,6 +15,35 @@ import time
 from collections import namedtuple
 
 NIMSStat = namedtuple('NIMSStat', 'acc, csi, pod, bias')
+MONTH_DAY = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+
+def create_test_date_list(date, test_result_path):
+    test_date_list = []
+    test_months = list(range(date['start_month'], date['end_month'] + 1))
+    for i, month in enumerate(test_months):
+        if i == 0:
+            start_day = date['start_day']
+            end_day = MONTH_DAY[month]
+        elif i == len(test_months) - 1:
+            start_day = 1
+            end_day = date['end_day']
+        else:
+            start_day = 1
+            end_day = MONTH_DAY[month]
+
+        current_test_date = '{:4d}{:02d}{:02d}-{:04d}{:02d}{:02d}'.format(date['year'], month, start_day,
+                                                                          date['year'], month, end_day)
+        current_test_path = os.path.join(test_result_path, current_test_date)
+        if args.eval_only:
+            assert os.path.isdir(current_test_path), \
+                   'You have to run test for this date range before running eval_only mode'
+        
+        if not os.path.isdir(current_test_path):
+            os.mkdir(current_test_path)
+
+        test_date_list.append(current_test_path)
+
+    return test_date_list
 
 def recreate_total_stat(total_test_path):
     one_day_stat_list = sorted([os.path.join(total_test_path, f) for f in os.listdir(total_test_path) if f.endswith('.csv')])
@@ -130,6 +159,10 @@ def plot_stat_graph(ldaps_stat, model_stat, date, model_name):
         plt.close()
 
 if __name__ == '__main__':
+    #########################################################
+    # 1. Test setting part                                  #
+    #########################################################
+
     # Parsing command line arguments
     args = parse_args()
 
@@ -174,7 +207,6 @@ if __name__ == '__main__':
     args.cross_entropy_weight = chosen_info['cross_entropy_weight']
     args.bilinear = chosen_info['bilinear']
     args.custom_name = chosen_info['custom_name']
-
     if (args.custom_name != None) and ('transpose_conv' in args.custom_name):
         args.bilinear = False
         args.custom_name = ''
@@ -225,8 +257,11 @@ if __name__ == '__main__':
 
     # Set experiment name and use it as process name if possible
     args.batch_size = chosen_info['batch_size']
+    args.sampling_ratio = chosen_info['sampling_ratio']
+    args.optimizer = chosen_info['optimizer']
+    args.lr = chosen_info['lr']
+    args.wd = chosen_info['wd']
     experiment_name = set_experiment_name(args, date)
-    args.batch_size = 1
 
     # Create necessary directory
     create_results_dir()
@@ -238,31 +273,7 @@ if __name__ == '__main__':
         os.mkdir(test_result_path)
 
     # Create directory for each month currently tested date for chosen weight
-    test_date_list = []
-    MONTH_DAY = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-    test_months = list(range(date['start_month'], date['end_month'] + 1))
-    for i, month in enumerate(test_months):
-        if i == 0:
-            start_day = date['start_day']
-            end_day = MONTH_DAY[month]
-        elif i == len(test_months) - 1:
-            start_day = 1
-            end_day = date['end_day']
-        else:
-            start_day = 1
-            end_day = MONTH_DAY[month]
-
-        current_test_date = '{:4d}{:02d}{:02d}-{:04d}{:02d}{:02d}'.format(date['year'], month, start_day,
-                                                                          date['year'], month, end_day)
-        current_test_path = os.path.join(test_result_path, current_test_date)
-        if args.eval_only:
-            assert os.path.isdir(current_test_path), \
-                   'You have to run test for this date range before running eval_only mode'
-        
-        if not os.path.isdir(current_test_path):
-            os.mkdir(current_test_path)
-
-        test_date_list.append(current_test_path)
+    test_date_list = create_test_date_list(date, test_result_path)
 
     # Load trained model weight
     model.load_state_dict(chosen_info['model'])
@@ -274,7 +285,11 @@ if __name__ == '__main__':
                                normalization=normalization,
                                test_date_list=test_date_list)
     if not args.eval_only:
-        nims_trainer.test()        
+        nims_trainer.test()
+
+    #########################################################
+    # 2. Plotting part                                      #
+    #########################################################
 
     # Load evaluate results from test model
     for current_test_path in test_date_list:

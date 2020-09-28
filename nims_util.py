@@ -161,14 +161,14 @@ def parse_args():
     common.add_argument('--model', default='unet', type=str, help='which model to use [unet, attn_unet, convlstm]')
     common.add_argument('--dataset_dir', default='/home/osilab12/ssd/NIMS_LDPS', type=str, help='root directory of dataset')
     common.add_argument('--device', default='0', type=str, help='which device to use')
-    common.add_argument('--num_workers', default=5, type=int, help='# of workers for dataloader')
+    common.add_argument('--num_workers', default=6, type=int, help='# of workers for dataloader')
     common.add_argument('--eval_only', default=False, help='when enabled, do not run test epoch, only creating graph', action='store_true')
     common.add_argument('--custom_name', default=None, type=str, help='add customize experiment name')
     common.add_argument('--debug', help='turn on debugging print', action='store_true')
 
     unet = parser.add_argument_group('unet related')
-    unet.add_argument('--n_blocks', default=7, type=int, help='# of blocks in Down and Up phase')
-    unet.add_argument('--start_channels', default=32, type=int, help='# of channels after first block of unet')
+    unet.add_argument('--n_blocks', default=5, type=int, help='# of blocks in Down and Up phase')
+    unet.add_argument('--start_channels', default=64, type=int, help='# of channels after first block of unet')
     unet.add_argument('--pos_dim', default=0, type=int, help="# of learnable position channels")
     unet.add_argument('--bilinear', default=False, help='use bilinear for upsample instead of transpose conv', action='store_true')
     unet.add_argument('--cross_entropy_weight', default=False, help='use weight for cross entropy loss', action='store_true')
@@ -181,15 +181,15 @@ def parse_args():
     #                           help='which variables to use (rain, cape, etc.). \
     #                                 Can be single number which specify how many variables to use \
     #                                 or list of variables name')
-    nims_dataset.add_argument('--sampling_ratio', default=0.0, type=float, help='the ratio of undersampling')
+    nims_dataset.add_argument('--sampling_ratio', default=1.0, type=float, help='the ratio of undersampling')
     nims_dataset.add_argument('--normalization', default=False, help='normalize input data', action='store_true')
 
     hyperparam = parser.add_argument_group('hyper-parameters')
-    hyperparam.add_argument('--num_epochs', default=200, type=int, help='# of training epochs')
+    hyperparam.add_argument('--num_epochs', default=60, type=int, help='# of training epochs')
     hyperparam.add_argument('--batch_size', default=1, type=int, help='batch size')
     hyperparam.add_argument('--optimizer', default='adam', type=str, help='which optimizer to use (rmsprop, adam, sgd)')
     hyperparam.add_argument('--lr', default=0.001, type=float, help='learning rate of optimizer')
-    hyperparam.add_argument('--wd', default=5e-4, type=float, help='weight decay')
+    hyperparam.add_argument('--wd', default=0, type=float, help='weight decay')
     
     finetune = parser.add_argument_group('finetune related')
     finetune.add_argument('--final_test_time', default=None, type=str, help='the final date of fine-tuning')
@@ -329,11 +329,11 @@ def set_model(sample, device, args, train=True,
                                   bilinear=args.bilinear,
                                   batch_size=args.batch_size)
 
-        # criterion = NIMSCrossEntropyLoss(device=device,
-        #                                  num_classes=num_classes,
-        #                                  use_weights=args.cross_entropy_weight)
-
-        criterion = NIMSBinaryFocalLoss()
+        criterion = NIMSCrossEntropyLoss(device=device,
+                                         num_classes=num_classes,
+                                         use_weights=args.cross_entropy_weight)
+        # criterion = NIMSBinaryFocalLoss()
+        # criterion = MSELoss(device=device)
 
     elif args.model == 'convlstm':
         assert args.window_size == args.target_num, \
