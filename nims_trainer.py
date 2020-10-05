@@ -32,6 +32,7 @@ class NIMSTrainer:
         self.train_info = {'model': None,
                            'n_blocks': args.n_blocks,
                            'start_channels': args.start_channels,
+                           'pos_loc': args.pos_loc,
                            'pos_dim': args.pos_dim,
                            'cross_entropy_weight': args.cross_entropy_weight,
                            'bilinear': args.bilinear,

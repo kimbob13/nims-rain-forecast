@@ -204,6 +204,7 @@ if __name__ == '__main__':
     args.start_channels = chosen_info['start_channels']
     args.window_size = chosen_info['window_size']
     args.model_utc = chosen_info['model_utc']
+    args.pos_loc = chosen_info['pos_loc']
     args.pos_dim = chosen_info['pos_dim']
     args.cross_entropy_weight = chosen_info['cross_entropy_weight']
     args.bilinear = chosen_info['bilinear']
