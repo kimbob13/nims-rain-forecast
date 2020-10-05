@@ -164,6 +164,9 @@ if __name__ == '__main__':
     # 1. Test setting part                                  #
     #########################################################
 
+    # Set the number of threads in pytorch
+    torch.set_num_threads(5)
+
     # Parsing command line arguments
     args = parse_args()
 

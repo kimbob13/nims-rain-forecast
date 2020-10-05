@@ -14,6 +14,9 @@ except:
     pass
 
 if __name__ == '__main__':
+    # Set the number of threads in pytorch
+    torch.set_num_threads(3)
+
     # Select start and end date for train
     date = select_date()
 
