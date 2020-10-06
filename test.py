@@ -14,7 +14,7 @@ import shutil
 import time
 from collections import namedtuple
 
-NIMSStat = namedtuple('NIMSStat', 'acc, csi, pod, bias')
+NIMSStat = namedtuple('NIMSStat', 'acc, csi, pod, far, f1, bias')
 MONTH_DAY = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 
 def create_test_date_list(date, test_result_path):
@@ -71,7 +71,7 @@ def recreate_total_stat(total_test_path):
     total_df.iloc[-1, 1] = (total_hit + total_cn) / (total_hit + total_miss + total_fa + total_cn)
     total_df.iloc[-1, 0] = 'Total'
 
-    total_df.to_csv(os.path.join(total_test_path, '..', 'total.csv'), index=False)
+    total_df.to_csv(os.path.join(total_test_path, '..', 'total-{}.csv'.format(year)), index=False)
 
 def get_ldaps_eval_date_files(model_utc, date):
     ldaps_eval_dir = os.path.join('./results', 'LDAPS_Logger')
@@ -114,10 +114,12 @@ def get_nims_stat(eval_date_files):
 
     csi = np.where((hit + miss + fa) > 0, hit / (hit + miss + fa), -0.1)
     pod = np.where((hit + miss) > 0, hit / (hit + miss), -0.1)
+    far = np.where((hit + fa) > 0, fa / (hit + fa), -0.1)
+    f1 = np.where(((2 * hit) + fa + miss) > 0, 2 * hit / ((2 * hit) + fa + miss), 1)
     bias = np.where((hit + miss) > 0, (hit + fa) / (hit + miss), 1)
     acc = ((hit + cn) / (hit + miss + fa + cn)) * 100
 
-    nims_stat = NIMSStat(acc, csi, pod, bias)
+    nims_stat = NIMSStat(acc, csi, pod, far, f1, bias)
 
     return nims_stat
 

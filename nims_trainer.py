@@ -56,13 +56,13 @@ class NIMSTrainer:
         self.model.to(self.device)
 
         if model.name == 'unet' or model.name == 'attn_unet':
-            self.nims_logger = NIMSLogger(loss=True, correct=True, binary_f1=True,
+            self.nims_logger = NIMSLogger(loss=True, correct=True,
                                           macro_f1=False, micro_f1=False,
                                           hit=True, miss=True, fa=True, cn=True,
                                           stn_codi=self.stn_codi,
                                           test_date_list=test_date_list)
         elif model.name == 'convlstm':
-            self.nims_logger = NIMSLogger(loss=True, correct=False, binary_f1=True,
+            self.nims_logger = NIMSLogger(loss=True, correct=False,
                                           macro_f1=False, micro_f1=False,
                                           hit=True, miss=True, fa=True, cn=True,
                                           stn_codi=self.stn_codi,

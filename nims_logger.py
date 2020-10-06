@@ -9,9 +9,8 @@ from nims_eval_converter import save_nims_metric
 __all__ = ['NIMSLogger']
 
 class NIMSLogger:
-    def __init__(self, loss, correct, binary_f1, macro_f1, micro_f1,
-                 hit, miss, fa, cn, stn_codi,
-                 test_date_list=None, num_classes=2):
+    def __init__(self, loss, correct, macro_f1, micro_f1,
+                 hit, miss, fa, cn, stn_codi, test_date_list=None):
         """
         <Parameter>
         loss, correct, macro_f1, micro_f1 [bool]: whether to record each variable
@@ -24,7 +23,6 @@ class NIMSLogger:
         """
         self.stn_codi = stn_codi
         self.num_stn = len(stn_codi)
-        self.num_classes = num_classes
         self.test_date_dict = dict()
 
         if test_date_list != None:
@@ -34,20 +32,22 @@ class NIMSLogger:
                 month = int(test_date_path.split('/')[-1][4:6])
                 self.test_date_dict[month] = test_date_path
 
+            self.test_year = int(test_date_path.split('/')[-1][0:4])
+        
         self.num_update = 0
 
         # Initialize one epoch stat dictionary
-        self.one_epoch_stat = OneTargetStat(loss, correct, binary_f1, macro_f1, micro_f1, hit, miss, fa, cn)
+        self.one_epoch_stat = OneTargetStat(loss, correct, macro_f1, micro_f1, hit, miss, fa, cn)
 
         # Used for one data instance stat
-        self._latest_stat = OneTargetStat(loss, correct, binary_f1, macro_f1, micro_f1, hit, miss, fa, cn)
+        self._latest_stat = OneTargetStat(loss, correct, macro_f1, micro_f1, hit, miss, fa, cn)
 
         # Test stat dataframe
         self.test_df = pd.DataFrame(columns=['date', 'acc', 'hit', 'miss', 'false alarm', 'correct negative'])
         self.daily_df = pd.DataFrame(0, index=['acc', 'hit', 'miss', 'false alarm', 'correct negative'], columns=list(range(49)))
 
     def update(self, loss=None, correct=None,
-               binary_f1=None, macro_f1=None, micro_f1=None,
+               macro_f1=None, micro_f1=None,
                hit=None, miss=None, fa=None, cn=None,
                target_time=None, test=False):
 
@@ -63,12 +63,6 @@ class NIMSLogger:
                 self._latest_stat.correct = sum(correct)
             except:
                 print("You don't specify the correct to be logged")
-        if binary_f1 != None:
-            try:
-                self.one_epoch_stat.binary_f1 += sum(binary_f1)
-                self._latest_stat.binary_f1 = sum(binary_f1)
-            except:
-                print("You don't specify the binary_f1 to be logged")
         if macro_f1 != None:
             try:
                 self.one_epoch_stat.macro_f1 += sum(macro_f1)
@@ -173,11 +167,6 @@ class NIMSLogger:
             pass
 
         try:
-            stat_str += "[{:12s}] {:.5f}\n".format('f1 (binary)', self.one_epoch_stat.binary_f1 / self.num_update)
-        except:
-            pass
-
-        try:
             stat_str += "[{:12s}] {:.5f}\n".format('f1 (macro)', self.one_epoch_stat.macro_f1 / self.num_update)
         except:
             pass
@@ -191,9 +180,13 @@ class NIMSLogger:
             pod = self.one_epoch_stat.hit / (self.one_epoch_stat.hit + self.one_epoch_stat.miss)
             csi = self.one_epoch_stat.hit / (self.one_epoch_stat.hit + self.one_epoch_stat.miss + self.one_epoch_stat.fa)
             bias = (self.one_epoch_stat.hit + self.one_epoch_stat.fa) / (self.one_epoch_stat.hit + self.one_epoch_stat.miss)
+            far = self.one_epoch_stat.fa / (self.one_epoch_stat.hit + self.one_epoch_stat.fa)
+            f1 = (2 * self.one_epoch_stat.hit) / ((2 * self.one_epoch_stat.hit) + self.one_epoch_stat.fa + self.one_epoch_stat.miss)
 
             stat_str += "[{:12s}] {:.5f}\n".format('pod', pod)
             stat_str += "[{:12s}] {:.5f}\n".format('csi', csi)
+            stat_str += "[{:12s}] {:.5f}\n".format('far', far)
+            stat_str += "[{:12s}] {:.5f}\n".format('f1 score', f1)
             stat_str += "[{:12s}] {:.5f}\n".format('bias', bias)
         except:
             pass
@@ -242,11 +235,6 @@ class NIMSLogger:
             pass
 
         try:
-            stat_str += ", f1 (binary) = {:.5f}".format(self._latest_stat.binary_f1 / num_batch)
-        except:
-            pass
-
-        try:
             stat_str += ", f1 (macro) = {:.5f}".format(self._latest_stat.macro_f1 / num_batch)
         except:
             pass
@@ -271,12 +259,6 @@ class NIMSLogger:
         except:
             pass
 
-        try:
-            if _stat.binary_f1:
-                _stat.binary_f1 = 0.0
-        except:
-            pass
-            
         try:
             if _stat.macro_f1:
                 _stat.macro_f1 = 0.0
@@ -325,10 +307,11 @@ class NIMSLogger:
         self.test_df.iloc[-1, 1] = (total_hit + total_cn) / (total_hit + total_miss + total_fa + total_cn)
         self.test_df.iloc[-1, 0] = 'Total'
 
-        self.test_df.to_csv(os.path.join(self.test_result_path, 'total.csv'), index=False)
+        self.test_df.to_csv(os.path.join(self.test_result_path,
+                                         'total-{}.csv'.format(self.test_year)), index=False)
 
 class OneTargetStat:
-    def __init__(self, loss, correct, binary_f1, macro_f1, micro_f1, hit, miss, fa, cn):
+    def __init__(self, loss, correct, macro_f1, micro_f1, hit, miss, fa, cn):
         """
         <Parameter>
         loss, correct, macro_f1, micro_f1 [bool]: whether to record each variable
@@ -337,8 +320,6 @@ class OneTargetStat:
             self._loss = 0.0
         if correct:
             self._correct = 0
-        if binary_f1:
-            self._binary_f1 = 0.0
         if macro_f1:
             self._macro_f1 = 0.0
         if micro_f1:
@@ -367,14 +348,6 @@ class OneTargetStat:
     @correct.setter
     def correct(self, correct_val):
         self._correct = correct_val
-
-    @property
-    def binary_f1(self):
-        return self._binary_f1
-
-    @binary_f1.setter
-    def binary_f1(self, binary_f1_val):
-        self._binary_f1 = binary_f1_val
 
     @property
     def macro_f1(self):

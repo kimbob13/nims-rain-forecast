@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import numpy as np
-from sklearn.metrics import f1_score, confusion_matrix
+from sklearn.metrics import confusion_matrix
 from sklearn.utils.class_weight import compute_class_weight
 
 __all__ = ['MSELoss', 'NIMSCrossEntropyLoss', 'NIMSBinaryFocalLoss']
@@ -29,7 +29,6 @@ class ClassificationStat(nn.Module):
         assert (b, num_stn) == targets.shape
 
         correct = [0] * b
-        binary_f1 = [0] * b
         hit = [0] * b
         miss = [0] * b
         fa = [0] * b
@@ -40,7 +39,6 @@ class ClassificationStat(nn.Module):
 
         for i in range(b):
             pred, target = pred_labels[i], target_labels[i]
-            _binary_f1 = f1_score(target, pred, zero_division=0)
 
             """
             [Confusion matrix]
@@ -54,13 +52,12 @@ class ClassificationStat(nn.Module):
             _correct = _hit + _cn
 
             correct[i] = _correct
-            binary_f1[i] = _binary_f1
             hit[i] = _hit
             miss[i] = _miss
             fa[i] = _fa
             cn[i] = _cn
 
-        return correct, binary_f1, hit, miss, fa, cn
+        return correct, hit, miss, fa, cn
 
 class MSELoss(ClassificationStat):
     def __init__(self, device):
@@ -76,7 +73,7 @@ class MSELoss(ClassificationStat):
         # stn_targets_label = torch.where(stn_targets >= 0.1,
         #                                 torch.ones(stn_targets.shape).to(self.device),
         #                                 torch.zeros(stn_targets.shape).to(self.device)).to(self.device)
-        # correct, binary_f1, hit, miss, fa, cn = self.get_stat(stn_preds, stn_targets_label)
+        # correct, hit, miss, fa, cn = self.get_stat(stn_preds, stn_targets_label)
 
         loss = F.mse_loss(stn_preds, stn_targets)
         
@@ -125,14 +122,14 @@ class NIMSCrossEntropyLoss(ClassificationStat):
         stn_preds = preds[:, :, stn_codi[:, 0], stn_codi[:, 1]]
         stn_targets = targets[:, stn_codi[:, 0], stn_codi[:, 1]]
         
-        correct, binary_f1, hit, miss, fa, cn = self.get_stat(stn_preds, stn_targets)
+        correct, hit, miss, fa, cn = self.get_stat(stn_preds, stn_targets)
         
         loss = F.cross_entropy(stn_preds, stn_targets, weight=class_weights, reduction='none')
         loss = torch.mean(torch.mean(loss, dim=0))
 
         if logger:
             logger.update(loss=loss.item(), correct=correct,
-                          binary_f1=binary_f1, hit=hit, miss=miss, fa=fa, cn=cn,
+                          hit=hit, miss=miss, fa=fa, cn=cn,
                           target_time=target_time, test=test)
 
         # print('[cross_entropy] loss: {}'.format(loss.item()))
@@ -183,7 +180,7 @@ class NIMSBinaryFocalLoss(ClassificationStat):
         stn_preds = preds[:, :, stn_codi[:, 0], stn_codi[:, 1]]
         stn_targets = targets[:, stn_codi[:, 0], stn_codi[:, 1]]
         
-        correct, binary_f1, hit, miss, fa, cn = self.get_stat(stn_preds, stn_targets)
+        correct, hit, miss, fa, cn = self.get_stat(stn_preds, stn_targets)
 
         prob = torch.sigmoid(stn_preds)
         prob = torch.clamp(prob, self.smooth, 1.0 - self.smooth)
@@ -207,7 +204,7 @@ class NIMSBinaryFocalLoss(ClassificationStat):
 
         if logger:
             logger.update(loss=loss.item(), correct=correct,
-                          binary_f1=binary_f1, hit=hit, miss=miss, fa=fa, cn=cn,
+                          hit=hit, miss=miss, fa=fa, cn=cn,
                           target_time=target_time, test=test)
         
         return loss
