@@ -378,8 +378,11 @@ def set_experiment_name(args, date):
     <Parameters>
     args [argparse]: parsed argument
     """
-    date_str = ' ({:4d}{:02d}{:02d}-{:04d}{:02d}{:02d})'.format(date['year'], date['start_month'], date['start_day'],
-                                                           date['year'], date['end_month'], date['end_day'])
+    if date != '':
+        date_str = ' ({:4d}{:02d}{:02d}-{:04d}{:02d}{:02d})'.format(date['year'], date['start_month'], date['start_day'],
+                                                               date['year'], date['end_month'], date['end_day'])
+    else:
+        date_str = ''
 
     if args.wd != 0:
         wd_str = '{:1.0e}'.format(args.wd)

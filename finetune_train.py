@@ -58,6 +58,7 @@ if __name__ == '__main__':
                                          window_size=args.window_size,
                                          root_dir=args.dataset_dir,
                                          date=curr_date,
+                                         lite=args.lite,
                                          train=True,
                                          transform=ToTensor())
 
@@ -75,18 +76,17 @@ if __name__ == '__main__':
                             'min_values': min_values}
     
         # Get a sample for getting shape of each tensor
-        sample, _ = nims_train_dataset[0]
+        sample, _, _ = nims_train_dataset[0]
         
         # Set experiment name and use it as process name if possible
-        experiment_name = set_experiment_name(args)
+        experiment_name = set_experiment_name(args, '')
 
         # XXX: Need to change using curr_date
-        if test_time == first_date:
-            pretrained_model = 'nims-utc0-unet_nb6_ch64_ws6_ep200_bs1_sr1.0_adam0.001'
+        if test_time == finetune_start:
+            pretrained_model = 'nims-utc0-unet_nb5_ch32_ws6_ep100_bs1_pos9-1_sr1.0_adam0.001_wd0_norm'
         else:
-            yesterday_time = test_time - timedelta(days=1)
-            yesterday_time_str = yesterday_time.strftime("%Y%m%d%H")
-            pretrained_model = experiment_name + '_{}'.format(yesterday_time_str[:8])
+            train_time_str = train_time.strftime("%Y%m%d")
+            pretrained_model = experiment_name + '_{}'.format(train_time_str)
         model_path = os.path.join('./results', 'trained_model', '{}.pt'.format(pretrained_model))
         
         # Create a model and criterion
