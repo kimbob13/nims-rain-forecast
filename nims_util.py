@@ -351,7 +351,7 @@ def set_model(sample, device, args, train=True,
 
     if finetune:
         checkpoint = torch.load(model_path)
-        model.load_state_dict(checkpoint, strict=True)
+        model.load_state_dict(checkpoint, strict=False)
 
     return model, criterion
 
@@ -536,7 +536,7 @@ def get_min_max_values(dataset):
     # Start processes
     for i in range(num_processes):
         processes[i].start()
-
+    
     # Get return value of each process
     max_values, min_values = None, None
     for i in tqdm(range(num_processes)):

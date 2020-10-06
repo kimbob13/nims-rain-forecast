@@ -83,7 +83,7 @@ if __name__ == '__main__':
 
         # XXX: Need to change using curr_date
         if test_time == finetune_start:
-            pretrained_model = 'nims-utc0-unet_nb5_ch32_ws6_ep100_bs1_pos9-1_sr1.0_adam0.001_wd0_norm'
+            pretrained_model = 'nims-utc0-unet_nb5_ch32_ws6_ep2_bs1_pos0-0_sr1.0_adam0.001_wd5e-05_norm'
         else:
             train_time_str = train_time.strftime("%Y%m%d")
             pretrained_model = experiment_name + '_{}'.format(train_time_str)
@@ -111,12 +111,12 @@ if __name__ == '__main__':
                                   pin_memory=True)
 
         # Set the optimizer
-        optimizer = set_optimizer(model, args)
+        optimizer, scheduler = set_optimizer(model, args)
 
         # Start training
-        print ("fine-tuning for {}".format(test_time_str[:8]))
-        experiment_name += '_{}'.format(test_time_str[:8])
-        nims_trainer = NIMSTrainer(model, criterion, optimizer, device,
+        print ("fine-tuning for {}".format(test_time.strftime("%Y%m%d")))
+        experiment_name += '_{}'.format(test_time.strftime("%Y%m%d"))
+        nims_trainer = NIMSTrainer(model, criterion, optimizer, scheduler, device,
                                    train_loader, None, len(nims_train_dataset), 0,
                                    experiment_name, args,
                                    normalization=normalization)
