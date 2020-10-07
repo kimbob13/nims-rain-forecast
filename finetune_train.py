@@ -4,6 +4,7 @@ from torch.utils.data import DataLoader, Subset
 from datetime import datetime, timedelta
 
 from nims_util import *
+from nims_util import get_min_max_values_pool, get_min_max_values_no_mp
 from nims_dataset import NIMSDataset, ToTensor
 from nims_trainer import NIMSTrainer
 #from nims_variable import parse_variables
@@ -66,7 +67,7 @@ if __name__ == '__main__':
         normalization = None
         if args.normalization:
             print('=' * 25, 'Normalization Start...', '=' * 25)
-            max_values, min_values = get_min_max_values(nims_train_dataset)
+            max_values, min_values = get_min_max_values_no_mp(nims_train_dataset)
             transform = get_min_max_normalization(max_values, min_values)
             print('=' * 25, 'Normalization End!', '=' * 25)
             print()

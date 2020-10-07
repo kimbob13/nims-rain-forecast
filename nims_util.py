@@ -16,7 +16,8 @@ import random
 import argparse
 
 from tqdm import tqdm
-from multiprocessing import Process, Queue, cpu_count
+from multiprocessing import Process, Queue, cpu_count, Pool
+import itertools
 
 try:
     import setproctitle
@@ -557,6 +558,60 @@ def get_min_max_values(dataset):
     max_values = torch.tensor(max_values)
     min_values = torch.tensor(min_values)
 
+    return max_values, min_values
+
+def get_min_max_values_pool(dataset):
+    '''
+        get_min_max_values with pool. original version of this function uses Process instance for multiprocessing.
+        However, this function uses Pool instance, instead.
+    '''
+
+    indices = list(range(len(dataset)))
+    num_processes = 8
+    num_indices_per_process = len(indices) // num_processes
+
+    pool = Pool(num_processes)
+    indices_list = []
+    
+    for i in range(num_processes):
+        start_idx = i * num_indices_per_process
+        end_idx = start_idx + num_indices_per_process
+        
+        if i == num_processes - 1:
+            indices_for_process = indices[start_idx:]
+        else:
+            indices_for_process = indices[start_idx:end_idx]
+        indices_list.append(indices_for_process)
+    
+    proc_results = pool.starmap(_get_min_max_values, zip(itertools.repeat(dataset), indices_list))
+    
+    max_values, min_values = None, None
+    for i in tqdm(range(num_processes)):
+        proc_result = proc_results[i]
+        if i == 0:
+            max_values = proc_result[0]
+            min_values = proc_result[1]
+        else:
+            max_values = np.maximum(max_values, proc_result[0])
+            min_values = np.minimum(min_values, proc_result[1])
+
+    max_values = torch.tensor(max_values)
+    min_values = torch.tensor(min_values)
+
+    return max_values, min_values
+
+def get_min_max_values_no_mp(dataset):
+    '''
+        get_min_max_values function with no multiprocessing
+    '''
+
+    indices = list(range(len(dataset)))
+
+    max_values, min_values = _get_min_max_values(dataset, indices)
+    
+    max_values = torch.tensor(max_values)
+    min_values = torch.tensor(min_values)
+    
     return max_values, min_values
 
 def get_min_max_normalization(max_values, min_values):
