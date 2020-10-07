@@ -36,7 +36,7 @@ class NIMSDataset(Dataset):
         self.train = train
         self.transform = transform
         
-        self._data_path_list, self._gt_path_list = self.__set_path()
+        self._data_path_list, self._gt_path = self.__set_path()
 
     @property
     def gt_path_list(self):
@@ -119,15 +119,23 @@ class NIMSDataset(Dataset):
                             data_path_list.append((os.path.join(data_dir, p), os.path.join(data_dir, u)))
             
         # Set target data list
-        gt_dir = os.path.join(self.root_dir, '..', 'OBS', str(self.date['year']))
-        gt_path_list = os.listdir(gt_dir)
-        gt_path_list = sorted([os.path.join(gt_dir, f) for f in gt_path_list if
-                               f.split('_')[3][:-2] >= start_date.strftime("%Y%m%d%H") and
-                               f.split('_')[3][:-2] <= gt_end_date.strftime("%Y%m%d%H")])
+        # User defined
+        gt_dir = "/home/mgyukim/data/NIMS_LITE/npy"
+        gt_path = os.path.join(gt_dir, str(self.date['year']), 'rainr.npy')
+        
+        return data_path_list, gt_path
 
-        return data_path_list, gt_path_list
+    def __get_index(self, train_end_time):
+        # Declare new_year date
+        new_year_date = datetime(year=self.date['year'], month=1, \
+            day=1, hour=0)
+    
+        # getting passing days (train_end_date) from new_years
+        index = int((train_end_time - new_year_date).total_seconds() // 3600)
 
-    def __len__(self):
+        return index
+
+    def __len__(self):        
         return len(self._data_path_list)
 
     def __getitem__(self, idx):
@@ -175,11 +183,18 @@ class NIMSDataset(Dataset):
         
         if self.transform:
             ldaps_input = self.transform(ldaps_input)
+
+        # Getting indices of ground truth data
+        train_end_time_index = self.__get_index(train_end_time)
+        gt_index = train_end_time_index
         
-        gt_path = [p for p in self._gt_path_list \
-                   if train_end_time.strftime("%Y%m%d%H") in p][0]
-        gt = torch.tensor(np.load(gt_path))
-        gt = torch.where(gt >= 0.1, torch.ones(gt.shape), torch.zeros(gt.shape))
+        # Load ground truth data (np.array --> torch.Tensor)
+        gts_np = np.load(self._gt_path) #[8760 x 512 x 512]
+        gts = torch.tensor(gts_np) #[8760 x 512 x 512]
+        gts = torch.where(gts >= 0.1, torch.ones(gts.shape), torch.zeros(gts.shape))
+
+        # Slicing gt data 
+        gt = gts[gt_index]
 
         # Make tensor of current target time for test logging
         target_time_tensor = torch.tensor([current_utc_date.year,
@@ -241,6 +256,49 @@ class ToTensor(object):
         return torch.from_numpy(images)
 
 
+if __name__ == "__main__":
+    # DEBUG
+    start_date = datetime(year=2019, month=6, \
+            day=1, hour=0)
+    time_window = timedelta(hours=6)
+
+    new_date = start_date + time_window
+
+    diff_seconds = (new_date - start_date).total_seconds()
+    diff_hours = int(diff_seconds // 3600)
+
+    print(diff_hours)
+    
+
+    date = select_date()
+
+    # Train dataset
+    nims_train_dataset = NIMSDataset(model='unet',
+                                     model_utc=0,
+                                     window_size=6,
+                                     root_dir='/home/osilab12/ssd/NIMS_LDPS',
+                                     date=date,
+                                     lite=False,
+                                     train=True,
+                                     transform=ToTensor())
+
+
+    # DEBUG
+    x, y, _ = nims_train_dataset[0]
+
+    print(x.shape)
+    print(y.shape)
+
+    x_1, y_1, _ = nims_train_dataset[20]
+
+    print(x_1.shape)
+    print(y_1.shape)
+
+
+
+    # len
+    print(len(nims_train_dataset))
+    
     
 
     
