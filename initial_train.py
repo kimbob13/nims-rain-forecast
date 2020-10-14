@@ -17,8 +17,10 @@ if __name__ == '__main__':
     # Set the number of threads in pytorch
     torch.set_num_threads(3)
 
-    # Select start and end date for train
-    date = select_date()
+    # Select start and end date for train and valid
+    train_date = select_date()
+    valid_date = {'year': 2020, 'start_month': 6, 'start_day': 1,
+                  'end_month': 6, 'end_day': 30}
 
     # Parsing command line arguments
     args = parse_args()
@@ -29,9 +31,6 @@ if __name__ == '__main__':
     # Fix the seed
     fix_seed(2020)
 
-    # Create necessary directory
-    create_results_dir()
-
     # Parse NIMS dataset variables
     # variables = parse_variables(args.variables)
 
@@ -40,10 +39,20 @@ if __name__ == '__main__':
                                      model_utc=args.model_utc,
                                      window_size=args.window_size,
                                      root_dir=args.dataset_dir,
-                                     date=date,
+                                     date=train_date,
                                      lite=args.lite,
                                      heavy_rain=args.heavy_rain,
                                      train=True,
+                                     transform=ToTensor())
+
+    nims_valid_dataset = NIMSDataset(model=args.model,
+                                     model_utc=args.model_utc,
+                                     window_size=args.window_size,
+                                     root_dir=args.dataset_dir,
+                                     date=valid_date,
+                                     lite=args.lite,
+                                     heavy_rain=args.heavy_rain,
+                                     train=False,
                                      transform=ToTensor())
     
     # Undersampling
@@ -80,16 +89,21 @@ if __name__ == '__main__':
     train_loader = DataLoader(nims_train_dataset, batch_size=args.batch_size,
                               shuffle=True, num_workers=args.num_workers,
                               pin_memory=True)
+    valid_loader = DataLoader(nims_valid_dataset, batch_size=args.batch_size,
+                              shuffle=False, num_workers=args.num_workers,
+                              pin_memory=True)
 
     # Set the optimizer
     optimizer, scheduler = set_optimizer(model, args)
 
     # Set experiment name and use it as process name if possible
-    experiment_name = set_experiment_name(args, date)
+    experiment_name = set_experiment_name(args, train_date)
+
+    # Create necessary directory
+    create_results_dir(experiment_name)
 
     # Start training
     nims_trainer = NIMSTrainer(model, criterion, optimizer, scheduler, device,
-                               train_loader, None, len(nims_train_dataset), 0,
-                               experiment_name, args,
+                               train_loader, valid_loader, experiment_name, args,
                                normalization=normalization)
     nims_trainer.train()

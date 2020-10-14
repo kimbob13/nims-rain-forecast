@@ -18,6 +18,7 @@ import argparse
 
 from tqdm import tqdm
 from multiprocessing import Process, Queue, cpu_count, Pool
+from collections import namedtuple
 import itertools
 
 try:
@@ -25,29 +26,26 @@ try:
 except:
     pass
 
-__all__ = ['create_results_dir', 'select_date', 'parse_args', 'set_device', 'undersample',
+__all__ = ['NIMSStat', 'create_results_dir', 'select_date', 'parse_args', 'set_device', 'undersample',
            'fix_seed', 'set_model', 'set_optimizer', 'set_experiment_name', 'get_min_max_values', 'get_min_max_normalization']
 
-def create_results_dir():
+NIMSStat = namedtuple('NIMSStat', 'acc, csi, pod, far, f1, bias')
+
+def create_results_dir(experiment_name):
     # Base results directory
-    results_dir = './results'
+    results_dir = os.path.join('./results', experiment_name)
     if not os.path.isdir(results_dir):
         os.mkdir(results_dir)
-
-    # Create log directory if not
-    log_dir = os.path.join(results_dir, 'log')
-    if not os.path.isdir(log_dir):
-        os.mkdir(log_dir)
 
     # Create evaluation directory if not
     eval_dir = os.path.join(results_dir, 'eval')
     if not os.path.isdir(eval_dir):
         os.mkdir(eval_dir)
 
-    # Create trained_model directory if not
-    model_dir = os.path.join(results_dir, 'trained_model')
-    if not os.path.isdir(model_dir):
-        os.mkdir(model_dir)
+    # Create comparison_graph directory if not
+    graph_dir = os.path.join(results_dir, 'comparison_graph')
+    if not os.path.isdir(graph_dir):
+        os.mkdir(graph_dir)
 
 def select_date(test=False):
     # Mode selection

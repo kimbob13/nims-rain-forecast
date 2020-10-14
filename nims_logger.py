@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import sys
 import os
 
-from nims_eval_converter import save_nims_metric
+from nims_util import NIMSStat
 
 __all__ = ['NIMSLogger']
 
@@ -162,7 +162,8 @@ class NIMSLogger:
             pass
 
         try:
-            stat_str += "[{:12s}] {:.3f}%\n".format('accuracy', (self.one_epoch_stat.correct / total_stn) * 100)
+            acc = (self.one_epoch_stat.correct / total_stn) * 100
+            stat_str += "[{:12s}] {:.3f}%\n".format('accuracy', acc)
         except:
             pass
 
@@ -177,10 +178,10 @@ class NIMSLogger:
             pass
 
         try:
-            pod = self.one_epoch_stat.hit / (self.one_epoch_stat.hit + self.one_epoch_stat.miss)
             csi = self.one_epoch_stat.hit / (self.one_epoch_stat.hit + self.one_epoch_stat.miss + self.one_epoch_stat.fa)
-            bias = (self.one_epoch_stat.hit + self.one_epoch_stat.fa) / (self.one_epoch_stat.hit + self.one_epoch_stat.miss)
+            pod = self.one_epoch_stat.hit / (self.one_epoch_stat.hit + self.one_epoch_stat.miss)
             far = self.one_epoch_stat.fa / (self.one_epoch_stat.hit + self.one_epoch_stat.fa)
+            bias = (self.one_epoch_stat.hit + self.one_epoch_stat.fa) / (self.one_epoch_stat.hit + self.one_epoch_stat.miss)
             f1 = (2 * self.one_epoch_stat.hit) / ((2 * self.one_epoch_stat.hit) + self.one_epoch_stat.fa + self.one_epoch_stat.miss)
 
             stat_str += "[{:12s}] {:.5f}\n".format('pod', pod)
@@ -188,6 +189,8 @@ class NIMSLogger:
             stat_str += "[{:12s}] {:.5f}\n".format('far', far)
             stat_str += "[{:12s}] {:.5f}\n".format('f1 score', f1)
             stat_str += "[{:12s}] {:.5f}\n".format('bias', bias)
+
+            epoch_stat = NIMSStat(acc, csi, pod, far, f1, bias)
         except:
             pass
 
@@ -199,7 +202,7 @@ class NIMSLogger:
 
         self._clear_one_target_stat(self.one_epoch_stat)
 
-        return epoch_loss, pod, csi, bias
+        return epoch_loss, epoch_stat
 
     def latest_stat(self, target_time):
         num_batch = target_time.shape[0]
