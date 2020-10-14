@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Subset
 import numpy as np
@@ -219,7 +220,7 @@ def set_device(args):
     else:
         os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
         os.environ['CUDA_VISIBLE_DEVICES'] = args.device
-        device = torch.device('cuda:0')
+        device = torch.device('cuda')
 
     return device
 
@@ -352,6 +353,8 @@ def set_model(sample, device, args, train=True,
     if finetune:
         checkpoint = torch.load(model_path)
         model.load_state_dict(checkpoint, strict=True)
+
+    model = nn.DataParallel(model)
 
     return model, criterion
 

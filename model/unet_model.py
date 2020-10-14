@@ -79,10 +79,6 @@ class UNet(nn.Module):
         else:
             self.outc.add_module('out_conv', OutConv(start_channels, n_classes))
 
-    @property
-    def name(self):
-        return 'unet'
-
     def forward(self, x):
         logits = []
         out = self.inc(x)
@@ -139,7 +135,3 @@ class AttentionUNet(UNet):
             else:
                 self.up.append(Up(cur_in_ch, (cur_in_ch // 2),
                                   bilinear=bilinear, attention=True))
-
-    @property
-    def name(self):
-        return 'attn_unet'

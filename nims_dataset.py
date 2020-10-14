@@ -1,18 +1,13 @@
 import torch
 from torch.utils.data import Dataset
 
-from nims_variable import read_variable_value
 from nims_util import *
 import torchvision.transforms as transforms
 
 from datetime import datetime, timedelta
-from collections import defaultdict
 import numpy as np
-import xarray as xr
 
 import os
-import pwd
-import copy
 
 __all__ = ['NIMSDataset', 'ToTensor']
 
@@ -39,8 +34,8 @@ class NIMSDataset(Dataset):
         self._data_path_list, self._gt_path = self.__set_path()
 
     @property
-    def gt_path_list(self):
-        return self._gt_path_list
+    def gt_path(self):
+        return self._gt_path
         
     def __set_path(self):
         root, dirs, _ = next(os.walk(os.path.join(self.root_dir, str(self.date['year'])), topdown=True))
@@ -120,20 +115,19 @@ class NIMSDataset(Dataset):
             
         # Set target data list
         # User defined
-        gt_dir = "/home/mgyukim/data/NIMS_LITE/npy"
-        gt_path = os.path.join(gt_dir, str(self.date['year']), 'rainr.npy')
+        if self.train:
+            gt_dir = os.path.join(self.root_dir, '..', 'OBS', 'train', str(self.date['year']))
+            gt_path = os.path.join(gt_dir, 'rainr.npy')
+            gt_path = torch.tensor(np.load(gt_path))
+            gt_path = torch.where(gt_path >= 0.1, torch.ones(gt_path.shape), torch.zeros(gt_path.shape))
+        else:
+            gt_dir = os.path.join(self.root_dir, '..', 'OBS', 'test', str(self.date['year']))
+            gt_path = os.listdir(gt_dir)
+            gt_path = sorted([os.path.join(gt_dir, f) for f in gt_path if
+                                f.split('_')[3][:-2] >= start_date.strftime("%Y%m%d%H") and
+                                f.split('_')[3][:-2] <= gt_end_date.strftime("%Y%m%d%H")])
         
         return data_path_list, gt_path
-
-    def __get_index(self, train_end_time):
-        # Declare new_year date
-        new_year_date = datetime(year=self.date['year'], month=1, \
-            day=1, hour=0)
-    
-        # getting passing days (train_end_date) from new_years
-        index = int((train_end_time - new_year_date).total_seconds() // 3600)
-
-        return index
 
     def __len__(self):        
         return len(self._data_path_list)
@@ -184,17 +178,8 @@ class NIMSDataset(Dataset):
         if self.transform:
             ldaps_input = self.transform(ldaps_input)
 
-        # Getting indices of ground truth data
-        train_end_time_index = self.__get_index(train_end_time)
-        gt_index = train_end_time_index
-        
-        # Load ground truth data (np.array --> torch.Tensor)
-        gts_np = np.load(self._gt_path) #[8760 x 512 x 512]
-        gts = torch.tensor(gts_np) #[8760 x 512 x 512]
-        gts = torch.where(gts >= 0.1, torch.ones(gts.shape), torch.zeros(gts.shape))
-
-        # Slicing gt data 
-        gt = gts[gt_index]
+        # Get ground-truth based on train mode
+        gt = self._get_gt_data(train_end_time)
 
         # Make tensor of current target time for test logging
         target_time_tensor = torch.tensor([current_utc_date.year,
@@ -245,8 +230,33 @@ class NIMSDataset(Dataset):
 
             return np.concatenate(concat_list, axis=0)
 
+    def _get_index(self, train_end_time):
+        # Declare new_year date
+        new_year_date = datetime(year=self.date['year'], month=1, day=1, hour=0)
+    
+        # getting passing days (train_end_date) from new_years
+        index = int((train_end_time - new_year_date).total_seconds() // 3600)
+
+        return index
+
+    def _get_gt_data(self, train_end_time):
+        if self.train:
+            # Getting indices of ground truth data
+            train_end_time_index = self._get_index(train_end_time)
+            gt_index = train_end_time_index
+
+            # Slicing gt data 
+            gt = self._gt_path[gt_index]
+        else:
+            gt_path = [p for p in self._gt_path \
+                       if train_end_time.strftime("%Y%m%d%H") in p][0]
+            gt = torch.tensor(np.load(gt_path))
+            gt = torch.where(gt >= 0.1, torch.ones(gt.shape), torch.zeros(gt.shape))
+
+        return gt
+
     def get_real_gt(self, idx):
-        gt_path = self._gt_path_list[idx]
+        gt_path = self._gt_path[idx]
         real_gt = np.load(gt_path)
 
         return real_gt

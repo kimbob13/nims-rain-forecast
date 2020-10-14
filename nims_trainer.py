@@ -14,6 +14,7 @@ class NIMSTrainer:
                  train_loader, test_loader, train_len, test_len,
                  experiment_name, args, normalization=None, test_date_list=None):
         self.model = model
+        self.model_name = args.model
         self.criterion = criterion
         self.optimizer = optimizer
         self.scheduler = scheduler
@@ -55,13 +56,13 @@ class NIMSTrainer:
 
         self.model.to(self.device)
 
-        if model.name == 'unet' or model.name == 'attn_unet':
+        if self.model_name == 'unet' or self.model_name == 'attn_unet':
             self.nims_logger = NIMSLogger(loss=True, correct=True,
                                           macro_f1=False, micro_f1=False,
                                           hit=True, miss=True, fa=True, cn=True,
                                           stn_codi=self.stn_codi,
                                           test_date_list=test_date_list)
-        elif model.name == 'convlstm':
+        elif self.model_name == 'convlstm':
             self.nims_logger = NIMSLogger(loss=True, correct=False,
                                           macro_f1=False, micro_f1=False,
                                           hit=True, miss=True, fa=True, cn=True,
@@ -137,8 +138,8 @@ class NIMSTrainer:
     def _epoch(self, data_loader, train):
         pbar = tqdm(data_loader)
         for images, target, target_time in pbar:
-            if self.model.name == 'unet' or \
-               self.model.name == 'attn_unet':
+            if self.model_name == 'unet' or \
+               self.model_name == 'attn_unet':
                 if self.normalization:
                     b, c, h, w = images.shape
                     images = images.reshape((-1, h, w))
@@ -154,7 +155,7 @@ class NIMSTrainer:
                 target = target.type(torch.LongTensor).to(self.device)
                 target_time = target_time.numpy()
             
-            elif self.model.name == 'convlstm':
+            elif self.model_name == 'convlstm':
                 # Dataloader for ConvLSTM outputs images and target shape as NSCHW format.
                 # We should change this to SNCHW format.
                 images = images.permute(1, 0, 2, 3, 4).to(self.device)
