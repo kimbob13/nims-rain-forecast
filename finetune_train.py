@@ -4,6 +4,7 @@ from torch.utils.data import DataLoader, Subset
 from datetime import datetime, timedelta
 
 from nims_util import *
+from nims_util import get_min_max_values_pool, get_min_max_values_no_mp
 from nims_dataset import NIMSDataset, ToTensor
 from nims_trainer import NIMSTrainer
 #from nims_variable import parse_variables
@@ -58,6 +59,7 @@ if __name__ == '__main__':
                                          window_size=args.window_size,
                                          root_dir=args.dataset_dir,
                                          date=curr_date,
+                                         lite=args.lite,
                                          train=True,
                                          transform=ToTensor())
 
@@ -65,7 +67,7 @@ if __name__ == '__main__':
         normalization = None
         if args.normalization:
             print('=' * 25, 'Normalization Start...', '=' * 25)
-            max_values, min_values = get_min_max_values(nims_train_dataset)
+            max_values, min_values = get_min_max_values_no_mp(nims_train_dataset)
             transform = get_min_max_normalization(max_values, min_values)
             print('=' * 25, 'Normalization End!', '=' * 25)
             print()
@@ -75,18 +77,17 @@ if __name__ == '__main__':
                             'min_values': min_values}
     
         # Get a sample for getting shape of each tensor
-        sample, _ = nims_train_dataset[0]
+        sample, _, _ = nims_train_dataset[0]
         
         # Set experiment name and use it as process name if possible
-        experiment_name = set_experiment_name(args)
+        experiment_name = set_experiment_name(args, '')
 
         # XXX: Need to change using curr_date
-        if test_time == first_date:
-            pretrained_model = 'nims-utc0-unet_nb6_ch64_ws6_ep200_bs1_sr1.0_adam0.001'
+        if test_time == finetune_start:
+            pretrained_model = 'nims-utc0-unet_nb5_ch32_ws6_ep2_bs1_pos0-0_sr1.0_adam0.001_wd5e-05_norm'
         else:
-            yesterday_time = test_time - timedelta(days=1)
-            yesterday_time_str = yesterday_time.strftime("%Y%m%d%H")
-            pretrained_model = experiment_name + '_{}'.format(yesterday_time_str[:8])
+            train_time_str = train_time.strftime("%Y%m%d")
+            pretrained_model = experiment_name + '_{}'.format(train_time_str)
         model_path = os.path.join('./results', 'trained_model', '{}.pt'.format(pretrained_model))
         
         # Create a model and criterion
@@ -111,12 +112,12 @@ if __name__ == '__main__':
                                   pin_memory=True)
 
         # Set the optimizer
-        optimizer = set_optimizer(model, args)
+        optimizer, scheduler = set_optimizer(model, args)
 
         # Start training
-        print ("fine-tuning for {}".format(test_time_str[:8]))
-        experiment_name += '_{}'.format(test_time_str[:8])
-        nims_trainer = NIMSTrainer(model, criterion, optimizer, device,
+        print ("fine-tuning for {}".format(test_time.strftime("%Y%m%d")))
+        experiment_name += '_{}'.format(test_time.strftime("%Y%m%d"))
+        nims_trainer = NIMSTrainer(model, criterion, optimizer, scheduler, device,
                                    train_loader, None, len(nims_train_dataset), 0,
                                    experiment_name, args,
                                    normalization=normalization)
