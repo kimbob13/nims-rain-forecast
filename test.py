@@ -211,6 +211,7 @@ if __name__ == '__main__':
     args.model_utc = chosen_info['model_utc']
     args.pos_loc = chosen_info['pos_loc']
     args.pos_dim = chosen_info['pos_dim']
+    args.heavy_rain = chosen_info['heavy_rain']
     args.cross_entropy_weight = chosen_info['cross_entropy_weight']
     args.bilinear = chosen_info['bilinear']
     args.custom_name = chosen_info['custom_name']
@@ -228,6 +229,7 @@ if __name__ == '__main__':
                                     root_dir=args.dataset_dir,
                                     date=date,
                                     lite=args.lite,
+                                    heavy_rain=args.heavy_rain,
                                     train=False,
                                     transform=ToTensor())
 

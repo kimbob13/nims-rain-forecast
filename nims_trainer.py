@@ -40,6 +40,7 @@ class NIMSTrainer:
                            'window_size': args.window_size,
                            'model_utc': args.model_utc,
                            'sampling_ratio': args.sampling_ratio,
+                           'heavy_rain': args.heavy_rain,
                            'num_epochs': args.num_epochs,
                            'batch_size': args.batch_size,
                            'optimizer': args.optimizer,

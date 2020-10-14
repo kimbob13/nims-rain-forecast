@@ -185,6 +185,7 @@ def parse_args():
     #                                 Can be single number which specify how many variables to use \
     #                                 or list of variables name')
     nims_dataset.add_argument('--sampling_ratio', default=1.0, type=float, help='the ratio of undersampling')
+    nims_dataset.add_argument('--heavy_rain', default=False, help='if it is set, rain threshold becomes 10mm/hr instead of 0.1mm/hr', action='store_true')
     nims_dataset.add_argument('--normalization', default=False, help='normalize input data', action='store_true')
 
     hyperparam = parser.add_argument_group('hyper-parameters')
@@ -384,7 +385,7 @@ def set_experiment_name(args, date):
     """
     if date != '':
         date_str = ' ({:4d}{:02d}{:02d}-{:04d}{:02d}{:02d})'.format(date['year'], date['start_month'], date['start_day'],
-                                                               date['year'], date['end_month'], date['end_day'])
+                                                                    date['year'], date['end_month'], date['end_day'])
     else:
         date_str = ''
 
@@ -397,20 +398,24 @@ def set_experiment_name(args, date):
     if args.cross_entropy_weight:
         cross_entropy_weight = '_weight'
 
+    normalization = ''
+    if args.normalization:
+        normalization = '_norm'
+
     bilinear = ''
     if args.bilinear:
         bilinear = '_bilinear'
 
-    normalization = ''
-    if args.normalization:
-        normalization = '_norm'
+    heavy_rain = ''
+    if args.heavy_rain:
+        heavy_rain = '_heavy'
 
     custom_name = ''
     if args.custom_name:
         custom_name = '_' + args.custom_name
 
     if args.model == 'unet':            
-        experiment_name = 'nims-utc{}-unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}-{}_sr{}_{}{}_wd{}{}{}{}{}' \
+        experiment_name = 'nims-utc{}-unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}-{}_sr{}_{}{}_wd{}{}{}{}{}{}' \
                           .format(args.model_utc,
                                   args.n_blocks,
                                   args.start_channels,
@@ -426,11 +431,12 @@ def set_experiment_name(args, date):
                                   cross_entropy_weight,
                                   normalization,
                                   bilinear,
+                                  heavy_rain,
                                   custom_name,
                                   date_str)
 
     elif args.model == 'attn_unet':
-        experiment_name = 'nims-utc{}-attn_unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}-{}_sr{}_{}{}_wd{}{}{}{}{}' \
+        experiment_name = 'nims-utc{}-attn_unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}-{}_sr{}_{}{}_wd{}{}{}{}{}{}' \
                           .format(args.model_utc,
                                   args.n_blocks,
                                   args.start_channels,
@@ -446,6 +452,7 @@ def set_experiment_name(args, date):
                                   cross_entropy_weight,
                                   normalization,
                                   bilinear,
+                                  heavy_rain,
                                   custom_name,
                                   date_str)
 

@@ -42,6 +42,7 @@ if __name__ == '__main__':
                                      root_dir=args.dataset_dir,
                                      date=date,
                                      lite=args.lite,
+                                     heavy_rain=args.heavy_rain,
                                      train=True,
                                      transform=ToTensor())
     

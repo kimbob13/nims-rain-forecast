@@ -17,8 +17,8 @@ MONTH_DAY = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 
 
 class NIMSDataset(Dataset):
-    def __init__(self, model, model_utc, window_size, root_dir,
-                 date, lite=False, train=True, transform=None):
+    def __init__(self, model, model_utc, window_size, root_dir, date,
+                 lite=False, heavy_rain=False, train=True, transform=None):
         # assert window_size >= 6 and window_size <= 48, \
         #     'window_size must be in between 6 and 48'
 
@@ -28,6 +28,7 @@ class NIMSDataset(Dataset):
         self.root_dir = root_dir
         self.date = date
         self.lite = lite
+        self.rain_threshold = 10 if heavy_rain else 0.1
         self.train = train
         self.transform = transform
         
@@ -112,20 +113,21 @@ class NIMSDataset(Dataset):
                             data_path_list.append(os.path.join(data_dir, u))
                         else:
                             data_path_list.append((os.path.join(data_dir, p), os.path.join(data_dir, u)))
-            
+        
         # Set target data list
-        # User defined
+        # For training, use gt data which is same size with LDAPS grid
+        # For testing, use gt data which contains observation from only 705 stations
         if self.train:
             gt_dir = os.path.join(self.root_dir, '..', 'OBS', 'train', str(self.date['year']))
             gt_path = os.path.join(gt_dir, 'rainr.npy')
             gt_path = torch.tensor(np.load(gt_path))
-            gt_path = torch.where(gt_path >= 0.1, torch.ones(gt_path.shape), torch.zeros(gt_path.shape))
+            gt_path = torch.where(gt_path >= self.rain_threshold, torch.ones(gt_path.shape), torch.zeros(gt_path.shape))
         else:
             gt_dir = os.path.join(self.root_dir, '..', 'OBS', 'test', str(self.date['year']))
             gt_path = os.listdir(gt_dir)
             gt_path = sorted([os.path.join(gt_dir, f) for f in gt_path if
-                                f.split('_')[3][:-2] >= start_date.strftime("%Y%m%d%H") and
-                                f.split('_')[3][:-2] <= gt_end_date.strftime("%Y%m%d%H")])
+                              f.split('_')[3][:-2] >= start_date.strftime("%Y%m%d%H") and
+                              f.split('_')[3][:-2] <= gt_end_date.strftime("%Y%m%d%H")])
         
         return data_path_list, gt_path
 
@@ -251,7 +253,7 @@ class NIMSDataset(Dataset):
             gt_path = [p for p in self._gt_path \
                        if train_end_time.strftime("%Y%m%d%H") in p][0]
             gt = torch.tensor(np.load(gt_path))
-            gt = torch.where(gt >= 0.1, torch.ones(gt.shape), torch.zeros(gt.shape))
+            gt = torch.where(gt >= self.rain_threshold, torch.ones(gt.shape), torch.zeros(gt.shape))
 
         return gt
 
@@ -264,60 +266,3 @@ class NIMSDataset(Dataset):
 class ToTensor(object):
     def __call__(self, images):
         return torch.from_numpy(images)
-
-
-if __name__ == "__main__":
-    # DEBUG
-    start_date = datetime(year=2019, month=6, \
-            day=1, hour=0)
-    time_window = timedelta(hours=6)
-
-    new_date = start_date + time_window
-
-    diff_seconds = (new_date - start_date).total_seconds()
-    diff_hours = int(diff_seconds // 3600)
-
-    print(diff_hours)
-    
-
-    date = select_date()
-
-    # Train dataset
-    nims_train_dataset = NIMSDataset(model='unet',
-                                     model_utc=0,
-                                     window_size=6,
-                                     root_dir='/home/osilab12/ssd/NIMS_LDPS',
-                                     date=date,
-                                     lite=False,
-                                     train=True,
-                                     transform=ToTensor())
-
-
-    # DEBUG
-    x, y, _ = nims_train_dataset[0]
-
-    print(x.shape)
-    print(y.shape)
-
-    x_1, y_1, _ = nims_train_dataset[20]
-
-    print(x_1.shape)
-    print(y_1.shape)
-
-
-
-    # len
-    print(len(nims_train_dataset))
-    
-    
-
-    
-    
-    
-
-
-
-    
-
-    
-
