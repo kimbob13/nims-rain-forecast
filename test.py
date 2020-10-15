@@ -15,6 +15,41 @@ import time
 
 MONTH_DAY = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 
+#########################################################
+# 1. Function for test setting part                     #
+#########################################################
+
+def select_weight()
+    results_dir = os.path.join('./results')
+    experiment_list = sorted([f for f in os.listdir(results_dir) if f.startswith('nims-utc')])
+    print()
+    print('=' * 33, 'Which experiment do you want to test?', '=' * 33)
+    print()
+    print('-' * 100)
+    print('{:^4s}| {:^19s} | {:^65s}{:>7s}'.format('Idx', 'Last Modified', 'Trained Weight', '|'))
+    print('-' * 100)
+    for i, experiment in enumerate(experiment_list):
+        path_date = time.strftime('%Y/%m/%d %H:%M:%S', time.gmtime(os.path.getmtime(os.path.join(results_dir, experiment))))
+        print('[{:2d}] <{:s}> {}'.format(i + 1, path_date, experiment))
+    choice = int(input('\n> '))
+    experiment_name = experiment_list[choice - 1]
+    chosen_weight = torch.load(os.path.join(results_dir, experiment_list[choice - 1], 'trained_weight.pt'), map_location=device)
+    print('Load experiment... [{}] {}:'.format(choice, experiment_name))
+    print()
+
+    # Print trained weight info
+    print('=' * 25, 'Trained Weight Information', '=' * 25)
+    print('[best epoch]:', chosen_weight['best_epoch'])
+    print('[best loss ]: {:5f}'.format(chosen_weight['best_loss']))
+    print('[best acc  ]: {:5f}'.format(chosen_weight['best_acc']))
+    print('[best csi  ]: {:5f}'.format(chosen_weight['best_csi']))
+    print('[best pod  ]: {:5f}'.format(chosen_weight['best_pod']))
+    print('[best far  ]: {:5f}'.format(chosen_weight['best_far']))
+    print('[best f1   ]: {:5f}'.format(chosen_weight['best_f1']))
+    print('[best bias ]: {:5f}'.format(chosen_weight['best_bias']))
+
+    return chosen_weight, experiment_name
+
 def create_test_date_list(date, experiment_name):
     test_date_list = []
     test_months = list(range(date['start_month'], date['end_month'] + 1))
@@ -42,6 +77,10 @@ def create_test_date_list(date, experiment_name):
         test_date_list.append(current_test_path)
 
     return test_date_list
+
+#########################################################
+# 2. Function for plotting part                         #
+#########################################################
 
 def recreate_total_stat(total_test_path):
     one_day_stat_list = sorted([os.path.join(total_test_path, f) for f in os.listdir(total_test_path) if f.endswith('.csv')])
@@ -153,9 +192,6 @@ if __name__ == '__main__':
     # 1. Test setting part                                  #
     #########################################################
 
-    # Set the number of threads in pytorch
-    torch.set_num_threads(5)
-
     # Parsing command line arguments
     args = parse_args()
 
@@ -163,33 +199,7 @@ if __name__ == '__main__':
     device = set_device(args)
 
     # Specify trained model weight
-    results_dir = os.path.join('./results')
-    experiment_list = sorted([f for f in os.listdir(results_dir) if f.startswith('nims-utc0')])
-    print()
-    print('=' * 33, 'Which experiment do you want to test?', '=' * 33)
-    print()
-    print('-' * 100)
-    print('{:^4s}| {:^19s} | {:^65s}{:>7s}'.format('Idx', 'Last Modified', 'Trained Weight', '|'))
-    print('-' * 100)
-    for i, experiment in enumerate(experiment_list):
-        path_date = time.strftime('%Y/%m/%d %H:%M:%S', time.gmtime(os.path.getmtime(os.path.join(results_dir, experiment))))
-        print('[{:2d}] <{:s}> {}'.format(i + 1, path_date, experiment))
-    choice = int(input('\n> '))
-    experiment_name = experiment_list[choice - 1]
-    chosen_weight = torch.load(os.path.join(results_dir, experiment_list[choice - 1], 'trained_weight.pt'), map_location=device)
-    print('Load experiment... [{}] {}:'.format(choice, experiment_name))
-    print()
-
-    # Print trained weight info
-    print('=' * 25, 'Trained Weight Information', '=' * 25)
-    print('[best epoch]:', chosen_weight['best_epoch'])
-    print('[best loss ]: {:5f}'.format(chosen_weight['best_loss']))
-    print('[best acc  ]: {:5f}'.format(chosen_weight['best_acc']))
-    print('[best csi  ]: {:5f}'.format(chosen_weight['best_csi']))
-    print('[best pod  ]: {:5f}'.format(chosen_weight['best_pod']))
-    print('[best far  ]: {:5f}'.format(chosen_weight['best_far']))
-    print('[best f1   ]: {:5f}'.format(chosen_weight['best_f1']))
-    print('[best bias ]: {:5f}'.format(chosen_weight['best_bias']))
+    chosen_weight, experiment_name = select_weight()
 
     # Select start and end date for train
     date = select_date(test=True)
@@ -264,7 +274,7 @@ if __name__ == '__main__':
     # 2. Plotting part                                      #
     #########################################################
 
-    # Load evaluate results from test model
+    # 2-1. Plot stat graph for each month
     for current_test_path in test_date_list:
         _curr_date = current_test_path.split('/')[-1].split('-')[0]
         year, month = int(_curr_date[:4]), int(_curr_date[4:6])
@@ -282,7 +292,7 @@ if __name__ == '__main__':
         # Plot graph for each stat
         plot_stat_graph(ldaps_stat, model_stat, curr_date, experiment_name)
 
-    # Create directory for whole test date if start and end month is different
+    # 2-2. Plot stat graph for whole test range if start and end month is different
     if date['start_month'] != date['end_month']:
         total_test_date = '{:4d}{:02d}{:02d}-{:04d}{:02d}{:02d}'.format(date['year'], date['start_month'], date['start_day'],
                                                                         date['year'], date['end_month'], date['end_day'])

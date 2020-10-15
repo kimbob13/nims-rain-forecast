@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from pytorch_lightning.metrics.functional.classification import confusion_matrix
 
 import numpy as np
-from sklearn.metrics import confusion_matrix
 from sklearn.utils.class_weight import compute_class_weight
 
 __all__ = ['MSELoss', 'NIMSCrossEntropyLoss', 'NIMSBinaryFocalLoss']
@@ -21,21 +21,28 @@ class RMSELoss(nn.Module):
 class ClassificationStat(nn.Module):
     def __init__(self, num_classes=2):
         super().__init__()
-        self.classes = np.arange(num_classes)
+        self.num_classes = num_classes
 
-    def get_stat(self, preds, targets):
-        _, pred_labels = preds.topk(1, dim=1, largest=True, sorted=True)
-        b, _, num_stn = pred_labels.shape
-        assert (b, num_stn) == targets.shape
+    def get_stat(self, preds, targets, mode):
+        if mode == 'train':
+            _, pred_labels = preds.topk(1, dim=1, largest=True, sorted=True)
+            b = pred_labels.shape[0]
+
+            pred_labels = pred_labels.squeeze(1).detach().reshape(b, -1)
+            target_labels = targets.data.detach().reshape(b, -1)
+        elif (mode == 'valid') or (mode == 'test'):
+            _, pred_labels = preds.topk(1, dim=1, largest=True, sorted=True)
+            b, _, num_stn = pred_labels.shape
+            assert (b, num_stn) == targets.shape
+
+        pred_labels = pred_labels.squeeze(1).detach()
+        target_labels = targets.data.detach()
 
         correct = [0] * b
         hit = [0] * b
         miss = [0] * b
         fa = [0] * b
         cn = [0] * b
-
-        pred_labels = pred_labels.squeeze(1).detach().cpu().numpy()
-        target_labels = targets.data.detach().cpu().numpy()
 
         for i in range(b):
             pred, target = pred_labels[i], target_labels[i]
@@ -47,8 +54,9 @@ class ClassificationStat(nn.Module):
             - fp: False Alarm
             - tn: Correct Negative
             """
-            conf_mat = confusion_matrix(target, pred, labels=self.classes)
+            conf_mat = confusion_matrix(pred, target, num_classes=self.num_classes)
             _hit, _miss, _fa, _cn = conf_mat[1, 1], conf_mat[1, 0], conf_mat[0, 1], conf_mat[0, 0]
+            _hit, _miss, _fa, _cn = int(_hit), int(_miss), int(_fa), int(_cn)
             _correct = _hit + _cn
 
             correct[i] = _correct
@@ -101,7 +109,7 @@ class NIMSCrossEntropyLoss(ClassificationStat):
         return torch.from_numpy(weights).type(torch.FloatTensor).to(self.device)
 
     def forward(self, preds, targets, target_time,
-                stn_codi, logger=None, test=False):
+                stn_codi, mode, logger=None):
         """
         <Parameter>
         preds [torch.tensor]: NCHW format (N: batch size, C: class num)
@@ -119,18 +127,19 @@ class NIMSCrossEntropyLoss(ClassificationStat):
         # print('[cross_entropy] preds shape:', preds.shape)
         # print('[cross_entropy] targets shape:', targets.shape)
 
-        stn_preds = preds[:, :, stn_codi[:, 0], stn_codi[:, 1]]
-        stn_targets = targets[:, stn_codi[:, 0], stn_codi[:, 1]]
+        if (mode == 'valid') or (mode == 'test'):
+            preds = preds[:, :, stn_codi[:, 0], stn_codi[:, 1]]
+            targets = targets[:, stn_codi[:, 0], stn_codi[:, 1]]
+
+        correct, hit, miss, fa, cn = self.get_stat(preds, targets, mode=mode)
         
-        correct, hit, miss, fa, cn = self.get_stat(stn_preds, stn_targets)
-        
-        loss = F.cross_entropy(stn_preds, stn_targets, weight=class_weights, reduction='none')
+        loss = F.cross_entropy(preds, targets, weight=class_weights, reduction='none')
         loss = torch.mean(torch.mean(loss, dim=0))
 
         if logger:
             logger.update(loss=loss.item(), correct=correct,
                           hit=hit, miss=miss, fa=fa, cn=cn,
-                          target_time=target_time, test=test)
+                          target_time=target_time, mode=mode)
 
         # print('[cross_entropy] loss: {}'.format(loss.item()))
 

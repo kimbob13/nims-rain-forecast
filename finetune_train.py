@@ -27,9 +27,6 @@ if __name__ == '__main__':
     # Fix the seed
     fix_seed(2020)
 
-    # Create necessary directory
-    create_results_dir()
-
     # Parse NIMS dataset variables
     # variables = parse_variables(args.variables)
     

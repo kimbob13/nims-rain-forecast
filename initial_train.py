@@ -1,5 +1,5 @@
-import numpy as np
 import torch
+import numpy as np
 from tqdm import tqdm
 from torch.utils.data import DataLoader, Subset
 
@@ -8,15 +8,25 @@ from nims_dataset import NIMSDataset, ToTensor
 from nims_trainer import NIMSTrainer
 #from nims_variable import parse_variables
 
-try:
-    from torchsummary import summary
-except:
-    pass
+import os
+
+def create_results_dir(experiment_name):
+    # Base results directory
+    results_dir = os.path.join('./results', experiment_name)
+    if not os.path.isdir(results_dir):
+        os.mkdir(results_dir)
+
+    # Create evaluation directory if not
+    eval_dir = os.path.join(results_dir, 'eval')
+    if not os.path.isdir(eval_dir):
+        os.mkdir(eval_dir)
+
+    # Create comparison_graph directory if not
+    graph_dir = os.path.join(results_dir, 'comparison_graph')
+    if not os.path.isdir(graph_dir):
+        os.mkdir(graph_dir)
 
 if __name__ == '__main__':
-    # Set the number of threads in pytorch
-    torch.set_num_threads(3)
-
     # Select start and end date for train and valid
     train_date = select_date()
     valid_date = {'year': 2020, 'start_month': 6, 'start_day': 1,
@@ -45,6 +55,7 @@ if __name__ == '__main__':
                                      train=True,
                                      transform=ToTensor())
 
+    # Valid dataset
     nims_valid_dataset = NIMSDataset(model=args.model,
                                      model_utc=args.model_utc,
                                      window_size=args.window_size,
@@ -89,7 +100,7 @@ if __name__ == '__main__':
     train_loader = DataLoader(nims_train_dataset, batch_size=args.batch_size,
                               shuffle=True, num_workers=args.num_workers,
                               pin_memory=True)
-    valid_loader = DataLoader(nims_valid_dataset, batch_size=args.batch_size,
+    valid_loader = DataLoader(nims_valid_dataset, batch_size=1,
                               shuffle=False, num_workers=args.num_workers,
                               pin_memory=True)
 

@@ -1,12 +1,10 @@
 import torch
 from torch.utils.data import Dataset
-
-from nims_util import *
-import torchvision.transforms as transforms
-
-from datetime import datetime, timedelta
 import numpy as np
 
+from nims_util import *
+
+from datetime import datetime, timedelta
 import os
 
 __all__ = ['NIMSDataset', 'ToTensor']
@@ -34,10 +32,6 @@ class NIMSDataset(Dataset):
         
         self._data_path_list, self._gt_path = self.__set_path()
 
-    @property
-    def gt_path(self):
-        return self._gt_path
-        
     def __set_path(self):
         root, dirs, _ = next(os.walk(os.path.join(self.root_dir, str(self.date['year'])), topdown=True))
         
@@ -257,6 +251,7 @@ class NIMSDataset(Dataset):
 
         return gt
 
+    # XXX: Need to fix for new training target data
     def get_real_gt(self, idx):
         gt_path = self._gt_path[idx]
         real_gt = np.load(gt_path)

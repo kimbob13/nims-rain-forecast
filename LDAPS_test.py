@@ -4,7 +4,6 @@ from sklearn.metrics import f1_score, confusion_matrix
 from sklearn.utils.class_weight import compute_class_weight
 
 from LDPS_logger import LDPSLogger
-from nims_util import create_results_dir
 from nims_dataset import NIMSDataset
 
 from tqdm import tqdm

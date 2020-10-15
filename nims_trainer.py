@@ -94,13 +94,13 @@ class NIMSTrainer:
         for epoch in range(1, self.num_epochs + 1):
             # Run training epoch
             print('=' * 25, 'Epoch {} / {}'.format(epoch, self.num_epochs), '=' * 25)
-            self._epoch(self.train_loader, train=True, logger=self.nims_logger)
-            epoch_train_loss, epoch_train_stat = self.nims_logger.print_stat()
+            self._epoch(self.train_loader, mode='train', logger=self.nims_logger)
+            epoch_train_loss, epoch_train_stat = self.nims_logger.print_stat(mode='train')
 
             # Run validation epoch
             print('-' * 10, 'Validation', '-' * 10)
-            self._epoch(self.test_loader, train=False, valid=True, logger=self.nims_valid_logger)
-            epoch_valid_loss, epoch_valid_stat = self.nims_valid_logger.print_stat()
+            self._epoch(self.test_loader, mode='valid', logger=self.nims_valid_logger)
+            epoch_valid_loss, epoch_valid_stat = self.nims_valid_logger.print_stat(mode='valid')
 
             if epoch_valid_loss < self.trained_weight['best_loss']:
                 self.trained_weight['model']      = self.model.state_dict()
@@ -138,11 +138,11 @@ class NIMSTrainer:
 
         print('=' * 25, 'Test', '=' * 25)
         with torch.no_grad():
-            self._epoch(self.test_loader, train=False, logger=self.nims_logger)
+            self._epoch(self.test_loader, mode='test', logger=self.nims_logger)
 
-        self.nims_logger.print_stat(test=True)
+        self.nims_logger.print_stat(mode='test')
 
-    def _epoch(self, data_loader, train, valid=False, logger=None):
+    def _epoch(self, data_loader, mode, logger=None):
         pbar = tqdm(data_loader)
         for images, target, target_time in pbar:
             if self.model_name == 'unet' or \
@@ -170,12 +170,11 @@ class NIMSTrainer:
 
             output = self.model(images)
             loss = self.criterion(output, target, target_time,
-                                  stn_codi=self.stn_codi, logger=logger,
-                                  test=((not train) and (not valid)))
+                                  stn_codi=self.stn_codi, mode=mode, logger=logger)
             
-            if train:
+            if mode == 'train':
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
 
-            pbar.set_description(logger.latest_stat(target_time))
+            pbar.set_description(logger.latest_stat(target_time, mode=mode))

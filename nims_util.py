@@ -1,5 +1,5 @@
 import torch
-import torch.nn as nn
+from torch.nn import DataParallel
 import torch.optim as optim
 from torch.utils.data import Subset
 import numpy as np
@@ -7,12 +7,9 @@ import torchvision.transforms as transforms
 
 from model.unet_model import UNet, AttentionUNet
 from model.conv_lstm import EncoderForecaster
-from model.persistence import Persistence
-
 from nims_loss import *
 
 import os
-import sys
 import random
 import argparse
 
@@ -26,26 +23,10 @@ try:
 except:
     pass
 
-__all__ = ['NIMSStat', 'create_results_dir', 'select_date', 'parse_args', 'set_device', 'undersample',
-           'fix_seed', 'set_model', 'set_optimizer', 'set_experiment_name', 'get_min_max_values', 'get_min_max_normalization']
+__all__ = ['NIMSStat', 'select_date', 'parse_args', 'set_device', 'undersample', 'fix_seed',
+           'set_model', 'set_optimizer', 'set_experiment_name', 'get_min_max_values', 'get_min_max_normalization']
 
 NIMSStat = namedtuple('NIMSStat', 'acc, csi, pod, far, f1, bias')
-
-def create_results_dir(experiment_name):
-    # Base results directory
-    results_dir = os.path.join('./results', experiment_name)
-    if not os.path.isdir(results_dir):
-        os.mkdir(results_dir)
-
-    # Create evaluation directory if not
-    eval_dir = os.path.join(results_dir, 'eval')
-    if not os.path.isdir(eval_dir):
-        os.mkdir(eval_dir)
-
-    # Create comparison_graph directory if not
-    graph_dir = os.path.join(results_dir, 'comparison_graph')
-    if not os.path.isdir(graph_dir):
-        os.mkdir(graph_dir)
 
 def select_date(test=False):
     # Mode selection
@@ -161,7 +142,7 @@ def parse_args():
     common.add_argument('--model', default='unet', type=str, help='which model to use [unet, attn_unet, convlstm]')
     common.add_argument('--dataset_dir', default='/home/osilab12/ssd/NIMS_LDPS', type=str, help='root directory of dataset')
     common.add_argument('--device', default='0', type=str, help='which device to use')
-    common.add_argument('--num_workers', default=6, type=int, help='# of workers for dataloader')
+    common.add_argument('--num_workers', default=5, type=int, help='# of workers for dataloader')
     common.add_argument('--eval_only', default=False, help='when enabled, do not run test epoch, only creating graph', action='store_true')
     common.add_argument('--custom_name', default=None, type=str, help='add customize experiment name')
     # common.add_argument('--debug', help='turn on debugging print', action='store_true')
@@ -354,7 +335,7 @@ def set_model(sample, device, args, train=True,
         checkpoint = torch.load(model_path)
         model.load_state_dict(checkpoint, strict=False)
 
-    model = nn.DataParallel(model)
+    model = DataParallel(model)
 
     return model, criterion
 

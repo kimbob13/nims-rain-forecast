@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
-import sys
 import os
 
 from nims_util import NIMSStat
@@ -21,8 +20,8 @@ class NIMSLogger:
         print_stat: Print one epoch stat
         latest_stat: Return straing of one "instance(batch)" stat
         """
-        self.stn_codi = stn_codi
-        self.num_stn = len(stn_codi)
+        self.num_pixels = 512 * 512     # # of pixels in training target data
+        self.num_stn = len(stn_codi)    # # of stations in testing target data
         self.test_date_dict = dict()
 
         if test_date_list != None:
@@ -35,6 +34,7 @@ class NIMSLogger:
             self.test_year = int(test_date_path.split('/')[-1][0:4])
         
         self.num_update = 0
+        self.total_points = 0
 
         # Initialize one epoch stat dictionary
         self.one_epoch_stat = OneTargetStat(loss, correct, macro_f1, micro_f1, hit, miss, fa, cn)
@@ -49,7 +49,7 @@ class NIMSLogger:
     def update(self, loss=None, correct=None,
                macro_f1=None, micro_f1=None,
                hit=None, miss=None, fa=None, cn=None,
-               target_time=None, test=False):
+               target_time=None, mode='train'):
 
         if loss != None:
             try:
@@ -102,8 +102,12 @@ class NIMSLogger:
 
         num_batch = target_time.shape[0]
         self.num_update += num_batch
+        if mode == 'train':
+            self.total_points += (num_batch * self.num_pixels)
+        elif (mode == 'valid') or (mode == 'test'):
+            self.total_points += (num_batch * self.num_stn)
 
-        if test:
+        if mode == 'test':
             for b in range(num_batch):
                 utc_year = int(target_time[b][0])
                 utc_month = int(target_time[b][1])
@@ -150,9 +154,7 @@ class NIMSLogger:
                     for col in self.daily_df.columns:
                         self.daily_df[col].values[:] = 0
     
-    def print_stat(self, test=False):
-        total_stn = self.num_update * self.num_stn
-
+    def print_stat(self, mode):
         stat_str = ''
         
         try:
@@ -162,7 +164,7 @@ class NIMSLogger:
             pass
 
         try:
-            acc = (self.one_epoch_stat.correct / total_stn) * 100
+            acc = (self.one_epoch_stat.correct / self.total_points) * 100
             stat_str += "[{:12s}] {:.3f}%\n".format('accuracy', acc)
         except:
             pass
@@ -178,11 +180,15 @@ class NIMSLogger:
             pass
 
         try:
-            csi = self.one_epoch_stat.hit / (self.one_epoch_stat.hit + self.one_epoch_stat.miss + self.one_epoch_stat.fa)
-            pod = self.one_epoch_stat.hit / (self.one_epoch_stat.hit + self.one_epoch_stat.miss)
-            far = self.one_epoch_stat.fa / (self.one_epoch_stat.hit + self.one_epoch_stat.fa)
-            bias = (self.one_epoch_stat.hit + self.one_epoch_stat.fa) / (self.one_epoch_stat.hit + self.one_epoch_stat.miss)
-            f1 = (2 * self.one_epoch_stat.hit) / ((2 * self.one_epoch_stat.hit) + self.one_epoch_stat.fa + self.one_epoch_stat.miss)
+            hit = self.one_epoch_stat.hit
+            miss = self.one_epoch_stat.miss
+            fa = self.one_epoch_stat.fa
+
+            csi = hit / (hit + miss + fa) if (hit + miss + fa) > 0 else 0.0
+            pod = hit / (hit + miss) if (hit + miss) > 0 else 0.0
+            far = fa / (hit + fa) if (hit + fa) > 0 else 0.0
+            bias = (hit + fa) / (hit + miss) if (hit + miss) > 0 else 0.0
+            f1 = (2 * hit) / ((2 * hit) + fa + miss) if ((2 * hit) + fa + miss) > 0 else 0.0
 
             stat_str += "[{:12s}] {:.5f}\n".format('pod', pod)
             stat_str += "[{:12s}] {:.5f}\n".format('csi', csi)
@@ -191,24 +197,29 @@ class NIMSLogger:
             stat_str += "[{:12s}] {:.5f}\n".format('bias', bias)
 
             epoch_stat = NIMSStat(acc, csi, pod, far, f1, bias)
-        except:
+        except Exception as e:
+            print('[NIMSLogger - print_stat] exception:', e)
             pass
 
         print(stat_str)
         print()
 
-        if test:
+        if mode == 'test':
             self._save_test_result()
 
         self._clear_one_target_stat(self.one_epoch_stat)
 
         return epoch_loss, epoch_stat
 
-    def latest_stat(self, target_time):
+    def latest_stat(self, target_time, mode):
         num_batch = target_time.shape[0]
-        batch_stn = self.num_stn * num_batch
+        if mode == 'train':
+            batch_points = self.num_pixels * num_batch
+        elif (mode == 'valid') or (mode == 'test'):
+            batch_points = self.num_stn * num_batch
+
         try:
-            accuracy = (self._latest_stat.correct / batch_stn) * 100
+            accuracy = (self._latest_stat.correct / batch_points) * 100
             assert accuracy <= 100.0
         except:
             pass
@@ -299,6 +310,7 @@ class NIMSLogger:
             pass
 
         self.num_update = 0
+        self.total_points = 0
 
     def _save_test_result(self):
         self.test_df = self.test_df.append(self.test_df.iloc[:, 2:].sum(axis=0), ignore_index=True)
