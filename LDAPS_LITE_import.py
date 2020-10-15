@@ -1,7 +1,6 @@
 import os
 import scipy.io
 import numpy as np
-import csv
 
 if __name__ == "__main__":
     
@@ -9,15 +8,15 @@ if __name__ == "__main__":
         User Defined : file_path
     '''
     # File load
-    sav_filename_19 = "/home/mgyukim/data/NIMS_LITE/sav/rain_19r.sav"
-    sav_filename_18 = "/home/mgyukim/data/NIMS_LITE/sav/rain_18r.sav"
+    sav_filename_19 = "/home/osilab12/ssd/NIMS_LDPS_SAV/rain_19r.sav"
+    sav_filename_18 = "/home/osilab12/ssd/NIMS_LDPS_SAV/rain_18r.sav"
 
     # File save
-    save_path_19 = "/home/mgyukim/data/NIMS_LITE/npy/2019"
-    save_path_18 = "/home/mgyukim/data/NIMS_LITE/npy/2018"
+    save_path_19 = "/home/osilab12/ssd/NIMS_LDPS_SAV/2019"
+    save_path_18 = "/home/osilab12/ssd/NIMS_LDPS_SAV/2018"
 
     column_name = ['xx', 'yy', 'rainr']
-    data = scipy.io.readsav(sav_filename_18, python_dict=True, verbose=True)
+    data = scipy.io.readsav(sav_filename_19, python_dict=True, verbose=True)
 
     for name in column_name:
         if name == "rainr":
@@ -35,18 +34,19 @@ if __name__ == "__main__":
             print(shape)
 
             #Slicing
-            rain_data = rain_data[:, (shape[1]-512):, :512]
+            start_x = shape[1] - 512
+            rain_data = rain_data[:, start_x:, :512] # rain_data[:, 90:, :512]
 
             #Debug
             print(rain_data.shape)
             
             # Save
-            save_filename = os.path.join(save_path_18, name + ".npy")
+            save_filename = os.path.join(save_path_19, name + ".npy")
             np.save(save_filename, rain_data)
             
     
     # File test using .npy
-    npy_filename_19 = "/home/mgyukim/data/NIMS_LITE/npy/2019/rainr.npy"
+    npy_filename_19 = "/home/osilab12/ssd/NIMS_LDPS_SAV/rainr.npy"
     rainr_npy = np.load(npy_filename_19)
 
     print(rainr_npy.shape)

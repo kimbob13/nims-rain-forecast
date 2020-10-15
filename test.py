@@ -19,7 +19,7 @@ MONTH_DAY = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 # 1. Function for test setting part                     #
 #########################################################
 
-def select_weight()
+def select_weight():
     results_dir = os.path.join('./results')
     experiment_list = sorted([f for f in os.listdir(results_dir) if f.startswith('nims-utc')])
     print()

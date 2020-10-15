@@ -116,6 +116,7 @@ class NIMSDataset(Dataset):
             gt_path = os.path.join(gt_dir, 'rainr.npy')
             gt_path = torch.tensor(np.load(gt_path))
             gt_path = torch.where(gt_path >= self.rain_threshold, torch.ones(gt_path.shape), torch.zeros(gt_path.shape))
+            gt_path = gt_path.permute(0, 2, 1) # to match coordination with AWS target data
         else:
             gt_dir = os.path.join(self.root_dir, '..', 'OBS', 'test', str(self.date['year']))
             gt_path = os.listdir(gt_dir)
