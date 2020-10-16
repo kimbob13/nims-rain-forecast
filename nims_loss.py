@@ -6,6 +6,9 @@ from pytorch_lightning.metrics.functional.classification import confusion_matrix
 import numpy as np
 from sklearn.utils.class_weight import compute_class_weight
 
+import warnings
+warnings.filterwarnings(action='ignore')
+
 __all__ = ['MSELoss', 'NIMSCrossEntropyLoss', 'NIMSBinaryFocalLoss']
 
 class RMSELoss(nn.Module):
@@ -54,6 +57,9 @@ class ClassificationStat(nn.Module):
             - fp: False Alarm
             - tn: Correct Negative
             """
+            if -1 in target:
+                print('invalid target:', target.shape)
+                print('target:\n', target)
             conf_mat = confusion_matrix(pred, target, num_classes=self.num_classes)
             _hit, _miss, _fa, _cn = conf_mat[1, 1], conf_mat[1, 0], conf_mat[0, 1], conf_mat[0, 0]
             _hit, _miss, _fa, _cn = int(_hit), int(_miss), int(_fa), int(_cn)
@@ -66,6 +72,20 @@ class ClassificationStat(nn.Module):
             cn[i] = _cn
 
         return correct, hit, miss, fa, cn
+
+    def remove_missing_station(self, targets, stn_codi):
+        _targets = targets.squeeze(0)
+        # targets_missing_idx = (_targets == -1).nonzero().cpu().tolist()
+        targets_norain_idx = (_targets == 0).nonzero().cpu().tolist()
+        targets_rain_idx = (_targets == 1).nonzero().cpu().tolist()
+
+        filtered_stn_codi = targets_norain_idx + targets_rain_idx
+
+        # filtered_stn_codi = stn_codi.tolist()
+        # for missing_idx in targets_missing_idx:
+        #     filtered_stn_codi.pop(filtered_stn_codi.index(missing_idx))
+        
+        return np.array(filtered_stn_codi)
 
 class MSELoss(ClassificationStat):
     def __init__(self, device):
@@ -114,7 +134,7 @@ class NIMSCrossEntropyLoss(ClassificationStat):
         <Parameter>
         preds [torch.tensor]: NCHW format (N: batch size, C: class num)
         targets [torch.tensor]:  NHW format (same as preds)
-        target_time [torch.tensor]: datetime of current target ([year, month, day, hour])
+        target_time [np.ndarray]: datetime of current target ([year, month, day, hour])
         stn_codi [np.ndarray]: coordinates of station
         logger [NIMSLogger]: Collect stat for this data instance
         """
@@ -128,8 +148,9 @@ class NIMSCrossEntropyLoss(ClassificationStat):
         # print('[cross_entropy] targets shape:', targets.shape)
 
         if (mode == 'valid') or (mode == 'test'):
-            preds = preds[:, :, stn_codi[:, 0], stn_codi[:, 1]]
-            targets = targets[:, stn_codi[:, 0], stn_codi[:, 1]]
+            filtered_stn_codi = self.remove_missing_station(targets, stn_codi)
+            preds = preds[:, :, filtered_stn_codi[:, 0], filtered_stn_codi[:, 1]]
+            targets = targets[:, filtered_stn_codi[:, 0], filtered_stn_codi[:, 1]]
 
         correct, hit, miss, fa, cn = self.get_stat(preds, targets, mode=mode)
         

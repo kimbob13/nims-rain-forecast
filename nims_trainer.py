@@ -55,6 +55,8 @@ class NIMSTrainer:
                                'best_f1'   : 0.0,           # f1 value at best_loss
                                'best_bias' : 0.0}           # bias value at best_loss
 
+        self.info_str = '=' * 16 + ' {:^25s} ' + '=' * 16
+        self.device_idx = int(args.device)
         self.model.to(self.device)
 
         if self.model_name == 'unet' or self.model_name == 'attn_unet':
@@ -83,6 +85,37 @@ class NIMSTrainer:
 
         return stn_codi
 
+    def _print_stat(self, stat_dict):
+        nims_stat_list = []
+        print()
+        print('+' + '-' * 2, 'Stat Name', '-' * 2, end='')
+        for mode_name in stat_dict:
+            print('+' + '-' * 3, '{} Stat'.format(mode_name), '-' * 3, end='')
+            nims_stat_list.append(stat_dict[mode_name])
+        print('+')
+
+
+        stat_name_fmt = '[{:^14s}] '
+        stat_value_fmt = '{:^18.5f} '
+
+        # Loss print
+        print(stat_name_fmt.format('loss'), end='')
+        for i in range(len(nims_stat_list)):
+            print(stat_value_fmt.format(nims_stat_list[i][0]), end='')
+        print()
+
+        # Remaining stat print
+        nims_stat_name = nims_stat_list[0][1]._fields
+        for stat_name in nims_stat_name:
+            print(stat_name_fmt.format(stat_name), end='')
+            for i in range(len(nims_stat_list)):
+                if stat_name == 'acc':
+                    print('{}{:7.3f} %{}'.format(' ' * 3, getattr(nims_stat_list[i][1], stat_name), ' ' * 7), end='')
+                else:
+                    print(stat_value_fmt.format(getattr(nims_stat_list[i][1], stat_name)), end='')
+            print()
+        print()
+
     def train(self):
         self.model.train()
 
@@ -90,18 +123,28 @@ class NIMSTrainer:
         train_log_path = os.path.join('./results', self.experiment_name, 'train_log.csv')
         train_log = pd.DataFrame(index=list(range(1, self.num_epochs + 1)),
                                  columns=['loss', 'acc', 'csi', 'pod', 'far', 'f1', 'bias'])
+        valid_log_path = os.path.join('./results', self.experiment_name, 'valid_log.csv')
+        valid_log = pd.DataFrame(index=list(range(1, self.num_epochs + 1)),
+                                 columns=['loss', 'acc', 'csi', 'pod', 'far', 'f1', 'bias'])
 
         for epoch in range(1, self.num_epochs + 1):
+            print(self.info_str.format('Epoch {:3d} / {:3d} (GPU {})'.format(epoch, self.num_epochs, self.device_idx)))
+
             # Run training epoch
-            print('=' * 25, 'Epoch {} / {}'.format(epoch, self.num_epochs), '=' * 25)
             self._epoch(self.train_loader, mode='train', logger=self.nims_logger)
-            epoch_train_loss, epoch_train_stat = self.nims_logger.print_stat(mode='train')
 
             # Run validation epoch
-            print('-' * 10, 'Validation', '-' * 10)
             self._epoch(self.test_loader, mode='valid', logger=self.nims_valid_logger)
-            epoch_valid_loss, epoch_valid_stat = self.nims_valid_logger.print_stat(mode='valid')
 
+            # Get stat for train and valid of this epoch
+            epoch_train_loss, epoch_train_stat = self.nims_logger.epoch_stat(mode='train')
+            epoch_valid_loss, epoch_valid_stat = self.nims_valid_logger.epoch_stat(mode='valid')
+
+            # Print stat
+            self._print_stat({'Train': (epoch_train_loss, epoch_train_stat),
+                              'Valid': (epoch_valid_loss, epoch_valid_stat)})
+
+            # Save model based on the best validation loss
             if epoch_valid_loss < self.trained_weight['best_loss']:
                 self.trained_weight['model']      = self.model.state_dict()
                 self.trained_weight['best_loss']  = epoch_valid_loss
@@ -118,6 +161,7 @@ class NIMSTrainer:
                     os.remove(trained_weight_path)
                 torch.save(self.trained_weight, trained_weight_path)
 
+            # Save train and valid log
             train_log.loc[epoch] = [epoch_train_loss,
                                     epoch_train_stat.acc,
                                     epoch_train_stat.csi,
@@ -126,6 +170,15 @@ class NIMSTrainer:
                                     epoch_train_stat.f1,
                                     epoch_train_stat.bias]
             train_log.to_csv(train_log_path, index=False)
+
+            valid_log.loc[epoch] = [epoch_valid_loss,
+                                    epoch_valid_stat.acc,
+                                    epoch_valid_stat.csi,
+                                    epoch_valid_stat.pod,
+                                    epoch_valid_stat.far,
+                                    epoch_valid_stat.f1,
+                                    epoch_valid_stat.bias]
+            valid_log.to_csv(valid_log_path, index=False)
 
             if self.scheduler:
                 self.scheduler.step()
@@ -136,11 +189,15 @@ class NIMSTrainer:
         #     if isinstance(m, torch.nn.BatchNorm2d):
         #         m.track_running_stats = False
 
-        print('=' * 25, 'Test', '=' * 25)
+        print(self.info_str.format('Test (GPU {})'.format(self.device_idx)))
         with torch.no_grad():
             self._epoch(self.test_loader, mode='test', logger=self.nims_logger)
 
-        self.nims_logger.print_stat(mode='test')
+        # Get stat for test
+        epoch_test_loss, epoch_test_stat = self.nims_logger.epoch_stat(mode='test')
+
+        # Print stat
+        self._print_stat({'Test': (epoch_test_loss, epoch_test_stat)})
 
     def _epoch(self, data_loader, mode, logger=None):
         pbar = tqdm(data_loader)
@@ -177,4 +234,4 @@ class NIMSTrainer:
                 loss.backward()
                 self.optimizer.step()
 
-            pbar.set_description(logger.latest_stat(target_time, mode=mode))
+            pbar.set_description('({}) '.format(mode.capitalize()) + logger.latest_stat(target_time, mode=mode))

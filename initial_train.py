@@ -27,10 +27,14 @@ def create_results_dir(experiment_name):
         os.mkdir(graph_dir)
 
 if __name__ == '__main__':
+    print()
+
+    phase_str = '=' * 16 + ' {:^25s} ' + '=' * 16
     # Select start and end date for train and valid
+    print(phase_str.format('Train Range'))
     train_date = select_date()
-    valid_date = {'year': 2020, 'start_month': 6, 'start_day': 1,
-                  'end_month': 6, 'end_day': 30}
+    print(phase_str.format('Valid Range'))
+    valid_date = select_date()
 
     # Parsing command line arguments
     args = parse_args()
@@ -82,10 +86,8 @@ if __name__ == '__main__':
     # Get normalization transform
     normalization = None
     if args.normalization:
-        print('=' * 25, 'Normalization Start...', '=' * 25)
+        print(phase_str.format('Normalization'))
         max_values, min_values = get_min_max_values(nims_train_dataset)
-        print('=' * 25, 'Normalization End!', '=' * 25)
-        print()
 
         normalization = {'max_values': max_values,
                          'min_values': min_values}

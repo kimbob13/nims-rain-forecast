@@ -12,6 +12,7 @@ from nims_loss import *
 import os
 import random
 import argparse
+import time
 
 from tqdm import tqdm
 from multiprocessing import Process, Queue, cpu_count, Pool
@@ -27,20 +28,22 @@ __all__ = ['NIMSStat', 'select_date', 'parse_args', 'set_device', 'undersample',
            'set_model', 'set_optimizer', 'set_experiment_name', 'get_min_max_values', 'get_min_max_normalization']
 
 NIMSStat = namedtuple('NIMSStat', 'acc, csi, pod, far, f1, bias')
+MONTHLY_MODE = 1
+DAILY_MODE = 2
 
 def select_date(test=False):
+    format_str = '[{:<14s}] {:^25s} : '
+
     # Mode selection
     while True:
         try:
-            print()
-            print('=' * 20, '1. Stat Type', '=' * 20)
-            print('Which mode do you want to specify date?')
-            date_mode = int(input('[1] Montly    [2] Daily: '))
+            print(format_str.format('1. Stat Type',  '(1) Montly (2) Daily'), end='')
+            date_mode = int(input())
 
-            if date_mode not in [1, 2]:
+            if date_mode not in [MONTHLY_MODE, DAILY_MODE]:
                 print('You must enter value between 1 or 2')
                 continue
-            elif test == True and date_mode == 2:
+            elif test == True and date_mode == DAILY_MODE:
                 print('You must select [Monthly] mode for test')
                 continue
 
@@ -48,27 +51,17 @@ def select_date(test=False):
             print('You must enter integer only')
             continue
 
-        break
-    
-    # Year selection
-    while True:
-        try:
-            print()
-            print('=' * 20, '2 Year Selection', '=' * 20)
-            year = int(input('Which year do you want to train(test)? (2019, 2020): '))
-
-            if year not in [2019, 2020]:
-                print("You must specify year 2019 or 2020")
-                continue
-
-        except ValueError:
-            print("You must enter integer for year")
-            continue
+        if date_mode == MONTHLY_MODE:
+            date_format = 'YYYY-MM'
+        elif date_mode == DAILY_MODE:
+            date_format = 'YYYY-MM-DD'
 
         break
 
-    MONTH_DAY = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-    LEAP_YEAR = (2020)
+    VALID_MONTH = [6, 7, 8]
+    MONTH_DAY   = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    LEAP_YEAR   = (2020)
+
     def _check_valid_day(month, day):
         valid_day = MONTH_DAY[month]
         if (month == 2) and (year in LEAP_YEAR):
@@ -78,61 +71,73 @@ def select_date(test=False):
             return False
 
         return True
-
-    # Start date selection
+    
+    # Start date input
     while True:
-        try:
-            print()
-            print('=' * 20, '3. Start date Selection', '=' * 20)
-            start_month = int(input('Which month do you want to start train(test)? (1 - 12): '))
-            if (start_month < 1) or (start_month > 12):
-                print("You must specify start month between 1 to 12")
-                continue
-
-            if date_mode == 2:
-                start_day = int(input('Which day do you want to start train(test)?: '))
-                if not _check_valid_day(start_month, start_day):
-                    print("You must specifiy valid day for month '{}'".format(start_month))
-                    continue
-            else:
-                start_day = 1
-
-        except ValueError:
-            print("You must enter integer for month")
+        print(format_str.format('2. Start Date', '(' + date_format + ')'), end='')
+        start_date = input()
+        if len(start_date) != len(date_format):
+            print('Please follow the format ({})'.format(date_format))
             continue
 
-        break
+        # Parse input
+        start_date = start_date.split('-')
+        start_year, start_month = map(int, start_date[:2])
 
-    # End date selection
-    while True:
-        try:
-            print()
-            print('=' * 20, '4. End date Selection', '=' * 20)
-            end_month = int(input('Which month do you want to end train(test)? (1 - 12): '))
-            if (end_month < start_month) or (end_month > 12):
-                print("You must specify start month between 1 to 12")
-                continue
-
-            if date_mode == 2:
-                end_day = int(input('Which day do you want to end train(test)?: '))
-                if not _check_valid_day(end_month, end_day) or \
-                       ((end_month == start_month) and (end_day < start_day)):
-                    print("You must specifiy valid day for month '{}'".format(end_month))
-                    continue
-            else:
-                end_day = MONTH_DAY[end_month]
-                if (end_month == 2) and (year in LEAP_YEAR):
-                    end_day = 29
-
-        except ValueError:
-            print("You must enter integer for month")
+        # Year check
+        if start_year not in [2019, 2020]:
+            print("You must specify year 2019 or 2020")
             continue
 
-        break
+        # Month check
+        if start_month not in VALID_MONTH:
+            print("You must specify start month between {} to {}".format(VALID_MONTH[0], VALID_MONTH[-1]))
+            continue
         
-    print()
+        # Day check
+        start_day = 1
+        if date_mode == DAILY_MODE:
+            start_day = int(start_date[2])
+            if not _check_valid_day(start_month, start_day):
+                print("You must specifiy valid day for month '{}'".format(start_month))
+                continue
+        
+        break
 
-    return {'year': year, 'start_month': start_month, 'start_day': start_day,
+    # End date input
+    while True:
+        print(format_str.format('3. End Date', '(' + date_format + ')'), end='')
+        end_date = input()
+        if len(end_date) != len(date_format):
+            print('Please follow the format ({})'.format(date_format))
+            continue
+
+        # Parse input
+        end_date = end_date.split('-')
+        end_year, end_month = map(int, end_date[:2])
+
+        # Year check
+        if end_year != start_year:
+            print("You must specify same end year as start year")
+            continue
+
+        # Month check
+        if (end_month < start_month) or (end_month not in VALID_MONTH):
+            print("You must specify start month between {} to {}".format(start_month, VALID_MONTH[-1]))
+            continue
+        
+        # Day check
+        end_day = MONTH_DAY[end_month]
+        if date_mode == DAILY_MODE:
+            if not _check_valid_day(end_month, end_day):
+                print("You must specifiy valid day for month '{}'".format(end_month))
+                continue
+
+        break
+
+    print()
+    
+    return {'year': start_year, 'start_month': start_month, 'start_day': start_day,
             'end_month': end_month, 'end_day': end_day}
 
 def parse_args():
@@ -526,10 +531,31 @@ def get_min_max_values(dataset):
     # Start processes
     for i in range(num_processes):
         processes[i].start()
+
+    # Join processes
+    animation = "|/-\\"
+    idx = 0
+    alive_flag = [True] * num_processes
+    while True:
+        for i in range(num_processes):
+            processes[i].join(timeout=0)
+            if not processes[i].is_alive():
+                alive_flag[i] = False
+        
+        if True not in alive_flag:
+            print()
+            break
+
+        print('Normalization Start. Please Wait...{}'.format(animation[idx % len(animation)]), end='\r')
+        idx += 1
+        time.sleep(0.1)
+    
+    print('Normalization End!')
+    print()
     
     # Get return value of each process
     max_values, min_values = None, None
-    for i in tqdm(range(num_processes)):
+    for i in range(num_processes):
         proc_result = queues[i].get()
         
         if i == 0:
@@ -538,10 +564,6 @@ def get_min_max_values(dataset):
         else:
             max_values = np.maximum(max_values, proc_result[0])
             min_values = np.minimum(min_values, proc_result[1])
-
-    # Join processes
-    for i in range(num_processes):
-        processes[i].join()
 
     # Convert to PyTorch tensor
     max_values = torch.tensor(max_values)

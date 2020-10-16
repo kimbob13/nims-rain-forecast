@@ -37,7 +37,7 @@ if __name__ == '__main__':
     for obs_txt in pbar:
         pbar.set_description('[current_file] {}'.format(obs_txt))
 
-        result_array = np.zeros([512, 512])
+        result_array = np.full([512, 512], -9999)
         with open(os.path.join(obs_txt_dir, obs_txt), 'r', encoding='euc-kr') as f:
             for line in f:
                 if line.startswith('#'):
@@ -65,5 +65,5 @@ if __name__ == '__main__':
         file_name = 'AWS_HOUR_ALL_{}_{}.npy'.format(utc_str, utc_str)
 
         # Save npy file
-        with open(os.path.join(root_dir, 'OBS', str(date['year']), file_name), 'wb') as npyf:
+        with open(os.path.join(root_dir, 'OBS', 'test', str(date['year']), file_name), 'wb') as npyf:
             np.save(npyf, result_array)

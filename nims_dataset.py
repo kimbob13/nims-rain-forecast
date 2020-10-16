@@ -239,8 +239,7 @@ class NIMSDataset(Dataset):
     def _get_gt_data(self, train_end_time):
         if self.train:
             # Getting indices of ground truth data
-            train_end_time_index = self._get_index(train_end_time)
-            gt_index = train_end_time_index
+            gt_index = self._get_index(train_end_time)
 
             # Slicing gt data 
             gt = self._gt_path[gt_index]
@@ -248,7 +247,8 @@ class NIMSDataset(Dataset):
             gt_path = [p for p in self._gt_path \
                        if train_end_time.strftime("%Y%m%d%H") in p][0]
             gt = torch.tensor(np.load(gt_path))
-            gt = torch.where(gt >= self.rain_threshold, torch.ones(gt.shape), torch.zeros(gt.shape))
+            gt = torch.where(gt < 0, -9999 * torch.ones(gt.shape),
+                             torch.where(gt >= self.rain_threshold, torch.ones(gt.shape), torch.zeros(gt.shape)))
 
         return gt
 

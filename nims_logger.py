@@ -154,28 +154,24 @@ class NIMSLogger:
                     for col in self.daily_df.columns:
                         self.daily_df[col].values[:] = 0
     
-    def print_stat(self, mode):
-        stat_str = ''
-        
+    def epoch_stat(self, mode):
         try:
             epoch_loss = self.one_epoch_stat.loss / self.num_update
-            stat_str += "[{:12s}] {:.5f}\n".format('loss', epoch_loss)
         except:
             pass
 
         try:
             acc = (self.one_epoch_stat.correct / self.total_points) * 100
-            stat_str += "[{:12s}] {:.3f}%\n".format('accuracy', acc)
         except:
             pass
 
         try:
-            stat_str += "[{:12s}] {:.5f}\n".format('f1 (macro)', self.one_epoch_stat.macro_f1 / self.num_update)
+            macro_f1 = self.one_epoch_stat.macro_f1 / self.num_update
         except:
             pass
 
         try:
-            stat_str += "[{:12s}] {:.5f}\n".format('f1 (micro)', self.one_epoch_stat.micro_f1 / self.num_update)
+            micro_f1 = self.one_epoch_stat.micro_f1 / self.num_update
         except:
             pass
 
@@ -190,19 +186,10 @@ class NIMSLogger:
             bias = (hit + fa) / (hit + miss) if (hit + miss) > 0 else 0.0
             f1 = (2 * hit) / ((2 * hit) + fa + miss) if ((2 * hit) + fa + miss) > 0 else 0.0
 
-            stat_str += "[{:12s}] {:.5f}\n".format('pod', pod)
-            stat_str += "[{:12s}] {:.5f}\n".format('csi', csi)
-            stat_str += "[{:12s}] {:.5f}\n".format('far', far)
-            stat_str += "[{:12s}] {:.5f}\n".format('f1 score', f1)
-            stat_str += "[{:12s}] {:.5f}\n".format('bias', bias)
-
             epoch_stat = NIMSStat(acc, csi, pod, far, f1, bias)
         except Exception as e:
             print('[NIMSLogger - print_stat] exception:', e)
             pass
-
-        print(stat_str)
-        print()
 
         if mode == 'test':
             self._save_test_result()
