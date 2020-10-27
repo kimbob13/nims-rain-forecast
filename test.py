@@ -19,14 +19,14 @@ MONTH_DAY = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 # 1. Function for test setting part                     #
 #########################################################
 
-def select_weight():
+def select_experiment():
     results_dir = os.path.join('./results')
     experiment_list = sorted([f for f in os.listdir(results_dir) if f.startswith('nims-utc')])
     print()
     print('=' * 33, 'Which experiment do you want to test?', '=' * 33)
     print()
     print('-' * 100)
-    print('{:^4s}| {:^19s} | {:^65s}{:>7s}'.format('Idx', 'Last Modified', 'Trained Weight', '|'))
+    print('{:^4s}| {:^19s} | {:^65s}{:>7s}'.format('Idx', 'Last Modified', 'Experiment', '|'))
     print('-' * 100)
     for i, experiment in enumerate(experiment_list):
         path_date = time.strftime('%Y/%m/%d %H:%M:%S', time.gmtime(os.path.getmtime(os.path.join(results_dir, experiment))))
@@ -199,7 +199,7 @@ if __name__ == '__main__':
     device = set_device(args)
 
     # Specify trained model weight
-    chosen_weight, experiment_name = select_weight()
+    chosen_weight, experiment_name = select_experiment()
 
     # Select start and end date for train
     date = select_date(test=True)
@@ -215,6 +215,7 @@ if __name__ == '__main__':
     args.cross_entropy_weight = chosen_weight['cross_entropy_weight']
     args.bilinear = chosen_weight['bilinear']
     args.custom_name = chosen_weight['custom_name']
+    args.batch_size = 1 # Fix batch size as 1 for test
 
     # Fix the seed
     fix_seed(2020)

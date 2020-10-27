@@ -145,7 +145,7 @@ class NIMSTrainer:
                               'Valid': (epoch_valid_loss, epoch_valid_stat)})
 
             # Save model based on the best validation loss
-            if epoch_valid_loss < self.trained_weight['best_loss']:
+            if epoch_valid_stat.csi > self.trained_weight['best_csi']:
                 self.trained_weight['model']      = self.model.state_dict()
                 self.trained_weight['best_loss']  = epoch_valid_loss
                 self.trained_weight['best_epoch'] = epoch

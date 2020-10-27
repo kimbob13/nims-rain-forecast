@@ -60,10 +60,10 @@ if __name__ == '__main__':
     test_year = int(args.test_time[:4])
     if test_year == 2019:
         LDAPS_root_dir = '/home/osilab12/ssd/NIMS_LDPS'
-        OBS_root_dir = '/home/osilab12/ssd/OBS'
+        OBS_root_dir = '/home/osilab12/ssd/OBS/test'
     elif test_year == 2020:
         LDAPS_root_dir = '/home/osilab12/hdd2/NIMS_LDPS'
-        OBS_root_dir = '/home/osilab12/hdd2/OBS'
+        OBS_root_dir = '/home/osilab12/ssd/OBS/test'
     
     test_time = args.test_time
     LDAPS_year_dir = os.path.join(LDAPS_root_dir, test_time[:4])
