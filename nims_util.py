@@ -58,7 +58,7 @@ def select_date(test=False):
 
         break
 
-    VALID_MONTH = [6, 7, 8]
+    VALID_MONTH = [6, 7, 8, 9]
     MONTH_DAY   = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
     LEAP_YEAR   = (2020)
 
@@ -132,7 +132,7 @@ def select_date(test=False):
             if not _check_valid_day(end_month, end_day):
                 print("You must specifiy valid day for month '{}'".format(end_month))
                 continue
-
+            end_day = int(end_date[-1])
         break
 
     print()
