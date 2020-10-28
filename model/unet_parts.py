@@ -68,7 +68,7 @@ class DoubleConv(nn.Module):
                                         nn.BatchNorm2d(out_channels))
             self.double_conv.add_module("down_relu2",
                                         nn.ReLU(inplace=True))
-            self.double_conv.add_module("down_maxpool1", nn.MaxPool2d(2))
+            self.double_conv.add_module("down_maxpool1", nn.MaxPool2d(2, ceil_mode=True))
 
             # Residual connection
             self.residual.add_module("down_res_conv",

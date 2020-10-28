@@ -24,6 +24,7 @@ class NIMSTrainer:
         self.train_loader = train_loader
         self.test_loader = test_loader
 
+        self.reference = args.reference
         self.stn_codi = self._get_station_coordinate()
         self.experiment_name = experiment_name
         self.normalization = normalization
@@ -63,18 +64,21 @@ class NIMSTrainer:
             self.nims_logger = NIMSLogger(loss=True, correct=True,
                                           macro_f1=False, micro_f1=False,
                                           hit=True, miss=True, fa=True, cn=True,
+                                          reference=self.reference,
                                           stn_codi=self.stn_codi,
                                           test_date_list=test_date_list)
             if self.train_loader and self.test_loader:
                 self.nims_valid_logger = NIMSLogger(loss=True, correct=True,
                                                     macro_f1=False, micro_f1=False,
                                                     hit=True, miss=True, fa=True, cn=True,
+                                                    reference=self.reference,
                                                     stn_codi=self.stn_codi,
                                                     test_date_list=test_date_list)
         elif self.model_name == 'convlstm':
             self.nims_logger = NIMSLogger(loss=True, correct=False,
                                           macro_f1=False, micro_f1=False,
                                           hit=True, miss=True, fa=True, cn=True,
+                                          reference=self.reference,
                                           stn_codi=self.stn_codi,
                                           test_date_list=test_date_list)
 

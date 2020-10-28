@@ -111,10 +111,11 @@ class MSELoss(ClassificationStat):
         return loss
 
 class NIMSCrossEntropyLoss(ClassificationStat):
-    def __init__(self, device, num_classes=2, use_weights=False):
+    def __init__(self, device, num_classes=2, use_weights=False, reference=None):
         super().__init__(num_classes=num_classes)
         self.device = device
         self.use_weights = use_weights
+        self.reference = reference
 
     def _get_class_weights(self, targets):
         _targets = targets.flatten().detach().cpu().numpy()
@@ -147,7 +148,7 @@ class NIMSCrossEntropyLoss(ClassificationStat):
         # print('[cross_entropy] preds shape:', preds.shape)
         # print('[cross_entropy] targets shape:', targets.shape)
 
-        if (mode == 'valid') or (mode == 'test'):
+        if self.reference == 'aws':
             filtered_stn_codi = self.remove_missing_station(targets, stn_codi)
             preds = preds[:, :, filtered_stn_codi[:, 0], filtered_stn_codi[:, 1]]
             targets = targets[:, filtered_stn_codi[:, 0], filtered_stn_codi[:, 1]]

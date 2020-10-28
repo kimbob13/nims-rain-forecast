@@ -9,7 +9,7 @@ __all__ = ['NIMSLogger']
 
 class NIMSLogger:
     def __init__(self, loss, correct, macro_f1, micro_f1,
-                 hit, miss, fa, cn, stn_codi, test_date_list=None):
+                 hit, miss, fa, cn, reference, stn_codi, test_date_list=None):
         """
         <Parameter>
         loss, correct, macro_f1, micro_f1 [bool]: whether to record each variable
@@ -20,7 +20,10 @@ class NIMSLogger:
         print_stat: Print one epoch stat
         latest_stat: Return straing of one "instance(batch)" stat
         """
-        self.num_pixels = 512 * 512     # # of pixels in training target data
+        self.reference = reference
+        
+        # self.num_pixels = 512 * 512     # # of pixels in training target data
+        self.num_pixels = 781 * 602
         self.num_stn = len(stn_codi)    # # of stations in testing target data
         self.test_date_dict = dict()
 
@@ -102,10 +105,10 @@ class NIMSLogger:
 
         num_batch = target_time.shape[0]
         self.num_update += num_batch
-        if mode == 'train':
-            self.total_points += (num_batch * self.num_pixels)
-        elif (mode == 'valid') or (mode == 'test'):
+        if self.reference == 'aws':
             self.total_points += (num_batch * self.num_stn)
+        elif self.reference == 'reanalysis':
+            self.total_points += (num_batch * self.num_pixels)
 
         if mode == 'test':
             for b in range(num_batch):

@@ -50,6 +50,7 @@ if __name__ == '__main__':
 
     # Train dataset
     nims_train_dataset = NIMSDataset(model=args.model,
+                                     reference=args.reference,
                                      model_utc=args.model_utc,
                                      window_size=args.window_size,
                                      root_dir=args.dataset_dir,
@@ -61,6 +62,7 @@ if __name__ == '__main__':
 
     # Valid dataset
     nims_valid_dataset = NIMSDataset(model=args.model,
+                                     reference=args.reference,
                                      model_utc=args.model_utc,
                                      window_size=args.window_size,
                                      root_dir=args.dataset_dir,
@@ -93,10 +95,10 @@ if __name__ == '__main__':
                          'min_values': min_values}
         
     # Get a sample for getting shape of each tensor
-    sample, _, _ = nims_train_dataset[0]
+    LDAPS_sample, gt_sample, _ = nims_train_dataset[0]
 
     # Create a model and criterion
-    model, criterion = set_model(sample, device, args)
+    model, criterion = set_model(LDAPS_sample, device, args)
 
     # Create dataloaders
     train_loader = DataLoader(nims_train_dataset, batch_size=args.batch_size,

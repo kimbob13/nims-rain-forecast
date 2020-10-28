@@ -145,7 +145,7 @@ def parse_args():
 
     common = parser.add_argument_group('common')
     common.add_argument('--model', default='unet', type=str, help='which model to use [unet, attn_unet, convlstm]')
-    common.add_argument('--dataset_dir', default='/home/osilab12/ssd/NIMS_LDPS', type=str, help='root directory of dataset')
+    common.add_argument('--dataset_dir', default='/home/osilab12/ssd', type=str, help='root directory of dataset')
     common.add_argument('--device', default='0', type=str, help='which device to use')
     common.add_argument('--num_workers', default=5, type=int, help='# of workers for dataloader')
     common.add_argument('--eval_only', default=False, help='when enabled, do not run test epoch, only creating graph', action='store_true')
@@ -171,6 +171,7 @@ def parse_args():
     nims_dataset.add_argument('--sampling_ratio', default=1.0, type=float, help='the ratio of undersampling')
     nims_dataset.add_argument('--heavy_rain', default=False, help='if it is set, rain threshold becomes 10mm/hr instead of 0.1mm/hr', action='store_true')
     nims_dataset.add_argument('--normalization', default=False, help='normalize input data', action='store_true')
+    nims_dataset.add_argument('--reference', default=None, type=str, help='which data to be used as a ground truth')
 
     hyperparam = parser.add_argument_group('hyper-parameters')
     hyperparam.add_argument('--num_epochs', default=100, type=int, help='# of training epochs')
@@ -189,6 +190,9 @@ def parse_args():
     assert args.model_utc in [0, 6, 12, 18], \
            'model_utc must be one of [0, 6, 12, 18]'
 
+    assert args.reference in ['aws', 'reanalysis'], \
+           'reference must be one of [aws, reanalysis]'
+    
     return args
 
 def fix_seed(seed):
@@ -321,7 +325,8 @@ def set_model(sample, device, args, train=True,
 
         criterion = NIMSCrossEntropyLoss(device=device,
                                          num_classes=num_classes,
-                                         use_weights=args.cross_entropy_weight)
+                                         use_weights=args.cross_entropy_weight,
+                                         reference=args.reference)
         # criterion = NIMSBinaryFocalLoss()
         # criterion = MSELoss(device=device)
 

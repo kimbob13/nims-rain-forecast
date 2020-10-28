@@ -9,18 +9,19 @@ import os
 
 __all__ = ['NIMSDataset', 'ToTensor']
 
-VALID_YEAR = [2019, 2020]
+VALID_YEAR = [2018, 2019, 2020]
 VALID_MONTH = [5, 6, 7, 8]
 MONTH_DAY = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 
 
 class NIMSDataset(Dataset):
-    def __init__(self, model, model_utc, window_size, root_dir, date,
+    def __init__(self, model, reference, model_utc, window_size, root_dir, date,
                  lite=False, heavy_rain=False, train=True, transform=None):
         # assert window_size >= 6 and window_size <= 48, \
         #     'window_size must be in between 6 and 48'
 
         self.model = model
+        self.reference = reference
         self.model_utc = model_utc
         self.window_size = window_size
         self.root_dir = root_dir
@@ -33,7 +34,8 @@ class NIMSDataset(Dataset):
         self._data_path_list, self._gt_path = self.__set_path()
 
     def __set_path(self):
-        root, dirs, _ = next(os.walk(os.path.join(self.root_dir, str(self.date['year'])), topdown=True))
+        LDAPS_dir = os.path.join(self.root_dir, 'NIMS_LDPS')
+        root, dirs, _ = next(os.walk(os.path.join(LDAPS_dir, str(self.date['year'])), topdown=True))
         
         # Make datetime object for start and end date
         assert self.date['year']        in VALID_YEAR
@@ -51,12 +53,12 @@ class NIMSDataset(Dataset):
         elif self.date['year'] == 2020:
             if self.date['start_month'] == 5 and self.date['start_day'] == 1:
                 start_date += timedelta(hours=self.window_size)
-            
+                
         end_date = datetime(year=self.date['year'],
                             month=self.date['end_month'],
                             day=self.date['end_day'],
                             hour=23)
-
+        
         # Ground truth end date
         if self.train:
             gt_end_date = end_date
@@ -71,19 +73,23 @@ class NIMSDataset(Dataset):
                             if d.isnumeric() and \
                             d >= start_date.strftime("%Y%m%d") and \
                             d <= end_date.strftime("%Y%m%d")])
+        
         data_path_list = []
         pres_data_path_list = []
         unis_data_path_list = []
         for data_dir in data_dirs:
             curr_data_path_list = [f for f in os.listdir(data_dir)]
+            curr_data_path_list = [f for f in curr_data_path_list \
+                                   if int(f.split('_')[4][8:10]) == self.model_utc]
             unis_data_path_list = sorted([f for f in curr_data_path_list \
-                                          if 'unis' in f and int(f.split('_')[4][8:10]) == self.model_utc])
+                                          if 'unis' in f])
+            
             if self.lite:
                 pres_data_path_list = unis_data_path_list
             else:
                 pres_data_path_list = sorted([f for f in curr_data_path_list \
-                                              if 'pres' in f and int(f.split('_')[4][8:10]) == self.model_utc])
-                assert len(pres_data_path_list) == len(unis_data_path_list)
+                                              if 'pres' in f])
+                # assert len(pres_data_path_list) == len(unis_data_path_list)
             
             for p, u in list(zip(pres_data_path_list, unis_data_path_list)):
                 # p name: ldps_pres_sp_h0xx_yyyymmddhh
@@ -109,19 +115,18 @@ class NIMSDataset(Dataset):
                             data_path_list.append((os.path.join(data_dir, p), os.path.join(data_dir, u)))
         
         # Set target data list
-        # For training, use gt data which is same size with LDAPS grid
-        # For testing, use gt data which contains observation from only 705 stations
-        if self.train:
-            gt_dir = os.path.join(self.root_dir, '..', 'OBS', 'train', str(self.date['year']))
-            gt_path = os.path.join(gt_dir, 'rainr.npy')
-            gt_path = torch.tensor(np.load(gt_path))
-            gt_path = torch.where(gt_path >= self.rain_threshold, torch.ones(gt_path.shape), torch.zeros(gt_path.shape))
-        else:
-            gt_dir = os.path.join(self.root_dir, '..', 'OBS', 'test', str(self.date['year']))
+        if self.reference == 'aws':
+            gt_dir = os.path.join(self.root_dir, 'OBS', str(self.date['year']))
             gt_path = os.listdir(gt_dir)
             gt_path = sorted([os.path.join(gt_dir, f) for f in gt_path if
                               f.split('_')[3][:-2] >= start_date.strftime("%Y%m%d%H") and
                               f.split('_')[3][:-2] <= gt_end_date.strftime("%Y%m%d%H")])
+        elif self.reference == 'reanalysis':
+            gt_dir = os.path.join(self.root_dir, 'REANALYSIS', str(self.date['year']))
+            gt_path = os.listdir(gt_dir)
+            gt_path = sorted([os.path.join(gt_dir, f) for f in gt_path if
+                              f.split('.')[0] >= start_date.strftime("%Y%m%d%H") and
+                              f.split('.')[0] <= gt_end_date.strftime("%Y%m%d%H")])
         
         return data_path_list, gt_path
 
@@ -196,9 +201,11 @@ class NIMSDataset(Dataset):
             return unis
         else:
             p, u = data_list
+                        
+            """
             pres = np.load(p).reshape(512, 512, 20).transpose()
             unis = np.load(u).reshape(512, 512, 20).transpose()
-
+            
             if use_kindex:
                 T_850 = np.expand_dims(pres[9], axis=0)
                 T_700 = np.expand_dims(pres[10], axis=0)
@@ -213,7 +220,7 @@ class NIMSDataset(Dataset):
                 D_850 = (rh_850 / 100) ** (1 / 8) * (112 + (0.9 * t_850)) - 112 + (0.1 * t_850) + 273.15
                 D_700 = (rh_700 / 100) ** (1 / 8) * (112 + (0.9 * t_700)) - 112 + (0.1 * t_700) + 273.15
                 kindex = (T_850 - T_500) + D_850 - (T_700 - D_700)
-
+            
             concat_list = []
             if pres_idx_list != None:
                 pres = pres[pres_idx_list, :, :]
@@ -223,31 +230,20 @@ class NIMSDataset(Dataset):
                 concat_list.append(unis)
             if use_kindex:
                 concat_list.append(kindex)
-
+            """
+            
+            pres = np.load(p).reshape(602, 781, 3).transpose()
+            unis = np.load(u).reshape(602, 781, 5).transpose()
+            concat_list = [np.expand_dims(pres[0], axis=0), unis[:3,:,:]]
+            
             return np.concatenate(concat_list, axis=0)
 
-    def _get_index(self, train_end_time):
-        # Declare new_year date
-        new_year_date = datetime(year=self.date['year'], month=1, day=1, hour=0)
-    
-        # getting passing days (train_end_date) from new_years
-        index = int((train_end_time - new_year_date).total_seconds() // 3600)
-
-        return index
-
     def _get_gt_data(self, train_end_time):
-        if self.train:
-            # Getting indices of ground truth data
-            gt_index = self._get_index(train_end_time)
-
-            # Slicing gt data 
-            gt = self._gt_path[gt_index]
-        else:
-            gt_path = [p for p in self._gt_path \
-                       if train_end_time.strftime("%Y%m%d%H") in p][0]
-            gt = torch.tensor(np.load(gt_path))
-            gt = torch.where(gt < 0, -9999 * torch.ones(gt.shape),
-                             torch.where(gt >= self.rain_threshold, torch.ones(gt.shape), torch.zeros(gt.shape)))
+        gt_path = [p for p in self._gt_path \
+                   if train_end_time.strftime("%Y%m%d%H") in p][0]
+        gt = torch.tensor(np.load(gt_path))
+        gt = torch.where(gt < 0, -9999 * torch.ones(gt.shape),
+                         torch.where(gt >= self.rain_threshold, torch.ones(gt.shape), torch.zeros(gt.shape)))
 
         return gt
 
