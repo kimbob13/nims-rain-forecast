@@ -85,8 +85,8 @@ def select_date(test=False):
         start_year, start_month = map(int, start_date[:2])
 
         # Year check
-        if start_year not in [2019, 2020]:
-            print("You must specify year 2019 or 2020")
+        if start_year not in [2018, 2019, 2020]:
+            print("You must specify year 2018 or 2019 or 2020")
             continue
 
         # Month check

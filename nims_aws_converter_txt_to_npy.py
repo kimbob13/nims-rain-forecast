@@ -17,7 +17,7 @@ def get_station_coordinate(stn_id):
     stn_dii = stn_info['dii'] - 1
 
     # x, y = stn_dii // 512, stn_dii % 512
-    x, y = stn_dii % 602, stn_dii // 602
+    x, y = stn_dii // 602, stn_dii % 602
 
     return x, y
 
@@ -39,7 +39,8 @@ if __name__ == '__main__':
     for obs_txt in pbar:
         pbar.set_description('[current_file] {}'.format(obs_txt))
 
-        result_array = np.full([512, 512], -9999)
+        # result_array = np.full([512, 512], -9999)
+        result_array = np.full([781, 602], -9999)
         with open(os.path.join(obs_txt_dir, obs_txt), 'r', encoding='euc-kr') as f:
             for line in f:
                 if line.startswith('#'):
@@ -67,5 +68,7 @@ if __name__ == '__main__':
         file_name = 'AWS_HOUR_ALL_{}_{}.npy'.format(utc_str, utc_str)
 
         # Save npy file
-        with open(os.path.join(root_dir, 'OBS', str(date['year']), file_name), 'wb') as npyf:
+        obs_npy_dir = os.path.join(root_dir, 'OBS', str(date['year']))
+        os.makedirs(obs_npy_dir, exist_ok=True)
+        with open(os.path.join(obs_npy_dir, file_name), 'wb') as npyf:
             np.save(npyf, result_array)
