@@ -404,8 +404,9 @@ def set_experiment_name(args, date):
         custom_name = '_' + args.custom_name
 
     if args.model == 'unet':            
-        experiment_name = 'nims-utc{}-unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}-{}_sr{}_{}{}_wd{}{}{}{}{}{}' \
-                          .format(args.model_utc,
+        experiment_name = 'nims-{}-utc{}-unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}-{}_sr{}_{}{}_wd{}{}{}{}{}{}' \
+                          .format(args.reference,
+                                  args.model_utc,
                                   args.n_blocks,
                                   args.start_channels,
                                   args.window_size,
@@ -425,8 +426,9 @@ def set_experiment_name(args, date):
                                   date_str)
 
     elif args.model == 'attn_unet':
-        experiment_name = 'nims-utc{}-attn_unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}-{}_sr{}_{}{}_wd{}{}{}{}{}{}' \
-                          .format(args.model_utc,
+        experiment_name = 'nims-{}-utc{}-attn_unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}-{}_sr{}_{}{}_wd{}{}{}{}{}{}' \
+                          .format(args.reference,
+                                  args.model_utc,
                                   args.n_blocks,
                                   args.start_channels,
                                   args.window_size,
@@ -446,8 +448,9 @@ def set_experiment_name(args, date):
                                   date_str)
 
     elif args.model == 'convlstm':
-        experiment_name = 'nims-convlstm_ws{}_tn{}_ep{}_bs{}_sr{}_{}{}{}' \
-                          .format(args.window_size,
+        experiment_name = 'nims-{}-convlstm_ws{}_tn{}_ep{}_bs{}_sr{}_{}{}{}' \
+                          .format(args.reference,
+                                  args.window_size,
                                   args.target_num,
                                   args.num_epochs,
                                   args.batch_size,

@@ -234,6 +234,14 @@ class NIMSDataset(Dataset):
             
             pres = np.load(p).reshape(602, 781, 3).transpose()
             unis = np.load(u).reshape(602, 781, 5).transpose()
+            
+            # missing value
+            missing_x, missing_y = np.where(unis[0]<0)[0], np.where(unis[0]<0)[1]
+            unis[0][missing_x, missing_y] = 0.
+            unis[1][missing_x, missing_y] = 0.
+            unis[2][missing_x, missing_y] = 101300.
+            pres[0][missing_x, missing_y] = 273.15
+            
             concat_list = [np.expand_dims(pres[0], axis=0), unis[:3,:,:]]
             
             return np.concatenate(concat_list, axis=0)
