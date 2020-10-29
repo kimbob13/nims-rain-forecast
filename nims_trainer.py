@@ -238,4 +238,4 @@ class NIMSTrainer:
                 loss.backward()
                 self.optimizer.step()
 
-            pbar.set_description('({}) '.format(mode.capitalize()) + logger.latest_stat(target_time, mode=mode))
+            pbar.set_description('({}) '.format(mode.capitalize()) + logger.latest_stat(target_time))

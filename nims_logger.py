@@ -21,10 +21,8 @@ class NIMSLogger:
         latest_stat: Return straing of one "instance(batch)" stat
         """
         self.reference = reference
-        
-        # self.num_pixels = 512 * 512     # # of pixels in training target data
-        self.num_pixels = 781 * 602
-        self.num_stn = len(stn_codi)    # # of stations in testing target data
+        self.num_pixels = 781 * 602     # of pixels in training target data
+        self.num_stn = len(stn_codi)    # of stations in testing target data
         self.test_date_dict = dict()
 
         if test_date_list != None:
@@ -201,12 +199,12 @@ class NIMSLogger:
 
         return epoch_loss, epoch_stat
 
-    def latest_stat(self, target_time, mode):
+    def latest_stat(self, target_time):
         num_batch = target_time.shape[0]
-        if mode == 'train':
-            batch_points = self.num_pixels * num_batch
-        elif (mode == 'valid') or (mode == 'test'):
+        if self.reference == 'aws':
             batch_points = self.num_stn * num_batch
+        elif self.reference == 'reanalysis':
+            batch_points = self.num_pixels * num_batch
 
         try:
             accuracy = (self._latest_stat.correct / batch_points) * 100

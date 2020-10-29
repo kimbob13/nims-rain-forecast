@@ -222,6 +222,7 @@ if __name__ == '__main__':
     
     # Test dataset
     nims_test_dataset = NIMSDataset(model=args.model,
+                                    reference=args.reference,
                                     model_utc=args.model_utc,
                                     window_size=args.window_size,
                                     root_dir=args.dataset_dir,
