@@ -173,6 +173,7 @@ class SuccessiveUNet(nn.Module):
         else:
             self.outc.add_module('out_conv', OutConv(start_channels, 2))
             
+        # successive, parallel, parallel + previous logit
         self.outc2 = nn.Sequential()
         self.outc2.add_module('out_conv2', OutConv(2, 2))
 

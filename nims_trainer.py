@@ -83,9 +83,11 @@ class NIMSTrainer:
                                           test_date_list=test_date_list)
 
     def _get_station_coordinate(self):
-        codi_aws_df = pd.read_csv('./codi_ldps_aws/codi_ldps_aws_512.csv')
+        # codi_aws_df = pd.read_csv('./codi_ldps_aws/codi_ldps_aws_512.csv')
+        codi_aws_df = pd.read_csv('./codi_ldps_aws/codi_ldps_aws_602_781.csv')
         dii_info = np.array(codi_aws_df['dii']) - 1
-        stn_codi = np.array([(dii // 512, dii % 512) for dii in dii_info])
+        # stn_codi = np.array([(dii // 512, dii % 512) for dii in dii_info])
+        stn_codi = np.array([(dii // 602, dii % 602) for dii in dii_info])
 
         return stn_codi
 
@@ -241,9 +243,17 @@ class NIMSTrainer:
                                       stn_codi=self.stn_codi, mode=mode, logger=logger)
             elif self.model_name == 'suc_unet':
                 output_lst = self.model(images)
-                for output, target in zip(output_lst, target_lst):
-                    loss = self.criterion(output, target, target_time,
-                                          stn_codi=self.stn_codi, mode=mode, logger=logger)
+                for i, (output, target) in enumerate(zip(output_lst, target_lst)):
+                    if i == 0:
+                        loss = self.criterion(output, target, target_time,
+                                              stn_codi=self.stn_codi, mode=mode,
+                                              prev_preds=None, logger=None)
+                        prev_preds = output
+                    else:
+                        loss += self.criterion(output, target, target_time,
+                                               stn_codi=self.stn_codi, mode=mode,
+                                               prev_preds=prev_preds, logger=logger)
+                        prev_preds = output
             
             if mode == 'train':
                 self.optimizer.zero_grad()

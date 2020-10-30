@@ -22,15 +22,19 @@ class RMSELoss(nn.Module):
         return loss
 
 class ClassificationStat(nn.Module):
-    def __init__(self, num_classes=2):
+    def __init__(self, num_classes=2, reference=None):
         super().__init__()
         self.num_classes = num_classes
+        self.reference = reference
 
     def get_stat(self, preds, targets, mode):
         if mode == 'train':
             _, pred_labels = preds.topk(1, dim=1, largest=True, sorted=True)
             b = pred_labels.shape[0]
-
+            
+            if b==0:
+                return
+            
             pred_labels = pred_labels.squeeze(1).detach().reshape(b, -1)
             target_labels = targets.data.detach().reshape(b, -1)
         elif (mode == 'valid') or (mode == 'test'):
@@ -73,20 +77,14 @@ class ClassificationStat(nn.Module):
 
         return correct, hit, miss, fa, cn
 
-    def remove_missing_station(self, targets, stn_codi):
+    def remove_missing_station(self, targets):
         _targets = targets.squeeze(0)
-        # targets_missing_idx = (_targets == -1).nonzero().cpu().tolist()
-        targets_norain_idx = (_targets == 0).nonzero().cpu().tolist()
+        targets_norain_idx = (_targets == 0).nonzero().cpu().tolist() # [(x, y)'s]
         targets_rain_idx = (_targets == 1).nonzero().cpu().tolist()
-
-        filtered_stn_codi = targets_norain_idx + targets_rain_idx
-
-        # filtered_stn_codi = stn_codi.tolist()
-        # for missing_idx in targets_missing_idx:
-        #     filtered_stn_codi.pop(filtered_stn_codi.index(missing_idx))
+        targets_idx = targets_norain_idx + targets_rain_idx
         
-        return np.array(filtered_stn_codi)
-
+        return np.array(targets_idx)
+    
 class MSELoss(ClassificationStat):
     def __init__(self, device):
         super().__init__(num_classes=2)
@@ -112,10 +110,9 @@ class MSELoss(ClassificationStat):
 
 class NIMSCrossEntropyLoss(ClassificationStat):
     def __init__(self, device, num_classes=2, use_weights=False, reference=None):
-        super().__init__(num_classes=num_classes)
+        super().__init__(num_classes=num_classes, reference=reference)
         self.device = device
         self.use_weights = use_weights
-        self.reference = reference
 
     def _get_class_weights(self, targets):
         _targets = targets.flatten().detach().cpu().numpy()
@@ -130,7 +127,7 @@ class NIMSCrossEntropyLoss(ClassificationStat):
         return torch.from_numpy(weights).type(torch.FloatTensor).to(self.device)
 
     def forward(self, preds, targets, target_time,
-                stn_codi, mode, logger=None):
+                stn_codi, mode, prev_preds=None, logger=None):
         """
         <Parameter>
         preds [torch.tensor]: NCHW format (N: batch size, C: class num)
@@ -147,21 +144,50 @@ class NIMSCrossEntropyLoss(ClassificationStat):
 
         # print('[cross_entropy] preds shape:', preds.shape)
         # print('[cross_entropy] targets shape:', targets.shape)
-
-        if self.reference == 'aws':
-            filtered_stn_codi = self.remove_missing_station(targets, stn_codi)
-            preds = preds[:, :, filtered_stn_codi[:, 0], filtered_stn_codi[:, 1]]
-            targets = targets[:, filtered_stn_codi[:, 0], filtered_stn_codi[:, 1]]
-
-        correct, hit, miss, fa, cn = self.get_stat(preds, targets, mode=mode)
         
-        loss = F.cross_entropy(preds, targets, weight=class_weights, reduction='none')
-        loss = torch.mean(torch.mean(loss, dim=0))
+        if self.reference == 'aws':
+            stn_codi = self.remove_missing_station(targets)
+            stn_targets = targets[:, stn_codi[:, 0], stn_codi[:, 1]]
+            
+        if prev_preds is None:
+            if self.reference == 'aws':
+                curr_preds = preds[:, :, stn_codi[:, 0], stn_codi[:, 1]]
+                curr_targets = stn_targets
+                final_preds = curr_preds
+            elif self.reference == 'reanalysis':
+                curr_preds = preds
+                curr_targets = targets
+                final_preds = curr_preds
+        else:
+            if self.reference == 'aws':
+                prev_preds = prev_preds[:, :, stn_codi[:, 0], stn_codi[:, 1]]
+                curr_preds = preds[:, :, stn_codi[:, 0], stn_codi[:, 1]]
+                
+                prev_preds_max_idx = torch.argmax(prev_preds, dim=1, keepdims=True)
+                prev_preds_min_idx = torch.argmin(prev_preds, dim=1, keepdims=True)
+                final_preds = prev_preds_min_idx * prev_preds + prev_preds_max_idx * curr_preds
+                                
+                curr_codi = (torch.argmax(prev_preds, dim=1) == 1).nonzero().cpu().numpy()
+                curr_preds = curr_preds[:, :, curr_codi[:, 1]]
+                curr_targets = stn_targets[:, curr_codi[:, 1]]
+            elif self.reference == 'reanalysis':
+                pass
+        
+        if prev_preds is not None and len(curr_codi) == 0:
+            loss = torch.tensor(0., device=self.device)
+        else:
+            if self.reference == 'aws':
+                correct, hit, miss, fa, cn = self.get_stat(final_preds, stn_targets, mode=mode)
+            elif self.reference == 'reanalysis':
+                correct, hit, miss, fa, cn = self.get_stat(final_preds, targets, mode=mode)
 
-        if logger:
-            logger.update(loss=loss.item(), correct=correct,
-                          hit=hit, miss=miss, fa=fa, cn=cn,
-                          target_time=target_time, mode=mode)
+            loss = F.cross_entropy(curr_preds, curr_targets, weight=class_weights, reduction='none')
+            loss = torch.mean(torch.mean(loss, dim=1))
+
+            if logger:
+                logger.update(loss=loss.item(), correct=correct,
+                              hit=hit, miss=miss, fa=fa, cn=cn,
+                              target_time=target_time, mode=mode)
 
         # print('[cross_entropy] loss: {}'.format(loss.item()))
 

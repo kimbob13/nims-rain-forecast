@@ -255,7 +255,7 @@ class NIMSDataset(Dataset):
         # missing value (<0 in aws) or wrong value (<0 in reanlysis) pre-process
         if self.reference == 'aws':
             gt_base = torch.where(gt_base < 0, -9999 * torch.ones(gt_base.shape), gt_base)    
-        elif self.reference == 'analysis':
+        elif self.reference == 'reanalysis':
             gt_base = torch.where(gt_base < 0, torch.zeros(gt_base.shape), gt_base)
         
         if self.model == 'unet':
