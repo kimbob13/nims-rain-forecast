@@ -27,7 +27,8 @@ class NIMSDataset(Dataset):
         self.root_dir = root_dir
         self.date = date
         self.lite = lite
-        self.rain_threshold = 10 if heavy_rain else 0.1
+#         self.rain_threshold = 10 if heavy_rain else 0.1
+        self.rain_threshold = [0.1, 10.0]
         self.train = train
         self.transform = transform
         
@@ -167,7 +168,7 @@ class NIMSDataset(Dataset):
                                                       unis_idx_list=[2, 14, 17],
                                                       use_kindex=True))
         
-        if self.model == 'unet' or self.model == 'attn_unet':
+        if self.model == 'unet' or self.model == 'suc_unet' or self.model == 'attn_unet':
             for idx, l in enumerate(_ldaps_input):
                 if idx == 0:
                     ldaps_input = l
@@ -235,7 +236,7 @@ class NIMSDataset(Dataset):
             pres = np.load(p).reshape(602, 781, 3).transpose()
             unis = np.load(u).reshape(602, 781, 5).transpose()
             
-            # missing value
+            # LDAPS missing value pre-process
             missing_x, missing_y = np.where(unis[0]<0)[0], np.where(unis[0]<0)[1]
             unis[0][missing_x, missing_y] = 0.
             unis[1][missing_x, missing_y] = 0.
@@ -249,11 +250,39 @@ class NIMSDataset(Dataset):
     def _get_gt_data(self, train_end_time):
         gt_path = [p for p in self._gt_path \
                    if train_end_time.strftime("%Y%m%d%H") in p][0]
-        gt = torch.tensor(np.load(gt_path))
-        gt = torch.where(gt < 0, -9999 * torch.ones(gt.shape),
-                         torch.where(gt >= self.rain_threshold, torch.ones(gt.shape), torch.zeros(gt.shape)))
-
-        return gt
+        gt_base = torch.tensor(np.load(gt_path))
+        
+        # missing value (<0 in aws) or wrong value (<0 in reanlysis) pre-process
+        if self.reference == 'aws':
+            gt_base = torch.where(gt_base < 0, -9999 * torch.ones(gt_base.shape), gt_base)    
+        elif self.reference == 'analysis':
+            gt_base = torch.where(gt_base < 0, torch.zeros(gt_base.shape), gt_base)
+        
+        if self.model == 'unet':
+            # make len(rain_threshold)+1 classes (multi-class classification)
+            for i in range(len(self.rain_threshold)):
+                if i == 0:
+                    gt = torch.where((0 <= gt_base) & (gt_base < self.rain_threshold[i]),
+                                     i * torch.ones(gt_base.shape), gt_base)
+                else:
+                    gt = torch.where((self.rain_threshold[i-1] <= gt_base) & (gt_base < self.rain_threshold[i]),
+                                     i * torch.ones(gt_base.shape), gt)
+            gt = torch.where(self.rain_threshold[i] <= gt_base,
+                             (i+1) * torch.ones(gt_base.shape), gt)
+            
+            return gt
+            
+        elif self.model == 'suc_unet':
+            # make len(rain_threshold) * binary classes (successive binary classification)
+            gt_lst = []
+            for i in range(len(self.rain_threshold)):
+                gt = torch.where(gt_base < 0, gt_base,
+                                 torch.where(gt_base < self.rain_threshold[i],
+                                             torch.zeros(gt_base.shape),
+                                             torch.ones(gt_base.shape)))
+                gt_lst.append(gt)
+                
+            return gt_lst
 
     # XXX: Need to fix for new training target data
     def get_real_gt(self, idx):

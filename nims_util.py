@@ -5,7 +5,7 @@ from torch.utils.data import Subset
 import numpy as np
 import torchvision.transforms as transforms
 
-from model.unet_model import UNet, AttentionUNet
+from model.unet_model import UNet, SuccessiveUNet, AttentionUNet
 from model.conv_lstm import EncoderForecaster
 from nims_loss import *
 
@@ -330,6 +330,21 @@ def set_model(sample, device, args, train=True,
         # criterion = NIMSBinaryFocalLoss()
         # criterion = MSELoss(device=device)
 
+    elif args.model == 'suc_unet':
+        model = SuccessiveUNet(n_channels=sample.shape[0],
+                               n_classes=num_classes,
+                               n_blocks=args.n_blocks,
+                               start_channels=args.start_channels,
+                               pos_loc=args.pos_loc,
+                               pos_dim=args.pos_dim,
+                               bilinear=args.bilinear,
+                               batch_size=args.batch_size)
+        
+        criterion = NIMSCrossEntropyLoss(device=device,
+                                         num_classes=num_classes,
+                                         use_weights=args.cross_entropy_weight,
+                                         reference=args.reference)
+        
     elif args.model == 'convlstm':
         assert args.window_size == args.target_num, \
                'window_size and target_num must be same for ConvLSTM'
@@ -425,6 +440,28 @@ def set_experiment_name(args, date):
                                   custom_name,
                                   date_str)
 
+    elif args.model == 'suc_unet':
+        experiment_name = 'nims-{}-utc{}-suc_unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}-{}_sr{}_{}{}_wd{}{}{}{}{}{}' \
+                          .format(args.reference,
+                                  args.model_utc,
+                                  args.n_blocks,
+                                  args.start_channels,
+                                  args.window_size,
+                                  args.num_epochs,
+                                  args.batch_size,
+                                  args.pos_loc,
+                                  args.pos_dim,
+                                  args.sampling_ratio,
+                                  args.optimizer,
+                                  args.lr,
+                                  wd_str,
+                                  cross_entropy_weight,
+                                  normalization,
+                                  bilinear,
+                                  heavy_rain,
+                                  custom_name,
+                                  date_str)
+        
     elif args.model == 'attn_unet':
         experiment_name = 'nims-{}-utc{}-attn_unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}-{}_sr{}_{}{}_wd{}{}{}{}{}{}' \
                           .format(args.reference,

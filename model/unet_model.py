@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 from .unet_parts import *
 
-__all__ = ['UNet', 'AttentionUNet']
+__all__ = ['UNet', 'SuccessiveUNet', 'AttentionUNet']
 
 class UNet(nn.Module):
     def __init__(self, n_channels, n_classes, n_blocks, start_channels,
@@ -103,6 +103,105 @@ class UNet(nn.Module):
 
         return logit
 
+class SuccessiveUNet(nn.Module):
+    def __init__(self, n_channels, n_classes, n_blocks, start_channels,
+                 pos_loc=0, pos_dim=0, bilinear=False, batch_size=1):
+        super(SuccessiveUNet, self).__init__()
+
+        # Learnable position related
+        pos_loc_max = (2 * n_blocks) + 3
+        assert (pos_loc >= 0) and (pos_loc <= pos_loc_max)
+        if pos_loc == 0:
+            assert pos_dim == 0
+        if pos_dim == 0:
+            assert pos_loc == 0
+
+        # Model entrance block
+        self.inc = nn.Sequential()
+        if pos_loc == 1:
+            n_channels += pos_dim
+            self.inc.add_module('inc_pos', LearnablePosition(batch_size, pos_dim, 512, 512))
+        self.inc.add_module('inc', BasicConv(n_channels, start_channels))
+
+        # Create down blocks
+        self.down = nn.ModuleList([])
+        for i in range(n_blocks):
+            cur_in_ch = start_channels * (2 ** i)
+            if pos_loc == i + 2:
+                cur_in_ch_pos = cur_in_ch + pos_dim
+                down_with_pos = nn.Sequential()
+                down_with_pos.add_module('down{}_pos'.format(i),
+                                         LearnablePosition(batch_size, pos_dim, 512 // (2 ** i), 512 // (2 ** i)))
+                down_with_pos.add_module('down{}'.format(i), Down(cur_in_ch_pos, cur_in_ch * 2))
+
+                self.down.append(down_with_pos)
+            else:
+                self.down.append(Down(cur_in_ch, cur_in_ch * 2))
+
+        # Create bridge block
+        self.bridge = nn.Sequential()
+        bridge_channels = start_channels * (2 ** n_blocks)
+        if pos_loc == n_blocks + 2:
+            bridge_channels_pos = bridge_channels + pos_dim
+            self.bridge.add_module('bridge_pos',
+                                   LearnablePosition(batch_size, pos_dim, 512 // (2 ** n_blocks), 512 // (2 ** n_blocks)))
+            self.bridge.add_module('bridge_conv', BasicConv(bridge_channels_pos, bridge_channels))
+        else:
+            self.bridge.add_module('bridge_conv', BasicConv(bridge_channels, bridge_channels))
+
+        # Create up blocks
+        self.up = nn.ModuleList([])
+        for i in range(n_blocks, 0, -1):
+            cur_in_ch = start_channels * (2 ** i)
+            if pos_loc + i == pos_loc_max:
+                cur_in_ch_pos = cur_in_ch + pos_dim
+                self.up.append(Up(cur_in_ch_pos, (cur_in_ch // 2),
+                                  learnable_pos=LearnablePosition(batch_size,
+                                                                  pos_dim,
+                                                                  512 // (2 ** (i - 1)),
+                                                                  512 // (2 ** (i - 1))),
+                                  bilinear=bilinear))
+            else:
+                self.up.append(Up(cur_in_ch, (cur_in_ch // 2), bilinear=bilinear))
+
+        # Create out convolution block
+        self.outc = nn.Sequential()
+        if pos_loc == pos_loc_max:
+            start_channels_pos = start_channels + pos_dim
+            self.outc.add_module('out_pos', LearnablePosition(batch_size, pos_dim, 512, 512))
+            self.outc.add_module('out_conv', OutConv(start_channels_pos, 2))
+        else:
+            self.outc.add_module('out_conv', OutConv(start_channels, 2))
+            
+        self.outc2 = nn.Sequential()
+        self.outc2.add_module('out_conv2', OutConv(2, 2))
+
+    def forward(self, x):
+        logits = []
+        out = self.inc(x)
+
+        # Long residual list for Up phase
+        long_residual = []
+        long_residual.append(out.clone())
+
+        # Down blocks
+        for down_block in self.down:
+            out = down_block(out)
+            long_residual.append(out.clone())
+
+        # Bridge block
+        out = self.bridge(out)
+
+        # Up blocks
+        for i, up_block in enumerate(self.up):
+            out = up_block(out, long_residual[-1 * (i + 2)])
+
+        logit = self.outc(out)
+        logit2 = self.outc2(logit)
+
+        return [logit, logit2]
+    
+    
 class AttentionUNet(UNet):
     def __init__(self, n_channels, n_classes, n_blocks, start_channels,
                  pos_loc=0, pos_dim=0, bilinear=False, batch_size=1):

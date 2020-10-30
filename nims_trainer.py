@@ -60,7 +60,7 @@ class NIMSTrainer:
         self.device_idx = int(args.device)
         self.model.to(self.device)
 
-        if self.model_name == 'unet' or self.model_name == 'attn_unet':
+        if self.model_name == 'unet' or self.model_name == 'suc_unet' or self.model_name == 'attn_unet':
             self.nims_logger = NIMSLogger(loss=True, correct=True,
                                           macro_f1=False, micro_f1=False,
                                           hit=True, miss=True, fa=True, cn=True,
@@ -207,6 +207,7 @@ class NIMSTrainer:
         pbar = tqdm(data_loader)
         for images, target, target_time in pbar:
             if self.model_name == 'unet' or \
+               self.model_name == 'suc_unet' or \
                self.model_name == 'attn_unet':
                 if self.normalization:
                     b, c, h, w = images.shape
@@ -218,9 +219,14 @@ class NIMSTrainer:
 
                     images = transform(images)
                     images = images.reshape((b, c, h, w))
-                
+                                
                 images = images.type(torch.FloatTensor).to(self.device)
-                target = target.type(torch.LongTensor).to(self.device)
+                if self.model_name == 'suc_unet':
+                    target_lst = []
+                    for t in target:
+                        target_lst.append(t.type(torch.LongTensor).to(self.device))
+                else:
+                    target = target.type(torch.LongTensor).to(self.device)
                 target_time = target_time.numpy()
             
             elif self.model_name == 'convlstm':
@@ -229,9 +235,15 @@ class NIMSTrainer:
                 images = images.permute(1, 0, 2, 3, 4).to(self.device)
                 target = target.permute(1, 0, 2, 3, 4).to(self.device)
 
-            output = self.model(images)
-            loss = self.criterion(output, target, target_time,
-                                  stn_codi=self.stn_codi, mode=mode, logger=logger)
+            if self.model_name == 'unet':
+                output = self.model(images)
+                loss = self.criterion(output, target, target_time,
+                                      stn_codi=self.stn_codi, mode=mode, logger=logger)
+            elif self.model_name == 'suc_unet':
+                output_lst = self.model(images)
+                for output, target in zip(output_lst, target_lst):
+                    loss = self.criterion(output, target, target_time,
+                                          stn_codi=self.stn_codi, mode=mode, logger=logger)
             
             if mode == 'train':
                 self.optimizer.zero_grad()

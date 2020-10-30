@@ -39,8 +39,8 @@ if __name__ == '__main__':
     for obs_txt in pbar:
         pbar.set_description('[current_file] {}'.format(obs_txt))
 
-        # result_array = np.full([512, 512], -9999)
-        result_array = np.full([781, 602], -9999)
+        # result_array = np.full([512, 512], -9999., dtype=np.float32)
+        result_array = np.full([781, 602], -9999., dtype=np.float32)
         with open(os.path.join(obs_txt_dir, obs_txt), 'r', encoding='euc-kr') as f:
             for line in f:
                 if line.startswith('#'):
@@ -51,7 +51,6 @@ if __name__ == '__main__':
                 stn_id = int(line_list[1])
                 one_hour_rain = float(line_list[6])
                 stn_x, stn_y = get_station_coordinate(stn_id)
-
                 result_array[stn_x, stn_y] = one_hour_rain
 
         # Convert KST time to UTC time
