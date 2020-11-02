@@ -30,6 +30,7 @@ class NIMSTrainer:
         self.normalization = normalization
 
         self.trained_weight = {'model': None,
+                               'model_name': args.model,
                                'n_blocks': args.n_blocks,
                                'start_channels': args.start_channels,
                                'pos_loc': args.pos_loc,

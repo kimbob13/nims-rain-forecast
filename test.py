@@ -21,7 +21,7 @@ MONTH_DAY = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 
 def select_experiment():
     results_dir = os.path.join('./results')
-    experiment_list = sorted([f for f in os.listdir(results_dir) if f.startswith('nims-utc')])
+    experiment_list = sorted([f for f in os.listdir(results_dir) if f.startswith('nims')])
     print()
     print('=' * 33, 'Which experiment do you want to test?', '=' * 33)
     print()
@@ -205,6 +205,7 @@ if __name__ == '__main__':
     date = select_date(test=True)
 
     # Replace model related arguments to the train info
+    args.model = chosen_weight['model_name']
     args.n_blocks = chosen_weight['n_blocks']
     args.start_channels = chosen_weight['start_channels']
     args.window_size = chosen_weight['window_size']
@@ -231,7 +232,7 @@ if __name__ == '__main__':
                                     heavy_rain=args.heavy_rain,
                                     train=False,
                                     transform=ToTensor())
-
+    
     # Get normalization transform base on min/max value from training procedure
     normalization = None
     if ('norm_max' in chosen_weight) and ('norm_min' in chosen_weight) and \
