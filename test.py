@@ -10,14 +10,39 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 import os
+import sys
 import shutil
 import time
+from datetime import datetime, timedelta
 
 MONTH_DAY = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 
 #########################################################
 # 1. Function for test setting part                     #
 #########################################################
+
+def create_output_dir(args, date, experiment_name):
+    # (Re)create output directory for this year
+    output_dir = os.path.join(args.dataset_dir, 'NIMS_OUTPUT', experiment_name, str(date['year']))
+    if os.path.isdir(output_dir):
+        yes_no = input('It is about to remove whole output directory and recreate. CONTINUE? [YES or NO] : ')
+        shutil.rmtree(output_dir)
+        if yes_no.upper().startswith('N'):
+            print('Exit the test program')
+            print()
+            sys.exit()
+
+        print()
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    curr_date = datetime(year=date['year'], month=date['start_month'], day=date['start_day'])
+    while True:
+        os.mkdir(os.path.join(output_dir, curr_date.strftime('%Y%m%d')))
+        if curr_date.month == date['end_month'] and curr_date.day == date['end_day']:
+            break
+
+        curr_date += timedelta(days=1)
 
 def select_experiment():
     results_dir = os.path.join('./results')
@@ -204,6 +229,9 @@ if __name__ == '__main__':
     # Select start and end date for train
     date = select_date(test=True)
 
+    # Create output directory
+    create_output_dir(args, date, experiment_name)
+
     # Replace model related arguments to the train info
     args.model = chosen_weight['model_name']
     args.n_blocks = chosen_weight['n_blocks']
@@ -252,7 +280,7 @@ if __name__ == '__main__':
     sample, _, _ = nims_test_dataset[0]
 
     # Create a model and criterion
-    model, criterion = set_model(sample, device, args, train=False)
+    model, criterion = set_model(sample, device, args, train=False, experiment_name=experiment_name)
 
     # Create dataloaders
     test_loader = DataLoader(nims_test_dataset, batch_size=args.batch_size,

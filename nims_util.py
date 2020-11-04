@@ -43,9 +43,9 @@ def select_date(test=False):
             if date_mode not in [MONTHLY_MODE, DAILY_MODE]:
                 print('You must enter value between 1 or 2')
                 continue
-            elif test == True and date_mode == DAILY_MODE:
-                print('You must select [Monthly] mode for test')
-                continue
+            # elif test == True and date_mode == DAILY_MODE:
+            #     print('You must select [Monthly] mode for test')
+            #     continue
 
         except ValueError:
             print('You must enter integer only')
@@ -298,11 +298,11 @@ def undersample(train_dataset, sampling_ratio):
     return train_dataset
 
 def set_model(sample, device, args, train=True,
-              finetune=False, model_path=None):
+              experiment_name=None, finetune=False, model_path=None):
     # Create a model and criterion
     num_classes = 2
 
-    if (args.model == 'unet') or (args.model == 'attn_unet'):
+    if 'unet' in args.model:
         if args.model == 'unet':
             model = UNet(n_channels=sample.shape[0],
                          n_classes=num_classes,
@@ -323,27 +323,21 @@ def set_model(sample, device, args, train=True,
                                   bilinear=args.bilinear,
                                   batch_size=args.batch_size)
 
-        criterion = NIMSCrossEntropyLoss(device=device,
-                                         num_classes=num_classes,
-                                         use_weights=args.cross_entropy_weight,
-                                         reference=args.reference)
-        # criterion = NIMSBinaryFocalLoss()
-        # criterion = MSELoss(device=device)
-
-    elif args.model == 'suc_unet':
-        model = SuccessiveUNet(n_channels=sample.shape[0],
-                               n_classes=num_classes,
-                               n_blocks=args.n_blocks,
-                               start_channels=args.start_channels,
-                               pos_loc=args.pos_loc,
-                               pos_dim=args.pos_dim,
-                               bilinear=args.bilinear,
-                               batch_size=args.batch_size)
+        elif args.model == 'suc_unet':
+            model = SuccessiveUNet(n_channels=sample.shape[0],
+                                   n_classes=num_classes,
+                                   n_blocks=args.n_blocks,
+                                   start_channels=args.start_channels,
+                                   pos_loc=args.pos_loc,
+                                   pos_dim=args.pos_dim,
+                                   bilinear=args.bilinear,
+                                   batch_size=args.batch_size)
         
-        criterion = NIMSCrossEntropyLoss(device=device,
+        criterion = NIMSCrossEntropyLoss(args=args,
+                                         device=device,
                                          num_classes=num_classes,
                                          use_weights=args.cross_entropy_weight,
-                                         reference=args.reference)
+                                         experiment_name=experiment_name)
         
     elif args.model == 'convlstm':
         assert args.window_size == args.target_num, \
@@ -550,7 +544,7 @@ def get_min_max_values(dataset):
     # Make indices list
     indices = list(range(len(dataset)))
 
-    num_processes = 16
+    num_processes = cpu_count() // 4
     num_indices_per_process = len(indices) // num_processes
 
     # Create queue

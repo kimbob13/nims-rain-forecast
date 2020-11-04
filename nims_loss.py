@@ -1,42 +1,79 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.multiprocessing import Process, Queue
 from pytorch_lightning.metrics.functional.classification import confusion_matrix
 
 import numpy as np
 from sklearn.utils.class_weight import compute_class_weight
+from scipy.special import softmax
 
 import warnings
 warnings.filterwarnings(action='ignore')
 
 __all__ = ['MSELoss', 'NIMSCrossEntropyLoss', 'NIMSBinaryFocalLoss']
 
-class RMSELoss(nn.Module):
-    def __init__(self, eps=1e-6):
-        super().__init__()
-        self.mse = nn.MSELoss()
-        self.eps = eps
-        
-    def forward(self, yhat, y):
-        loss = torch.sqrt(self.mse(yhat, y) + self.eps)
-        return loss
+def _save_output_plot(preds, target_time, dataset_dir, experiment_name, queue):
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import os
+    
+    year   = target_time[0][0]
+    month  = target_time[0][1]
+    day    = target_time[0][2]
+    hour   = target_time[0][3]
+    from_h = target_time[0][4]
+
+    preds_plot = softmax(preds[0], axis=0)[0]
+    curr_pred_date = '{:4d}-{:02d}-{:02d}:{:02d}+{:02d}'.format(year,
+                                                                month,
+                                                                day,
+                                                                hour,
+                                                                from_h)
+    heatmap_plot = sns.heatmap(preds_plot, cmap='Blues')
+    plt.title(curr_pred_date)
+    output_path = os.path.join(dataset_dir, 'NIMS_OUTPUT', experiment_name, str(year),
+                               '{:4d}{:02d}{:02d}'.format(year, month, day), curr_pred_date + '.jpg')
+    plt.savefig(output_path, optimize=True)
+
+    queue.put(0)
+
+def save_output_plot(preds_list, dataset_dir, experiment_name):
+    num_proc = len(preds_list)
+
+    queues = []
+    for i in range(num_proc):
+        queues.append(Queue())
+
+    processes = []
+    for i in range(num_proc):
+        processes.append(Process(target=_save_output_plot,
+                                 args=(preds_list[i][0], preds_list[i][1],
+                                       dataset_dir, experiment_name, queues[i])))
+
+    for i in range(num_proc):
+        processes[i].start()
+
+    for i in range(num_proc):
+        processes[i].join()
 
 class ClassificationStat(nn.Module):
-    def __init__(self, num_classes=2, reference=None):
+    def __init__(self, args, num_classes=2):
         super().__init__()
+        self.args = args
         self.num_classes = num_classes
-        self.reference = reference
+        self.reference = args.reference
 
     def get_stat(self, preds, targets, mode):
         if mode == 'train':
             _, pred_labels = preds.topk(1, dim=1, largest=True, sorted=True)
             b = pred_labels.shape[0]
-            
-            if b==0:
+            if b == 0:
                 return
             
             pred_labels = pred_labels.squeeze(1).detach().reshape(b, -1)
             target_labels = targets.data.detach().reshape(b, -1)
+        
         elif (mode == 'valid') or (mode == 'test'):
             _, pred_labels = preds.topk(1, dim=1, largest=True, sorted=True)
             b, _, num_stn = pred_labels.shape
@@ -84,35 +121,17 @@ class ClassificationStat(nn.Module):
         targets_idx = targets_norain_idx + targets_rain_idx
         
         return np.array(targets_idx)
-    
-class MSELoss(ClassificationStat):
-    def __init__(self, device):
-        super().__init__(num_classes=2)
-        self.device = device
-
-    def forward(self, preds, targets, target_time,
-                stn_codi, logger=None, test=False):
-        stn_preds = preds[:, :, stn_codi[:, 0], stn_codi[:, 1]]
-        stn_preds = stn_preds.squeeze(0)
-        stn_targets = targets[:, stn_codi[:, 0], stn_codi[:, 1]]
-
-        # stn_targets_label = torch.where(stn_targets >= 0.1,
-        #                                 torch.ones(stn_targets.shape).to(self.device),
-        #                                 torch.zeros(stn_targets.shape).to(self.device)).to(self.device)
-        # correct, hit, miss, fa, cn = self.get_stat(stn_preds, stn_targets_label)
-
-        loss = F.mse_loss(stn_preds, stn_targets)
-        
-        if logger:
-            logger.update(loss=loss.item(), target_time=target_time, test=test)
-
-        return loss
 
 class NIMSCrossEntropyLoss(ClassificationStat):
-    def __init__(self, device, num_classes=2, use_weights=False, reference=None):
-        super().__init__(num_classes=num_classes, reference=reference)
+    def __init__(self, args, device, num_classes=2, use_weights=False, experiment_name=None):
+        super().__init__(args=args, num_classes=num_classes)
         self.device = device
         self.use_weights = use_weights
+        self.dataset_dir = args.dataset_dir
+        self.experiment_name = experiment_name
+
+        self.num_preds_batch = 100
+        self.preds_list = []
 
     def _get_class_weights(self, targets):
         _targets = targets.flatten().detach().cpu().numpy()
@@ -140,10 +159,19 @@ class NIMSCrossEntropyLoss(ClassificationStat):
 
         class_weights = None
         if self.use_weights:
-            class_weights = self._get_class_weights(targets)
+            self._get_class_weights(targets)
 
         # print('[cross_entropy] preds shape:', preds.shape)
         # print('[cross_entropy] targets shape:', targets.shape)
+
+        # Save preds plot in test mode
+        if mode == 'test':
+            _preds_cpu = preds.detach().cpu().numpy()
+            self.preds_list.append((_preds_cpu, target_time))
+            if (len(self.preds_list) % self.num_preds_batch) == 0:
+                save_output_plot(self.preds_list, self.dataset_dir, self.experiment_name)
+                self.save_count = 0
+                self.preds_list = []
         
         if self.reference == 'aws':
             stn_codi = self.remove_missing_station(targets)
@@ -264,4 +292,37 @@ class NIMSBinaryFocalLoss(ClassificationStat):
                           hit=hit, miss=miss, fa=fa, cn=cn,
                           target_time=target_time, test=test)
         
+        return loss
+
+class RMSELoss(nn.Module):
+    def __init__(self, eps=1e-6):
+        super().__init__()
+        self.mse = nn.MSELoss()
+        self.eps = eps
+        
+    def forward(self, yhat, y):
+        loss = torch.sqrt(self.mse(yhat, y) + self.eps)
+        return loss
+
+class MSELoss(ClassificationStat):
+    def __init__(self, device):
+        super().__init__(num_classes=2)
+        self.device = device
+
+    def forward(self, preds, targets, target_time,
+                stn_codi, logger=None, test=False):
+        stn_preds = preds[:, :, stn_codi[:, 0], stn_codi[:, 1]]
+        stn_preds = stn_preds.squeeze(0)
+        stn_targets = targets[:, stn_codi[:, 0], stn_codi[:, 1]]
+
+        # stn_targets_label = torch.where(stn_targets >= 0.1,
+        #                                 torch.ones(stn_targets.shape).to(self.device),
+        #                                 torch.zeros(stn_targets.shape).to(self.device)).to(self.device)
+        # correct, hit, miss, fa, cn = self.get_stat(stn_preds, stn_targets_label)
+
+        loss = F.mse_loss(stn_preds, stn_targets)
+        
+        if logger:
+            logger.update(loss=loss.item(), target_time=target_time, test=test)
+
         return loss
