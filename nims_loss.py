@@ -145,8 +145,8 @@ class NIMSCrossEntropyLoss(ClassificationStat):
 
         return torch.from_numpy(weights).type(torch.FloatTensor).to(self.device)
 
-    def forward(self, preds, targets, target_time,
-                stn_codi, mode, prev_preds=None, logger=None):
+    def forward(self, preds, targets, target_time, stn_codi, mode,
+                prev_preds=None, logger=None):
         """
         <Parameter>
         preds [torch.tensor]: NCHW format (N: batch size, C: class num)
@@ -203,6 +203,11 @@ class NIMSCrossEntropyLoss(ClassificationStat):
         
         if prev_preds is not None and len(curr_codi) == 0:
             loss = torch.tensor(0., device=self.device)
+            correct, hit, miss, fa, cn = self.get_stat(prev_preds, stn_targets, mode=mode)
+            if logger:
+                logger.update(loss=loss.item(), correct=correct,
+                              hit=hit, miss=miss, fa=fa, cn=cn,
+                              target_time=target_time, mode=mode)
         else:
             if self.reference == 'aws':
                 correct, hit, miss, fa, cn = self.get_stat(final_preds, stn_targets, mode=mode)

@@ -58,12 +58,8 @@ if __name__ == '__main__':
 
     ### set LDAPS, OBS dir path
     test_year = int(args.test_time[:4])
-    if test_year == 2019:
-        LDAPS_root_dir = '/home/osilab12/ssd/NIMS_LDPS'
-        OBS_root_dir = '/home/osilab12/ssd/OBS/test'
-    elif test_year == 2020:
-        LDAPS_root_dir = '/home/osilab12/hdd2/NIMS_LDPS'
-        OBS_root_dir = '/home/osilab12/ssd/OBS/test'
+    LDAPS_root_dir = '/home/osilab12/ssd2/NIMS_LDPS'
+    OBS_root_dir = '/home/osilab12/ssd2/OBS'
     
     test_time = args.test_time
     LDAPS_year_dir = os.path.join(LDAPS_root_dir, test_time[:4])
@@ -71,9 +67,8 @@ if __name__ == '__main__':
     
     LDAPS_dir = os.path.join(LDAPS_year_dir, test_time)
     
-    
     result_path = './results'
-    logger_folder = 'LDAPS_Logger'
+    logger_folder = 'LDAPS_Logger_heavy'
 
     if not os.path.isdir(result_path):
         os.mkdir(result_path)
@@ -84,9 +79,9 @@ if __name__ == '__main__':
     if not os.path.isdir(test_result_path):
         os.mkdir(test_result_path)
         
-    codi_aws_df = pd.read_csv('./codi_ldps_aws/codi_ldps_aws_512.csv')
+    codi_aws_df = pd.read_csv('./codi_ldps_aws/codi_ldps_aws_602_781.csv')
     dii_info = np.array(codi_aws_df['dii']) - 1
-    stn_codi = np.array([(dii // 512, dii % 512) for dii in dii_info])
+    stn_codi = np.array([(dii // 602, dii % 602) for dii in dii_info])
 
     ldps_logger = LDPSLogger(loss=False, correct=False, binary_f1=False,
                              macro_f1=False, micro_f1=False,
@@ -109,7 +104,7 @@ if __name__ == '__main__':
     # load data in dictionary key = time(0~23) / value = np.array // Total data load
     gt_data_dict = defaultdict(list)
     for i, data_dir in enumerate(gt_path_list):
-        tmp_data = np.load(data_dir).reshape(512, 512, 1).transpose()
+        tmp_data = np.load(data_dir).reshape(602, 781, 1).transpose()
         gt_data_dict[i] = tmp_data
         
     
@@ -124,13 +119,21 @@ if __name__ == '__main__':
     unis_data_dict = defaultdict(list)
 
     for a in unis_data_path_list:
-        tmp_h, tmp_t =a.split('_')[3], a.split('_')[4][8:10]
+        tmp_h, tmp_t = a.split('_')[3], a.split('_')[4][8:10]
         tmp_list = [tmp_h, tmp_t]
         tmp_key = '_'.join(tmp_list)
 
-        tmp_data = np.load(os.path.join(LDAPS_dir, a)).reshape(512,512,20).transpose()
-        tmp_data = tmp_data[2, :, :]
+        tmp_data = np.load(os.path.join(LDAPS_dir, a)).reshape(602, 781, 5).transpose()
+        tmp_data = tmp_data[0, :, :]
         unis_data_dict[tmp_key] = tmp_data
+
+    def remove_missing_station(targets):
+        # targets_norain_idx = (targets == 0).nonzero().tolist() # [(x, y)'s]
+        # targets_rain_idx = (targets == 1).nonzero().tolist()
+        # targets_idx = targets_norain_idx + targets_rain_idx
+        # x, y = np.nonzero(targets >= 0)
+
+        return np.array(np.nonzero(targets >= 0))
 
     for start_hour in range(4):
         start_hour = start_hour * 6 # 0, 6, 12, 18
@@ -145,15 +148,19 @@ if __name__ == '__main__':
         ### preprocessing reference data
 
             reference_data = np.load(gt_path)
-            reference_data = np.where(reference_data >= 0.1, np.ones(reference_data.shape), np.zeros(reference_data.shape))
-            reference_data = reference_data[stn_codi[:, 0], stn_codi[:, 1]]
+            reference_data = np.where(reference_data < 0, -9999 * np.ones(reference_data.shape),
+                                         np.where(reference_data < 10.0, np.zeros(reference_data.shape), np.ones(reference_data.shape)))
+            filtered_stn_codi = remove_missing_station(reference_data)
+            # print('filtered len:', filtered_stn_codi.shape)
+            # import sys; sys.exit()
+            reference_data = reference_data[filtered_stn_codi[0, :], filtered_stn_codi[1, :]]
 
         ### preprocessing LDPS data
             target_key = "h0{0:02d}_{1:02d}".format(i, start_hour)
             LDPS_data = unis_data_dict[target_key]
             LDPS_data = np.asarray(LDPS_data) #LDPS_Data.size = (512,512)
-            LDPS_data = np.where(LDPS_data >= 0.1, np.ones(LDPS_data.shape), np.zeros(LDPS_data.shape))
-            LDPS_data = LDPS_data[stn_codi[:, 0], stn_codi[:, 1]]
+            LDPS_data = np.where(LDPS_data >= 10, np.ones(LDPS_data.shape), np.zeros(LDPS_data.shape))
+            LDPS_data = LDPS_data[filtered_stn_codi[0, :], filtered_stn_codi[1, :]]
 
         ### get confusion matrix
 
