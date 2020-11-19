@@ -3,9 +3,9 @@ import numpy as np
 from tqdm import tqdm
 from torch.utils.data import DataLoader, Subset
 
-from nims_util import *
-from nims_dataset import NIMSDataset, ToTensor
-from nims_trainer import NIMSTrainer
+from core.nims_util import *
+from core.nims_dataset import NIMSDataset, ToTensor
+from core.nims_trainer import NIMSTrainer
 #from nims_variable import parse_variables
 
 import os

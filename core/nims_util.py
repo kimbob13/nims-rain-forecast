@@ -7,7 +7,7 @@ import torchvision.transforms as transforms
 
 from model.unet_model import UNet, SuccessiveUNet, AttentionUNet
 from model.conv_lstm import EncoderForecaster
-from nims_loss import *
+from .nims_loss import *
 
 import os
 import random
@@ -214,89 +214,6 @@ def set_device(args):
 
     return device
 
-def _undersample(train_dataset, indices, pid=None, queue=None):
-    target_nonzero_means = []
-
-    for idx in indices:
-        target = train_dataset.get_real_gt(idx)
-        total_pixel = len(target.flatten())
-
-        # Missing values are -99. Change these values to 0
-        target[target < 0] = 0.0
-
-        # Get average rain for target
-        max_one_hour_value = np.amax(target)
-        nonzero_count = np.count_nonzero(target)
-        if (max_one_hour_value == 0) or \
-           (nonzero_count < (total_pixel * 0.000019)):
-            # If the # of nonzero pixels are less than 0.0019% of total pixels,
-            # we treat it as non-rainy instance, so make avg_value as 0
-            target_nonzero_means.append((idx, 0))
-        else:
-            # Average over nonzero data
-            avg_rain = np.mean(target[np.nonzero(target)])
-            target_nonzero_means.append((idx, avg_rain))
-
-    if queue:
-        queue.put(target_nonzero_means)
-    else:
-        return target_nonzero_means
-
-def undersample(train_dataset, sampling_ratio):
-    # Make indices list
-    indices = list(range(len(train_dataset)))
-
-    num_processes = cpu_count() // 2
-    num_indices_per_process = len(indices) // num_processes
-
-    # Create queue
-    queues = []
-    for i in range(num_processes):
-        queues.append(Queue())
-
-    # Create processes
-    processes = []
-    for i in range(num_processes):
-        start_idx = i * num_indices_per_process
-        end_idx = start_idx + num_indices_per_process
-
-        if i == num_processes - 1:
-            processes.append(Process(target=_undersample,
-                                     args=(train_dataset, indices[start_idx:],
-                                           i, queues[i])))
-        else:
-            processes.append(Process(target=_undersample,
-                                     args=(train_dataset, indices[start_idx:end_idx],
-                                           i, queues[i])))
-
-    # Start processes
-    for i in range(num_processes):
-        processes[i].start()
-
-    # Get return value of each process
-    target_nonzero_means = []
-    for i in tqdm(range(num_processes)):
-        proc_result = queues[i].get()
-        target_nonzero_means.extend(proc_result)
-
-    # Join processes
-    for i in range(num_processes):
-        processes[i].join()
-
-    # Sampling index for non-rainy instance
-    selected_idx = []
-    for idx, target_nonzero_mean in target_nonzero_means:
-        if target_nonzero_mean < 2.0: # This case is not rainy hour
-            if np.random.uniform() < sampling_ratio:
-                selected_idx.append(idx)
-        else: # This case is rainy hour
-            selected_idx.append(idx)
-
-    # Undersample train dataset
-    train_dataset = Subset(train_dataset, selected_idx)
-
-    return train_dataset
-
 def set_model(sample, device, args, train=True,
               experiment_name=None, finetune=False, model_path=None):
     # Create a model and criterion
@@ -412,54 +329,11 @@ def set_experiment_name(args, date):
     if args.custom_name:
         custom_name = '_' + args.custom_name
 
-    if args.model == 'unet':            
-        experiment_name = 'nims-{}-utc{}-unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}-{}_sr{}_{}{}_wd{}{}{}{}{}{}' \
+    if 'unet' in args.model:
+        experiment_name = 'nims-{}-utc{}-{}_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}-{}_sr{}_{}{}_wd{}{}{}{}{}{}' \
                           .format(args.reference,
                                   args.model_utc,
-                                  args.n_blocks,
-                                  args.start_channels,
-                                  args.window_size,
-                                  args.num_epochs,
-                                  args.batch_size,
-                                  args.pos_loc,
-                                  args.pos_dim,
-                                  args.sampling_ratio,
-                                  args.optimizer,
-                                  args.lr,
-                                  wd_str,
-                                  cross_entropy_weight,
-                                  normalization,
-                                  bilinear,
-                                  heavy_rain,
-                                  custom_name,
-                                  date_str)
-
-    elif args.model == 'suc_unet':
-        experiment_name = 'nims-{}-utc{}-suc_unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}-{}_sr{}_{}{}_wd{}{}{}{}{}{}' \
-                          .format(args.reference,
-                                  args.model_utc,
-                                  args.n_blocks,
-                                  args.start_channels,
-                                  args.window_size,
-                                  args.num_epochs,
-                                  args.batch_size,
-                                  args.pos_loc,
-                                  args.pos_dim,
-                                  args.sampling_ratio,
-                                  args.optimizer,
-                                  args.lr,
-                                  wd_str,
-                                  cross_entropy_weight,
-                                  normalization,
-                                  bilinear,
-                                  heavy_rain,
-                                  custom_name,
-                                  date_str)
-        
-    elif args.model == 'attn_unet':
-        experiment_name = 'nims-{}-utc{}-attn_unet_nb{}_ch{}_ws{}_ep{}_bs{}_pos{}-{}_sr{}_{}{}_wd{}{}{}{}{}{}' \
-                          .format(args.reference,
-                                  args.model_utc,
+                                  args.model,
                                   args.n_blocks,
                                   args.start_channels,
                                   args.window_size,
@@ -610,46 +484,6 @@ def get_min_max_values(dataset):
 
     return max_values, min_values
 
-def get_min_max_values_pool(dataset):
-    '''
-        get_min_max_values with pool. original version of this function uses Process instance for multiprocessing.
-        However, this function uses Pool instance, instead.
-    '''
-
-    indices = list(range(len(dataset)))
-    num_processes = 8
-    num_indices_per_process = len(indices) // num_processes
-
-    pool = Pool(num_processes)
-    indices_list = []
-    
-    for i in range(num_processes):
-        start_idx = i * num_indices_per_process
-        end_idx = start_idx + num_indices_per_process
-        
-        if i == num_processes - 1:
-            indices_for_process = indices[start_idx:]
-        else:
-            indices_for_process = indices[start_idx:end_idx]
-        indices_list.append(indices_for_process)
-    
-    proc_results = pool.starmap(_get_min_max_values, zip(itertools.repeat(dataset), indices_list))
-    
-    max_values, min_values = None, None
-    for i in tqdm(range(num_processes)):
-        proc_result = proc_results[i]
-        if i == 0:
-            max_values = proc_result[0]
-            min_values = proc_result[1]
-        else:
-            max_values = np.maximum(max_values, proc_result[0])
-            min_values = np.minimum(min_values, proc_result[1])
-
-    max_values = torch.tensor(max_values)
-    min_values = torch.tensor(min_values)
-
-    return max_values, min_values
-
 def get_min_max_values_no_mp(dataset):
     '''
         get_min_max_values function with no multiprocessing
@@ -679,51 +513,85 @@ def get_min_max_normalization(max_values, min_values):
 
     return transform
 
-if __name__ == "__main__":
+def _undersample(train_dataset, indices, pid=None, queue=None):
+    target_nonzero_means = []
 
-    args = parse_args()
+    for idx in indices:
+        target = train_dataset.get_real_gt(idx)
+        total_pixel = len(target.flatten())
 
-    from nims_dataset import NIMSDataset, ToTensor
-    
-    nims_train_dataset = NIMSDataset(model=args.model,
-                                     model_utc=args.model_utc,
-                                     window_size=args.window_size,
-                                     root_dir=args.dataset_dir,
-                                     test_time=args.test_time,
-                                     train=True,
-                                     transform=ToTensor())
-    '''
-    nims_test_dataset = NIMSDataset(model=args.model,
-                                    model_utc=args.model_utc,
-                                    window_size=args.window_size,
-                                    root_dir=args.dataset_dir,
-                                    test_time=args.test_time,
-                                    train=False,
-                                    transform=ToTensor())
-    '''
+        # Missing values are -99. Change these values to 0
+        target[target < 0] = 0.0
 
-    # Test
-    ldaps_input, _, _ = nims_train_dataset[0]
+        # Get average rain for target
+        max_one_hour_value = np.amax(target)
+        nonzero_count = np.count_nonzero(target)
+        if (max_one_hour_value == 0) or \
+           (nonzero_count < (total_pixel * 0.000019)):
+            # If the # of nonzero pixels are less than 0.0019% of total pixels,
+            # we treat it as non-rainy instance, so make avg_value as 0
+            target_nonzero_means.append((idx, 0))
+        else:
+            # Average over nonzero data
+            avg_rain = np.mean(target[np.nonzero(target)])
+            target_nonzero_means.append((idx, avg_rain))
 
-    # Get min/max values
-    max_values, min_values = get_min_max_values(nims_train_dataset)
+    if queue:
+        queue.put(target_nonzero_means)
+    else:
+        return target_nonzero_means
 
-    # Check shape
-    print('max_values shape:', max_values.shape)
-    print('min_values shape:', min_values.shape)
+def undersample(train_dataset, sampling_ratio):
+    # Make indices list
+    indices = list(range(len(train_dataset)))
 
-    # Min-max transform
-    min_max_transform = get_min_max_normalization(max_values, min_values)
+    num_processes = cpu_count() // 2
+    num_indices_per_process = len(indices) // num_processes
 
-    # Do transform
-    ldaps_input_normalized = min_max_transform(ldaps_input)
+    # Create queue
+    queues = []
+    for i in range(num_processes):
+        queues.append(Queue())
 
-    # Compare of this result
-    print('normalized:', ldaps_input_normalized[0, 0, 0])
+    # Create processes
+    processes = []
+    for i in range(num_processes):
+        start_idx = i * num_indices_per_process
+        end_idx = start_idx + num_indices_per_process
 
-    # Compare of this result
-    print('original:', ldaps_input[0, 0, 0])
+        if i == num_processes - 1:
+            processes.append(Process(target=_undersample,
+                                     args=(train_dataset, indices[start_idx:],
+                                           i, queues[i])))
+        else:
+            processes.append(Process(target=_undersample,
+                                     args=(train_dataset, indices[start_idx:end_idx],
+                                           i, queues[i])))
 
-    # Min
-    # print("max_value :", max_values[0,0,0])
-    # print("min_value : ", min_values[0,0,0])
+    # Start processes
+    for i in range(num_processes):
+        processes[i].start()
+
+    # Get return value of each process
+    target_nonzero_means = []
+    for i in tqdm(range(num_processes)):
+        proc_result = queues[i].get()
+        target_nonzero_means.extend(proc_result)
+
+    # Join processes
+    for i in range(num_processes):
+        processes[i].join()
+
+    # Sampling index for non-rainy instance
+    selected_idx = []
+    for idx, target_nonzero_mean in target_nonzero_means:
+        if target_nonzero_mean < 2.0: # This case is not rainy hour
+            if np.random.uniform() < sampling_ratio:
+                selected_idx.append(idx)
+        else: # This case is rainy hour
+            selected_idx.append(idx)
+
+    # Undersample train dataset
+    train_dataset = Subset(train_dataset, selected_idx)
+
+    return train_dataset

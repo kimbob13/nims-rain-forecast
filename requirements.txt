@@ -1,4 +1,4 @@
-xarray
 torchsummary
 tqdm
 setproctitle
+pytorch-lightning

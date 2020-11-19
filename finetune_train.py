@@ -3,10 +3,10 @@ import torch
 from torch.utils.data import DataLoader, Subset
 from datetime import datetime, timedelta
 
-from nims_util import *
-from nims_util import get_min_max_values_pool, get_min_max_values_no_mp
-from nims_dataset import NIMSDataset, ToTensor
-from nims_trainer import NIMSTrainer
+from core.nims_util import *
+from core.nims_util import get_min_max_values_no_mp
+from core.nims_dataset import NIMSDataset, ToTensor
+from core.nims_trainer import NIMSTrainer
 #from nims_variable import parse_variables
 
 try:

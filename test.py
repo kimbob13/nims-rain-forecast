@@ -1,9 +1,9 @@
 import torch
 from torch.utils.data import DataLoader
 
-from nims_util import *
-from nims_dataset import NIMSDataset, ToTensor
-from nims_trainer import NIMSTrainer
+from core.nims_util import *
+from core.nims_dataset import NIMSDataset, ToTensor
+from core.nims_trainer import NIMSTrainer
 
 import numpy as np
 import pandas as pd
@@ -20,29 +20,6 @@ MONTH_DAY = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 #########################################################
 # 1. Function for test setting part                     #
 #########################################################
-
-def create_output_dir(args, date, experiment_name):
-    # (Re)create output directory for this year
-    output_dir = os.path.join(args.dataset_dir, 'NIMS_OUTPUT', experiment_name, str(date['year']))
-    if os.path.isdir(output_dir):
-        yes_no = input('It is about to remove whole output directory and recreate. CONTINUE? [YES or NO] : ')
-        shutil.rmtree(output_dir)
-        if yes_no.upper().startswith('N'):
-            print('Exit the test program')
-            print()
-            sys.exit()
-
-        print()
-
-    os.makedirs(output_dir, exist_ok=True)
-
-    curr_date = datetime(year=date['year'], month=date['start_month'], day=date['start_day'])
-    while True:
-        os.mkdir(os.path.join(output_dir, curr_date.strftime('%Y%m%d')))
-        if curr_date.month == date['end_month'] and curr_date.day == date['end_day']:
-            break
-
-        curr_date += timedelta(days=1)
 
 def select_experiment():
     results_dir = os.path.join('./results')
@@ -74,6 +51,29 @@ def select_experiment():
     print('[best bias ]: {:5f}'.format(chosen_weight['best_bias']))
 
     return chosen_weight, experiment_name
+
+def create_output_dir(args, date, experiment_name):
+    # (Re)create output directory for this year
+    output_dir = os.path.join(args.dataset_dir, 'NIMS_OUTPUT', experiment_name, str(date['year']))
+    if os.path.isdir(output_dir):
+        yes_no = input('It is about to remove whole output directory and recreate. CONTINUE? [YES or NO] : ')
+        shutil.rmtree(output_dir)
+        if yes_no.upper().startswith('N'):
+            print('Exit the test program')
+            print()
+            sys.exit()
+
+        print()
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    curr_date = datetime(year=date['year'], month=date['start_month'], day=date['start_day'])
+    while True:
+        os.mkdir(os.path.join(output_dir, curr_date.strftime('%Y%m%d')))
+        if curr_date.month == date['end_month'] and curr_date.day == date['end_day']:
+            break
+
+        curr_date += timedelta(days=1)
 
 def create_test_date_list(date, experiment_name):
     test_date_list = []

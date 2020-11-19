@@ -4,7 +4,6 @@ from sklearn.metrics import f1_score, confusion_matrix
 from sklearn.utils.class_weight import compute_class_weight
 
 from LDPS_logger import LDPSLogger
-from nims_dataset import NIMSDataset
 
 from tqdm import tqdm
 import os
@@ -67,8 +66,9 @@ if __name__ == '__main__':
     
     LDAPS_dir = os.path.join(LDAPS_year_dir, test_time)
     
-    result_path = './results'
-    logger_folder = 'LDAPS_Logger_heavy'
+    result_path = '../results'
+    # logger_folder = 'LDAPS_Logger_heavy'
+    logger_folder = 'LDAPS_Logger'
 
     if not os.path.isdir(result_path):
         os.mkdir(result_path)
@@ -79,7 +79,7 @@ if __name__ == '__main__':
     if not os.path.isdir(test_result_path):
         os.mkdir(test_result_path)
         
-    codi_aws_df = pd.read_csv('./codi_ldps_aws/codi_ldps_aws_602_781.csv')
+    codi_aws_df = pd.read_csv('../codi_ldps_aws/codi_ldps_aws_602_781.csv')
     dii_info = np.array(codi_aws_df['dii']) - 1
     stn_codi = np.array([(dii // 602, dii % 602) for dii in dii_info])
 
@@ -149,7 +149,7 @@ if __name__ == '__main__':
 
             reference_data = np.load(gt_path)
             reference_data = np.where(reference_data < 0, -9999 * np.ones(reference_data.shape),
-                                         np.where(reference_data < 10.0, np.zeros(reference_data.shape), np.ones(reference_data.shape)))
+                                         np.where(reference_data < 0.1, np.zeros(reference_data.shape), np.ones(reference_data.shape)))
             filtered_stn_codi = remove_missing_station(reference_data)
             # print('filtered len:', filtered_stn_codi.shape)
             # import sys; sys.exit()
@@ -159,7 +159,7 @@ if __name__ == '__main__':
             target_key = "h0{0:02d}_{1:02d}".format(i, start_hour)
             LDPS_data = unis_data_dict[target_key]
             LDPS_data = np.asarray(LDPS_data) #LDPS_Data.size = (512,512)
-            LDPS_data = np.where(LDPS_data >= 10, np.ones(LDPS_data.shape), np.zeros(LDPS_data.shape))
+            LDPS_data = np.where(LDPS_data >= 0.1, np.ones(LDPS_data.shape), np.zeros(LDPS_data.shape))
             LDPS_data = LDPS_data[filtered_stn_codi[0, :], filtered_stn_codi[1, :]]
 
         ### get confusion matrix

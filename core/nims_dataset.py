@@ -2,7 +2,7 @@ import torch
 from torch.utils.data import Dataset
 import numpy as np
 
-from nims_util import *
+from .nims_util import *
 
 from datetime import datetime, timedelta
 import os
@@ -27,8 +27,8 @@ class NIMSDataset(Dataset):
         self.root_dir = root_dir
         self.date = date
         self.lite = lite
-#         self.rain_threshold = 10 if heavy_rain else 0.1
-        self.rain_threshold = [0.1, 10.0]
+        # self.rain_threshold = 10 if heavy_rain else 0.1
+        self.rain_threshold = [0.1, 10]
         self.train = train
         self.transform = transform
         
@@ -202,37 +202,6 @@ class NIMSDataset(Dataset):
             return unis
         else:
             p, u = data_list
-                        
-            """
-            pres = np.load(p).reshape(512, 512, 20).transpose()
-            unis = np.load(u).reshape(512, 512, 20).transpose()
-            
-            if use_kindex:
-                T_850 = np.expand_dims(pres[9], axis=0)
-                T_700 = np.expand_dims(pres[10], axis=0)
-                T_500 = np.expand_dims(pres[11], axis=0)
-
-                rh_850 = np.expand_dims(np.where(pres[13] > 0, pres[13], 0.), axis=0)
-                rh_700 = np.expand_dims(np.where(pres[14] > 0, pres[14], 0.), axis=0)
-
-                t_850 = T_850 - 273.15
-                t_700 = T_700 - 273.15
-
-                D_850 = (rh_850 / 100) ** (1 / 8) * (112 + (0.9 * t_850)) - 112 + (0.1 * t_850) + 273.15
-                D_700 = (rh_700 / 100) ** (1 / 8) * (112 + (0.9 * t_700)) - 112 + (0.1 * t_700) + 273.15
-                kindex = (T_850 - T_500) + D_850 - (T_700 - D_700)
-            
-            concat_list = []
-            if pres_idx_list != None:
-                pres = pres[pres_idx_list, :, :]
-                concat_list.append(pres)
-            if unis_idx_list != None:
-                unis = unis[unis_idx_list, :, :]
-                concat_list.append(unis)
-            if use_kindex:
-                concat_list.append(kindex)
-            """
-            
             pres = np.load(p).reshape(602, 781, 3).transpose()
             unis = np.load(u).reshape(602, 781, 5).transpose()
             

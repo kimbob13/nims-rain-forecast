@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from nims_util import select_date
+from core.nims_util import select_date
 
 # codi_aws_df = pd.read_csv('./codi_ldps_aws/codi_ldps_aws_512.csv')
 codi_aws_df = pd.read_csv('./codi_ldps_aws/codi_ldps_aws_602_781.csv')

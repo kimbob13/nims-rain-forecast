@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 import os
 
-from nims_util import NIMSStat
+from .nims_util import NIMSStat
 
 __all__ = ['NIMSLogger']
 

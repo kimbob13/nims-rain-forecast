@@ -1,6 +1,6 @@
 import torch
-from nims_util import get_min_max_normalization
-from nims_logger import NIMSLogger
+from .nims_util import get_min_max_normalization
+from .nims_logger import NIMSLogger
 
 from tqdm import tqdm
 import os
