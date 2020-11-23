@@ -10,21 +10,6 @@ from core.nims_trainer import NIMSTrainer
 
 import os
 
-def create_results_dir(experiment_name):
-    # Base results directory
-    results_dir = os.path.join('./results', experiment_name)
-    if not os.path.isdir(results_dir):
-        os.mkdir(results_dir)
-
-    # Create evaluation directory if not
-    eval_dir = os.path.join(results_dir, 'eval')
-    if not os.path.isdir(eval_dir):
-        os.mkdir(eval_dir)
-
-    # Create comparison_graph directory if not
-    graph_dir = os.path.join(results_dir, 'comparison_graph')
-    if not os.path.isdir(graph_dir):
-        os.mkdir(graph_dir)
 
 if __name__ == '__main__':
     print()

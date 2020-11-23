@@ -15,7 +15,13 @@ except:
     pass
 
 if __name__ == '__main__':
+    print()
+    phase_str = '=' * 16 + ' {:^25s} ' + '=' * 16
+    # Select start and end date for train and valid
+    print(phase_str.format('Train Range'))
     date = select_date()
+    print(phase_str.format('Valid Range'))
+    valid_date = select_date()
 
     args = parse_args()
     args.num_epochs = args.finetune_num_epochs
@@ -50,8 +56,9 @@ if __name__ == '__main__':
                      'start_day': train_time.day,
                      'end_month': train_time.month,
                      'end_day': train_time.day}
-        
+        # Train dataset for fine-tuning
         nims_train_dataset = NIMSDataset(model=args.model,
+                                         reference=args.reference,
                                          model_utc=args.model_utc,
                                          window_size=args.window_size,
                                          root_dir=args.dataset_dir,
@@ -59,6 +66,18 @@ if __name__ == '__main__':
                                          lite=args.lite,
                                          train=True,
                                          transform=ToTensor())
+        
+        # Valid dataset
+        nims_valid_dataset = NIMSDataset(model=args.model,
+                                     reference=args.reference,
+                                     model_utc=args.model_utc,
+                                     window_size=args.window_size,
+                                     root_dir=args.dataset_dir,
+                                     date=valid_date,
+                                     lite=args.lite,
+                                     heavy_rain=args.heavy_rain,
+                                     train=False,
+                                     transform=ToTensor())
 
         # Get normalization transform
         normalization = None
@@ -79,13 +98,9 @@ if __name__ == '__main__':
         # Set experiment name and use it as process name if possible
         experiment_name = set_experiment_name(args, '')
 
-        # XXX: Need to change using curr_date
-        if test_time == finetune_start:
-            pretrained_model = 'nims-utc0-unet_nb5_ch32_ws6_ep2_bs1_pos0-0_sr1.0_adam0.001_wd5e-05_norm'
-        else:
-            train_time_str = train_time.strftime("%Y%m%d")
-            pretrained_model = experiment_name + '_{}'.format(train_time_str)
-        model_path = os.path.join('./results', 'trained_model', '{}.pt'.format(pretrained_model))
+        # Get directories in results
+        pretrained_model = select_pretrained_model()
+        model_path = os.path.join('./results', pretrained_model, 'trained_weight.pt')
         
         # Create a model and criterion
         model, criterion = set_model(sample, device, args, train=True,
@@ -107,15 +122,22 @@ if __name__ == '__main__':
         train_loader = DataLoader(nims_train_dataset, batch_size=args.batch_size,
                                   shuffle=False, num_workers=args.num_workers,
                                   pin_memory=True)
-
+        
+        valid_loader = DataLoader(nims_valid_dataset, batch_size=1,
+                                  shuffle=False, num_workers=args.num_workers,
+                                  pin_memory=True)
         # Set the optimizer
         optimizer, scheduler = set_optimizer(model, args)
-
+        
         # Start training
         print ("fine-tuning for {}".format(test_time.strftime("%Y%m%d")))
-        experiment_name += '_{}'.format(test_time.strftime("%Y%m%d"))
+        experiment_name += '_FT_{}'.format(test_time.strftime("%Y%m%d"))
+        
+        # Create necessary directory
+        create_results_dir(experiment_name)
+
         nims_trainer = NIMSTrainer(model, criterion, optimizer, scheduler, device,
-                                   train_loader, None, len(nims_train_dataset), 0,
-                                   experiment_name, args,
-                                   normalization=normalization)
+                           train_loader, valid_loader, experiment_name, args,
+                           normalization=normalization)
+        
         nims_trainer.train()

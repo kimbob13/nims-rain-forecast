@@ -23,6 +23,10 @@ class NIMSTrainer:
 
         self.train_loader = train_loader
         self.test_loader = test_loader
+        
+        self.nims_logger = None
+        self.nims_valid_logger = None
+                
 
         self.reference = args.reference
         self.stn_codi = self._get_station_coordinate()
@@ -138,18 +142,24 @@ class NIMSTrainer:
             print(self.info_str.format('Epoch {:3d} / {:3d} (GPU {})'.format(epoch, self.num_epochs, self.device_idx)))
 
             # Run training epoch
-            self._epoch(self.train_loader, mode='train', logger=self.nims_logger)
+            if self.train_loader:
+                self._epoch(self.train_loader, mode='train', logger=self.nims_logger)
 
             # Run validation epoch
-            self._epoch(self.test_loader, mode='valid', logger=self.nims_valid_logger)
+            if self.test_loader:
+                self._epoch(self.test_loader, mode='valid', logger=self.nims_valid_logger)
 
             # Get stat for train and valid of this epoch
-            epoch_train_loss, epoch_train_stat = self.nims_logger.epoch_stat(mode='train')
-            epoch_valid_loss, epoch_valid_stat = self.nims_valid_logger.epoch_stat(mode='valid')
+            if self.nims_logger:
+                epoch_train_loss, epoch_train_stat = self.nims_logger.epoch_stat(mode='train')
+            
+            if self.nims_valid_logger:
+                epoch_valid_loss, epoch_valid_stat = self.nims_valid_logger.epoch_stat(mode='valid')
 
             # Print stat
-            self._print_stat({'Train': (epoch_train_loss, epoch_train_stat),
-                              'Valid': (epoch_valid_loss, epoch_valid_stat)})
+            if self.nims_logger and self.nims_valid_logger:
+                self._print_stat({'Train': (epoch_train_loss, epoch_train_stat),
+                                  'Valid': (epoch_valid_loss, epoch_valid_stat)})
 
             # Save model based on the best validation loss
             if epoch_valid_stat.csi > self.trained_weight['best_csi']:

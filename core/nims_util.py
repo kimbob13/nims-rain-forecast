@@ -13,6 +13,7 @@ import os
 import random
 import argparse
 import time
+from pathlib import Path
 
 from tqdm import tqdm
 from multiprocessing import Process, Queue, cpu_count, Pool
@@ -24,12 +25,34 @@ try:
 except:
     pass
 
-__all__ = ['NIMSStat', 'select_date', 'parse_args', 'set_device', 'undersample', 'fix_seed',
-           'set_model', 'set_optimizer', 'set_experiment_name', 'get_min_max_values', 'get_min_max_normalization']
+__all__ = ['NIMSStat', 'create_results_dir', 'select_date', 'parse_args', 'set_device', 'undersample', 'fix_seed',
+           'set_model', 'select_pretrained_model', 'set_optimizer', 'set_experiment_name', 
+           'get_min_max_values', 'get_min_max_normalization']
 
 NIMSStat = namedtuple('NIMSStat', 'acc, csi, pod, far, f1, bias')
 MONTHLY_MODE = 1
 DAILY_MODE = 2
+
+LIST_NUM_MODE = 1
+PRETRAIN_NAME_MODE = 2
+
+
+def create_results_dir(experiment_name):
+    # Base results directory
+    results_dir = os.path.join('./results', experiment_name)
+    if not os.path.isdir(results_dir):
+        os.makedirs(results_dir, exist_ok=True)
+
+    # Create evaluation directory if not
+    eval_dir = os.path.join(results_dir, 'eval')
+    if not os.path.isdir(eval_dir):
+        os.mkdir(eval_dir)
+
+    # Create comparison_graph directory if not
+    graph_dir = os.path.join(results_dir, 'comparison_graph')
+    if not os.path.isdir(graph_dir):
+        os.mkdir(graph_dir)
+
 
 def select_date(test=False):
     format_str = '[{:<14s}] {:^25s} : '
@@ -140,12 +163,54 @@ def select_date(test=False):
     return {'year': start_year, 'start_month': start_month, 'start_day': start_day,
             'end_month': end_month, 'end_day': end_day}
 
+
+def select_pretrained_model():
+    format_str = '[{:<14s}] {:^25s} : '
+    
+    while True:
+        try:
+            print(format_str.format('1. Pre-Train Select',  '(1) List & Number (2) Insert Pre-Trained Dir Name'), end='')
+            pretrain_mode = int(input())
+
+            if pretrain_mode not in [LIST_NUM_MODE, PRETRAIN_NAME_MODE]:
+                print('You must enter value between 1 or 2')
+                continue
+        except ValueError:
+            print('You must enter integer only')
+            continue
+
+        if pretrain_mode == LIST_NUM_MODE:
+            paths = sorted(Path("./results").iterdir(), key=os.path.getmtime, reverse=True)
+            dir_name_lst = [str(path).replace("results/", "") for path in paths]
+
+            while True:
+                for idx, dir_name in enumerate(dir_name_lst):
+                    print("({}) {}".format(idx + 1, dir_name))
+
+                print(format_str.format('1-1. List & Number',  'Select Model (1)~({})'.format(len(paths))), end='')
+                model_idx = int(input())
+
+                if model_idx not in list(range(len(paths))):
+                    print('You must enter value from 1 to {}'.format(len(paths)))
+                    continue
+                else:
+                    pretrain_model = dir_name_lst[model_idx - 1]
+                    break
+        elif pretrain_mode == PRETRAIN_NAME_MODE:
+            print(format_str.format('1-2. Insert Pre-Trained Dir Name',  "Dir Name(Having 'trained_weight.pt'): "), end='')
+            pretrain_model = input()
+            break
+        break
+
+    return pretrain_model
+    
+
 def parse_args():
     parser = argparse.ArgumentParser(description='NIMS rainfall data prediction')
 
     common = parser.add_argument_group('common')
     common.add_argument('--model', default='unet', type=str, help='which model to use [unet, attn_unet, convlstm]')
-    common.add_argument('--dataset_dir', default='/home/osilab12/ssd', type=str, help='root directory of dataset')
+    common.add_argument('--dataset_dir', default='/home/osilab12/ssd2', type=str, help='root directory of dataset')
     common.add_argument('--device', default='0', type=str, help='which device to use')
     common.add_argument('--num_workers', default=5, type=int, help='# of workers for dataloader')
     common.add_argument('--eval_only', default=False, help='when enabled, do not run test epoch, only creating graph', action='store_true')
@@ -195,6 +260,7 @@ def parse_args():
     
     return args
 
+
 def fix_seed(seed):
     torch.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
@@ -204,6 +270,7 @@ def fix_seed(seed):
     np.random.seed(seed)
     random.seed(seed)
 
+    
 def set_device(args):
     if args.device == 'cpu':
         device = torch.device('cpu')
@@ -213,6 +280,7 @@ def set_device(args):
         device = torch.device('cuda')
 
     return device
+
 
 def set_model(sample, device, args, train=True,
               experiment_name=None, finetune=False, model_path=None):
@@ -290,6 +358,7 @@ def set_optimizer(model, args):
     scheduler = optim.lr_scheduler.StepLR(optimizer, 60)
 
     return optimizer, scheduler
+
 
 def set_experiment_name(args, date):
     """
@@ -371,6 +440,7 @@ def set_experiment_name(args, date):
 
     return experiment_name
 
+
 def _get_min_max_values(dataset, indices, queue=None):
     '''
         Return min and max values of ldaps_inputs in train and test dataset
@@ -414,6 +484,7 @@ def _get_min_max_values(dataset, indices, queue=None):
     else:
         return max_values, min_values
 
+    
 def get_min_max_values(dataset):
     # Make indices list
     indices = list(range(len(dataset)))
@@ -484,6 +555,7 @@ def get_min_max_values(dataset):
 
     return max_values, min_values
 
+
 def get_min_max_values_no_mp(dataset):
     '''
         get_min_max_values function with no multiprocessing
@@ -497,6 +569,7 @@ def get_min_max_values_no_mp(dataset):
     min_values = torch.tensor(min_values)
     
     return max_values, min_values
+
 
 def get_min_max_normalization(max_values, min_values):
     '''
@@ -541,6 +614,7 @@ def _undersample(train_dataset, indices, pid=None, queue=None):
     else:
         return target_nonzero_means
 
+    
 def undersample(train_dataset, sampling_ratio):
     # Make indices list
     indices = list(range(len(train_dataset)))
