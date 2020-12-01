@@ -65,27 +65,20 @@ class NIMSTrainer:
         self.device_idx = int(args.device)
         self.model.to(self.device)
 
-        if self.model_name == 'unet' or self.model_name == 'suc_unet' or self.model_name == 'attn_unet':
-            self.nims_logger = NIMSLogger(loss=True, correct=True,
-                                          macro_f1=False, micro_f1=False,
-                                          hit=True, miss=True, fa=True, cn=True,
-                                          reference=self.reference,
-                                          stn_codi=self.stn_codi,
-                                          test_date_list=test_date_list)
-            if self.train_loader and self.test_loader:
-                self.nims_valid_logger = NIMSLogger(loss=True, correct=True,
-                                                    macro_f1=False, micro_f1=False,
-                                                    hit=True, miss=True, fa=True, cn=True,
-                                                    reference=self.reference,
-                                                    stn_codi=self.stn_codi,
-                                                    test_date_list=test_date_list)
-        elif self.model_name == 'convlstm':
-            self.nims_logger = NIMSLogger(loss=True, correct=False,
-                                          macro_f1=False, micro_f1=False,
-                                          hit=True, miss=True, fa=True, cn=True,
-                                          reference=self.reference,
-                                          stn_codi=self.stn_codi,
-                                          test_date_list=test_date_list)
+        self.nims_logger = NIMSLogger(loss=True, correct=True,
+                                      macro_f1=False, micro_f1=False,
+                                      hit=True, miss=True, fa=True, cn=True,
+                                      reference=self.reference,
+                                      stn_codi=self.stn_codi,
+                                      test_date_list=test_date_list)
+        
+        if self.train_loader and self.test_loader:
+            self.nims_valid_logger = NIMSLogger(loss=True, correct=True,
+                                                macro_f1=False, micro_f1=False,
+                                                hit=True, miss=True, fa=True, cn=True,
+                                                reference=self.reference,
+                                                stn_codi=self.stn_codi,
+                                                test_date_list=test_date_list)
 
     def _get_station_coordinate(self):
         # codi_aws_df = pd.read_csv('./codi_ldps_aws/codi_ldps_aws_512.csv')
@@ -219,9 +212,7 @@ class NIMSTrainer:
     def _epoch(self, data_loader, mode, logger=None):
         pbar = tqdm(data_loader)
         for images, target, target_time in pbar:
-            if self.model_name == 'unet' or \
-               self.model_name == 'suc_unet' or \
-               self.model_name == 'attn_unet':
+            if 'unet' in self.model_name:
                 if self.normalization:
                     b, c, h, w = images.shape
                     images = images.reshape((-1, h, w))
@@ -243,13 +234,15 @@ class NIMSTrainer:
                 target_time = target_time.numpy()
             
             elif self.model_name == 'convlstm':
-                # Dataloader for ConvLSTM outputs images and target shape as NSCHW format.
-                # We should change this to SNCHW format.
-                images = images.permute(1, 0, 2, 3, 4).to(self.device)
-                target = target.permute(1, 0, 2, 3, 4).to(self.device)
+                images = images.type(torch.FloatTensor).to(self.device)
+                target = target.type(torch.LongTensor).to(self.device)
+                # target = target.permute(1, 0, 2, 3, 4).to(self.device)
 
+            # Apply input to the model and get loss
             if self.model_name == 'unet':
                 output = self.model(images)
+                print('unet output:', output.shape)
+                import sys; sys.exit()
                 loss = self.criterion(output, target, target_time,
                                       stn_codi=self.stn_codi, mode=mode, logger=logger)
             elif self.model_name == 'suc_unet':
@@ -265,6 +258,11 @@ class NIMSTrainer:
                                                stn_codi=self.stn_codi, mode=mode,
                                                prev_preds=prev_preds, logger=logger)
                         prev_preds = output
+            elif self.model_name == 'convlstm':
+                output = self.model(images, future_seq=1)
+                output = output.squeeze(2)
+                loss = self.criterion(output, target, target_time,
+                                      stn_codi=self.stn_codi, mode=mode, logger=logger)
             
             if mode == 'train':
                 self.optimizer.zero_grad()

@@ -181,7 +181,8 @@ def select_pretrained_model():
 
         if pretrain_mode == LIST_NUM_MODE:
             paths = sorted(Path("./results").iterdir(), key=os.path.getmtime, reverse=True)
-            dir_name_lst = [str(path).replace("results/", "") for path in paths]
+            dir_name_lst = [str(path).replace("results/", "") for path in paths
+                            if path.is_dir() and ('nims' in path.as_posix())]
 
             while True:
                 for idx, dir_name in enumerate(dir_name_lst):
@@ -224,6 +225,9 @@ def parse_args():
     unet.add_argument('--pos_dim', default=0, type=int, help="# of learnable position channels")
     unet.add_argument('--bilinear', default=False, help='use bilinear for upsample instead of transpose conv', action='store_true')
     unet.add_argument('--cross_entropy_weight', default=False, help='use weight for cross entropy loss', action='store_true')
+
+    convlstm = parser.add_argument_group('convlstm related')
+    convlstm.add_argument('--hidden_dim', default=64, type=int, help='hidden dimension in ConvLSTM')
 
     nims_dataset = parser.add_argument_group('nims dataset related')
     nims_dataset.add_argument('--window_size', default=6, type=int, help='# of input sequences in time')
@@ -325,15 +329,18 @@ def set_model(sample, device, args, train=True,
                                          experiment_name=experiment_name)
         
     elif args.model == 'convlstm':
-        assert args.window_size == args.target_num, \
-               'window_size and target_num must be same for ConvLSTM'
+        # assert args.window_size == args.target_num, \
+        #        'window_size and target_num must be same for ConvLSTM'
 
         model = EncoderForecaster(input_channels=sample.shape[1],
-                                  hidden_channels=[64, 128],
-                                  kernel_size=3,
-                                  seq_len=args.window_size,
-                                  device=device)
-        criterion = MSELoss()
+                                  hidden_dim=args.hidden_dim,
+                                  num_classes=num_classes)
+        # criterion = MSELoss()
+        criterion = NIMSCrossEntropyLoss(args=args,
+                                         device=device,
+                                         num_classes=num_classes,
+                                         use_weights=args.cross_entropy_weight,
+                                         experiment_name=experiment_name)
 
     if finetune:
         checkpoint = torch.load(model_path)
@@ -418,20 +425,19 @@ def set_experiment_name(args, date):
                                   normalization,
                                   bilinear,
                                   heavy_rain,
-                                  custom_name,
-                                  date_str)
+                                  custom_name)
 
     elif args.model == 'convlstm':
-        experiment_name = 'nims-{}-convlstm_ws{}_tn{}_ep{}_bs{}_sr{}_{}{}{}' \
+        experiment_name = 'nims-{}-convlstm_ws{}_hd{}_ep{}_bs{}_sr{}_{}{}{}' \
                           .format(args.reference,
                                   args.window_size,
-                                  args.target_num,
+                                  args.hidden_dim,
                                   args.num_epochs,
                                   args.batch_size,
                                   args.sampling_ratio,
                                   args.optimizer,
                                   args.lr,
-                                  date_str)
+                                  normalization)
 
     try:
         setproctitle.setproctitle(experiment_name)

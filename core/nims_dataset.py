@@ -151,7 +151,6 @@ class NIMSDataset(Dataset):
         train_start_time = train_end_time - timedelta(hours=self.window_size)
         
         _ldaps_input = []
-        
         for t in range(self.window_size + 1):
             curr_u = u.replace('h{}'.format(str(from_h).zfill(3)),
                                'h{}'.format(str(from_h - self.window_size + t).zfill(3)))
@@ -168,14 +167,10 @@ class NIMSDataset(Dataset):
                                                       unis_idx_list=[2, 14, 17],
                                                       use_kindex=True))
         
-        if self.model == 'unet' or self.model == 'suc_unet' or self.model == 'attn_unet':
-            for idx, l in enumerate(_ldaps_input):
-                if idx == 0:
-                    ldaps_input = l
-                else:
-                    ldaps_input = np.concatenate((ldaps_input, l), axis=0)
-        else:
-            ldaps_input = _ldaps_input
+        if 'unet' in self.model:
+            ldaps_input = np.concatenate(_ldaps_input, axis=0)
+        elif self.model == 'convlstm':
+            ldaps_input = np.stack(_ldaps_input, axis=0)
         
         if self.transform:
             ldaps_input = self.transform(ldaps_input)
@@ -227,7 +222,7 @@ class NIMSDataset(Dataset):
         elif self.reference == 'reanalysis':
             gt_base = torch.where(gt_base < 0, torch.zeros(gt_base.shape), gt_base)
         
-        if self.model == 'unet':
+        if self.model == 'unet' or self.model == 'convlstm':
             # make len(rain_threshold)+1 classes (multi-class classification)
             for i in range(len(self.rain_threshold)):
                 if i == 0:
