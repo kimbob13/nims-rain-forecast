@@ -234,15 +234,23 @@ class NIMSTrainer:
                 target_time = target_time.numpy()
             
             elif self.model_name == 'convlstm':
+                if self.normalization:
+                    b, s, c, h, w = images.shape
+                    images = images.reshape((-1, h, w))
+
+                    max_values_batch = self.normalization['max_values'].unsqueeze(0).repeat(b, 1).reshape(-1)
+                    min_values_batch = self.normalization['min_values'].unsqueeze(0).repeat(b, 1).reshape(-1)
+                    transform = get_min_max_normalization(max_values_batch, min_values_batch)
+
+                    images = transform(images)
+                    images = images.reshape((b, s, c, h, w))
+                
                 images = images.type(torch.FloatTensor).to(self.device)
                 target = target.type(torch.LongTensor).to(self.device)
-                # target = target.permute(1, 0, 2, 3, 4).to(self.device)
 
             # Apply input to the model and get loss
             if self.model_name == 'unet':
                 output = self.model(images)
-                print('unet output:', output.shape)
-                import sys; sys.exit()
                 loss = self.criterion(output, target, target_time,
                                       stn_codi=self.stn_codi, mode=mode, logger=logger)
             elif self.model_name == 'suc_unet':
@@ -260,7 +268,6 @@ class NIMSTrainer:
                         prev_preds = output
             elif self.model_name == 'convlstm':
                 output = self.model(images, future_seq=1)
-                output = output.squeeze(2)
                 loss = self.criterion(output, target, target_time,
                                       stn_codi=self.stn_codi, mode=mode, logger=logger)
             

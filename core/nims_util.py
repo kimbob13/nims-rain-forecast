@@ -428,7 +428,7 @@ def set_experiment_name(args, date):
                                   custom_name)
 
     elif args.model == 'convlstm':
-        experiment_name = 'nims-{}-convlstm_ws{}_hd{}_ep{}_bs{}_sr{}_{}{}{}' \
+        experiment_name = 'nims-{}-convlstm_ws{}_hd{}_ep{}_bs{}_sr{}_{}{}{}{}' \
                           .format(args.reference,
                                   args.window_size,
                                   args.hidden_dim,
@@ -437,7 +437,8 @@ def set_experiment_name(args, date):
                                   args.sampling_ratio,
                                   args.optimizer,
                                   args.lr,
-                                  normalization)
+                                  normalization,
+                                  custom_name)
 
     try:
         setproctitle.setproctitle(experiment_name)
@@ -459,6 +460,7 @@ def _get_min_max_values(dataset, indices, queue=None):
     
     max_values = None
     min_values = None
+    model_name = dataset.model
 
     # Check out training set
     for i, idx in enumerate(indices):
@@ -467,10 +469,12 @@ def _get_min_max_values(dataset, indices, queue=None):
         ldaps_input = ldaps_input.numpy()
         
         # Get a shape
-        features, height, width = ldaps_input.shape
-
-        # Reshape the laps_input
-        features_reshape = np.reshape(ldaps_input, (features, -1))
+        if 'unet' in model_name:
+            features, height, width = ldaps_input.shape
+            features_reshape = np.reshape(ldaps_input, (features, -1))
+        elif model_name == 'convlstm':
+            seq_len, features, height, width = ldaps_input.shape
+            features_reshape = np.reshape(ldaps_input, (seq_len * features, -1))
         
         # Evaluate min / max on current data
         temp_max = np.amax(features_reshape, axis=-1)

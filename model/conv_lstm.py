@@ -86,10 +86,10 @@ class EncoderForecaster(nn.Module):
                                                kernel_size=(3, 3),
                                                bias=True)
 
-        self.decoder_CNN = nn.Conv3d(in_channels=hidden_dim,
+        self.decoder_CNN = nn.Conv2d(in_channels=hidden_dim,
                                      out_channels=num_classes,
-                                     kernel_size=(1, 3, 3),
-                                     padding=(0, 1, 1))
+                                     kernel_size=1,
+                                     padding=0)
 
 
     def autoencoder(self, x, seq_len, future_step, h_t, c_t, h_t2, c_t2, h_t3, c_t3, h_t4, c_t4):
@@ -115,9 +115,8 @@ class EncoderForecaster(nn.Module):
             outputs += [h_t4]  # predictions
 
         outputs = torch.stack(outputs, 1)
-        outputs = outputs.permute(0, 2, 1, 3, 4)
+        outputs = outputs.permute(0, 2, 1, 3, 4).squeeze(2)
         outputs = self.decoder_CNN(outputs)
-        outputs = torch.nn.Sigmoid()(outputs)
 
         return outputs
 
