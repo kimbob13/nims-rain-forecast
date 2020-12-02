@@ -59,7 +59,7 @@ class NIMSTrainer:
                                'best_pod'  : 0.0,           # pod value at best_loss
                                'best_far'  : 0.0,           # far value at best_loss
                                'best_f1'   : 0.0,           # f1 value at best_loss
-                               'best_bias' : 0.0}           # bias value at best_loss
+                               'best_bias' : float("inf")}  # bias value at best_loss
 
         self.info_str = '=' * 16 + ' {:^25s} ' + '=' * 16
         self.device_idx = int(args.device)
@@ -154,8 +154,8 @@ class NIMSTrainer:
                 self._print_stat({'Train': (epoch_train_loss, epoch_train_stat),
                                   'Valid': (epoch_valid_loss, epoch_valid_stat)})
 
-            # Save model based on the best validation loss
-            if epoch_valid_stat.csi > self.trained_weight['best_csi']:
+            # Save model based on the best validation bias
+            if abs(epoch_valid_stat.bias - 1) < abs(self.trained_weight['best_bias'] - 1):
                 self.trained_weight['model']      = self.model.state_dict()
                 self.trained_weight['best_loss']  = epoch_valid_loss
                 self.trained_weight['best_epoch'] = epoch
@@ -231,7 +231,6 @@ class NIMSTrainer:
                         target_lst.append(t.type(torch.LongTensor).to(self.device))
                 else:
                     target = target.type(torch.LongTensor).to(self.device)
-                target_time = target_time.numpy()
             
             elif self.model_name == 'convlstm':
                 if self.normalization:
@@ -248,8 +247,10 @@ class NIMSTrainer:
                 images = images.type(torch.FloatTensor).to(self.device)
                 target = target.type(torch.LongTensor).to(self.device)
 
+            target_time = target_time.numpy()
+
             # Apply input to the model and get loss
-            if self.model_name == 'unet':
+            if self.model_name == 'unet' or self.model_name == 'attn_unet':
                 output = self.model(images)
                 loss = self.criterion(output, target, target_time,
                                       stn_codi=self.stn_codi, mode=mode, logger=logger)

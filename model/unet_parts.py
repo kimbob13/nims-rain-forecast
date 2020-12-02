@@ -6,8 +6,10 @@ Original Source: https://github.com/milesial/Pytorch-UNet
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
+from typing import Tuple
 
-__all__ = ['BasicConv', 'Down', 'Up', 'OutConv', 'LearnablePosition']
+__all__ = ['BasicConv', 'Down', 'Up', 'OutConv', 'LearnablePosition', 'LCN2DLayer']
 
 class BasicConv(nn.Module):
     def __init__(self, in_channels, out_channels):
@@ -229,3 +231,63 @@ class AttentionGate(nn.Module):
         psi = self.w_psi(psi)
 
         return x * psi
+
+class LCN2DLayer(nn.Module):
+    def __init__(self, in_channels, out_channels, width, height, kernel=3, with_affine=False):
+        super(LCN2DLayer, self).__init__()
+        self.c = in_channels
+        self.oc = out_channels
+        self.w = width
+        self.h = height
+
+        weight_shape = [self.c, self.w, self.h, self.oc, kernel, kernel]
+        bias_shape = [self.w, self.h, self.oc]
+        self.weights = nn.Parameter(torch.zeros(weight_shape, dtype=torch.float32), requires_grad=True)
+        self.bias = nn.Parameter(torch.zeros(bias_shape, dtype=torch.float32), requires_grad=True)
+        self.kernel = kernel
+        self.with_affine = with_affine
+
+    def _symm_pad(self, x: torch.Tensor, padding: Tuple[int, int, int, int]):
+        h, w = x.shape[-2:]
+        left, right, top, bottom = padding
+    
+        x_idx = np.arange(-left, w + right)
+        y_idx = np.arange(-top, h + bottom)
+    
+        def reflect(x, minx, maxx):
+            """ Reflects an array around two points making a triangular waveform that ramps up
+            and down,  allowing for pad lengths greater than the input length """
+            rng = maxx - minx
+            double_rng = 2 * rng
+            mod = np.fmod(x - minx, double_rng)
+            normed_mod = np.where(mod < 0, mod + double_rng, mod)
+            out = np.where(normed_mod >= rng, double_rng - normed_mod, normed_mod) + minx
+
+            return np.array(out, dtype=x.dtype)
+
+        x_pad = reflect(x_idx, -0.5, w - 0.5)
+        y_pad = reflect(y_idx, -0.5, h - 0.5)
+        xx, yy = np.meshgrid(x_pad, y_pad)
+
+        return x[..., yy, xx]
+
+    def forward(self, x):
+        pad_size = (self.kernel - 1) // 2
+        pad_x = self._symm_pad(x, padding=[pad_size, pad_size, pad_size, pad_size])
+
+        result = [None] * self.oc
+        for k in range(self.oc):
+            for i in range(self.kernel):
+                for j in range(self.kernel):
+                    tensor_crop = pad_x[:, :, i:i + self.w, j:j + self.h]
+                    weight_filter = self.weights[:, :, :, k, i, j]
+                    lcn = torch.sum(weight_filter * tensor_crop, dim=1)
+
+                    if i == 0 and j == 0:
+                        result[k] = lcn + self.bias[:, :, k]
+                    else:
+                        result[k] = result[k] + lcn
+
+        oc_result = torch.cat([torch.reshape(t, [-1, 1, self.w, self.h]) for t in result], dim=1)
+
+        return oc_result

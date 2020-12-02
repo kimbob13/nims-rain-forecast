@@ -184,7 +184,7 @@ class NIMSCrossEntropyLoss(ClassificationStat):
             stn_codi = self.remove_missing_station(targets)
             stn_targets = targets[:, stn_codi[:, 0], stn_codi[:, 1]]
             
-        if prev_preds is None:
+        if prev_preds == None:
             if self.reference == 'aws':
                 curr_preds = preds[:, :, stn_codi[:, 0], stn_codi[:, 1]]
                 curr_targets = stn_targets
@@ -207,9 +207,9 @@ class NIMSCrossEntropyLoss(ClassificationStat):
                 curr_preds = curr_preds[:, :, curr_codi[:, 1]]
                 curr_targets = stn_targets[:, curr_codi[:, 1]]
             elif self.reference == 'reanalysis':
-                pass
+                raise NotImplementedError
         
-        if prev_preds is not None and len(curr_codi) == 0:
+        if prev_preds != None and len(curr_codi) == 0:
             loss = torch.tensor(0., device=self.device)
             correct, hit, miss, fa, cn = self.get_stat(prev_preds, stn_targets, mode=mode)
             if logger:
