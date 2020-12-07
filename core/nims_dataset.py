@@ -122,14 +122,17 @@ class NIMSDataset(Dataset):
             gt_path = sorted([os.path.join(gt_dir, f) for f in gt_path if
                               f.split('_')[3][:-2] >= start_date.strftime("%Y%m%d%H") and
                               f.split('_')[3][:-2] <= gt_end_date.strftime("%Y%m%d%H")])
+            return data_path_list, gt_path
         elif self.reference == 'reanalysis':
             gt_dir = os.path.join(self.root_dir, 'REANALYSIS', str(self.date['year']))
             gt_path = os.listdir(gt_dir)
             gt_path = sorted([os.path.join(gt_dir, f) for f in gt_path if
                               f.split('.')[0] >= start_date.strftime("%Y%m%d%H") and
                               f.split('.')[0] <= gt_end_date.strftime("%Y%m%d%H")])
+            return data_path_list, gt_path
+        else:
+            return data_path_list, None
         
-        return data_path_list, gt_path
 
     def __len__(self):        
         return len(self._data_path_list)
@@ -175,8 +178,6 @@ class NIMSDataset(Dataset):
         if self.transform:
             ldaps_input = self.transform(ldaps_input)
 
-        # Get ground-truth based on train mode
-        gt = self._get_gt_data(train_end_time)
 
         # Make tensor of current target time for test logging
         target_time_tensor = torch.tensor([current_utc_date.year,
@@ -185,7 +186,13 @@ class NIMSDataset(Dataset):
                                            current_utc_date.hour,
                                            from_h])
 
-        return ldaps_input, gt, target_time_tensor
+        if self.reference in ['aws', 'reanalysis']:
+            # Get ground-truth based on train mode
+            gt = self._get_gt_data(train_end_time)
+            
+            return ldaps_input, gt, target_time_tensor
+        else:
+            return ldaps_input, target_time_tensor
 
     def _merge_pres_unis(self, data_list, pres_idx_list=None, unis_idx_list=None, use_kindex=True):
         assert (pres_idx_list != None) or (unis_idx_list != None)

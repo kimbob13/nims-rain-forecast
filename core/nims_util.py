@@ -259,7 +259,7 @@ def parse_args():
     assert args.model_utc in [0, 6, 12, 18], \
            'model_utc must be one of [0, 6, 12, 18]'
 
-    assert args.reference in ['aws', 'reanalysis'], \
+    assert args.reference in ['aws', 'reanalysis', None], \
            'reference must be one of [aws, reanalysis]'
     
     return args
