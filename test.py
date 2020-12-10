@@ -41,14 +41,38 @@ def select_experiment():
 
     # Print trained weight info
     print('=' * 25, 'Trained Weight Information', '=' * 25)
-    print('[best epoch]:', chosen_weight['best_epoch'])
-    print('[best loss ]: {:5f}'.format(chosen_weight['best_loss']))
-    print('[best acc  ]: {:5f}'.format(chosen_weight['best_acc']))
-    print('[best csi  ]: {:5f}'.format(chosen_weight['best_csi']))
-    print('[best pod  ]: {:5f}'.format(chosen_weight['best_pod']))
-    print('[best far  ]: {:5f}'.format(chosen_weight['best_far']))
-    print('[best f1   ]: {:5f}'.format(chosen_weight['best_f1']))
-    print('[best bias ]: {:5f}'.format(chosen_weight['best_bias']))
+    try:
+        print('[best epoch]:', chosen_weight['best_epoch'])
+    except:
+        pass
+    try:
+        print('[best loss ]: {:5f}'.format(chosen_weight['best_loss']))
+    except:
+        pass
+    try:
+        print('[best acc  ]: {:5f}'.format(chosen_weight['best_acc']))
+    except:
+        pass
+    try:
+        print('[best csi  ]: {:5f}'.format(chosen_weight['best_csi']))
+    except:
+        pass
+    try:
+        print('[best pod  ]: {:5f}'.format(chosen_weight['best_pod']))
+    except:
+        pass
+    try:
+        print('[best far  ]: {:5f}'.format(chosen_weight['best_far']))
+    except:
+        pass
+    try:
+        print('[best f1   ]: {:5f}'.format(chosen_weight['best_f1']))
+    except:
+        pass
+    try:
+        print('[best bias ]: {:5f}'.format(chosen_weight['best_bias']))
+    except:
+        pass
 
     return chosen_weight, experiment_name
 
@@ -230,7 +254,7 @@ if __name__ == '__main__':
     date = select_date(test=True)
 
     # Create output directory
-    create_output_dir(args, date, experiment_name)
+    # create_output_dir(args, date, experiment_name)
 
     # Replace model related arguments to the train info
     args.model = chosen_weight['model_name']

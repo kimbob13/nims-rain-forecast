@@ -11,7 +11,7 @@ from scipy.special import softmax
 import warnings
 warnings.filterwarnings(action='ignore')
 
-__all__ = ['MSELoss', 'NIMSCrossEntropyLoss']
+__all__ = ['MSELoss', 'NIMSCrossEntropyLoss', 'BinaryDiceLoss']
 
 def _save_output_plot(preds, target_time, dataset_dir, experiment_name, queue):
     import matplotlib.pyplot as plt
@@ -75,12 +75,15 @@ class ClassificationStat(nn.Module):
             target_labels = targets.data.detach().reshape(b, -1)
         
         elif (mode == 'valid') or (mode == 'test'):
-            # _, pred_labels = preds.topk(1, dim=1, largest=True, sorted=True)
-            preds = F.softmax(preds, dim=1)
-            true_probs = preds[:, 1, :].unsqueeze(1)
-            pred_labels = torch.where(true_probs > 0.05,
-                                      torch.ones(true_probs.shape).to(0),
-                                      torch.zeros(true_probs.shape).to(0))
+            # Old
+            _, pred_labels = preds.topk(1, dim=1, largest=True, sorted=True)
+
+            # Current
+            # preds = F.softmax(preds, dim=1)
+            # true_probs = preds[:, 1, :].unsqueeze(1)
+            # pred_labels = torch.where(true_probs > 0.05,
+            #                           torch.ones(true_probs.shape).to(0),
+            #                           torch.zeros(true_probs.shape).to(0))
             b, _, num_stn = pred_labels.shape
             assert (b, num_stn) == targets.shape
 
@@ -170,16 +173,14 @@ class NIMSCrossEntropyLoss(ClassificationStat):
         # print('[cross_entropy] targets shape:', targets.shape)
 
         # Save preds plot in test mode
-        """
-        if mode == 'test':
-            _preds_cpu = preds.detach().cpu().numpy()
-            self.preds_list.append((_preds_cpu, target_time))
-            if (len(self.preds_list) % self.num_preds_batch) == 0:
-                save_output_plot(self.preds_list, self.dataset_dir, self.experiment_name)
-                self.save_count = 0
-                self.preds_list = []
-        """
-        
+        # if mode == 'test':
+        #     _preds_cpu = preds.detach().cpu().numpy()
+        #     self.preds_list.append((_preds_cpu, target_time))
+        #     if (len(self.preds_list) % self.num_preds_batch) == 0:
+        #         save_output_plot(self.preds_list, self.dataset_dir, self.experiment_name)
+        #         self.save_count = 0
+        #         self.preds_list = []
+
         if self.reference == 'aws':
             stn_codi = self.remove_missing_station(targets)
             stn_targets = targets[:, stn_codi[:, 0], stn_codi[:, 1]]
@@ -231,6 +232,60 @@ class NIMSCrossEntropyLoss(ClassificationStat):
                               target_time=target_time, mode=mode)
 
         # print('[cross_entropy] loss: {}'.format(loss.item()))
+
+        return loss
+
+class BinaryDiceLoss(ClassificationStat):
+    """Dice loss of binary class
+    Args:
+        smooth: A float number to smooth loss, and avoid NaN error, default: 1
+        p: Denominator value: \sum{x^p} + \sum{y^p}, default: 2
+        predict: A tensor of shape [N, *]
+        target: A tensor of shape same with predict
+        reduction: Reduction method to apply, return mean over batch if 'mean',
+            return sum if 'sum', return a tensor of shape [N,] if 'none'
+    Returns:
+        Loss tensor according to arg reduction
+    Raise:
+        Exception if unexpected reduction
+    """
+    def __init__(self, args, num_classes, smooth=1, p=2, reduction='mean'):
+        super(BinaryDiceLoss, self).__init__(args=args, num_classes=num_classes)
+        self.smooth = smooth
+        self.p = p
+        self.reduction = reduction
+
+    def forward(self, preds, targets, target_time, stn_codi, mode, logger=None):
+        assert preds.shape[0] == targets.shape[0], "predict & target batch size don't match"
+        
+        stn_codi = self.remove_missing_station(targets) # Disable for Old
+        stn_targets = targets[:, stn_codi[:, 0], stn_codi[:, 1]]
+        stn_preds = preds[:, :, stn_codi[:, 0], stn_codi[:, 1]]
+        correct, hit, miss, fa, cn = self.get_stat(stn_preds, stn_targets, mode=mode)
+        
+        stn_preds = F.softmax(stn_preds, dim=1)
+        stn_preds = torch.max(stn_preds, dim=1).values
+        predict = stn_preds.contiguous().view(stn_preds.shape[0], -1)
+        target = stn_targets.contiguous().view(targets.shape[0], -1)
+
+
+        num = torch.sum(torch.mul(predict, target), dim=1) + self.smooth
+        den = torch.sum(predict.pow(self.p) + target.pow(self.p), dim=1) + self.smooth
+
+        loss = 1 - num / den
+        if self.reduction == 'mean':
+            loss = loss.mean()
+        elif self.reduction == 'sum':
+            loss = loss.sum()
+        elif self.reduction == 'none':
+            pass
+        else:
+            raise Exception('Unexpected reduction {}'.format(self.reduction))
+
+        if logger:
+            logger.update(loss=loss.item(), correct=correct,
+                          hit=hit, miss=miss, fa=fa, cn=cn,
+                          target_time=target_time, mode=mode)
 
         return loss
 

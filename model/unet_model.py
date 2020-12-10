@@ -23,11 +23,14 @@ class UNet(nn.Module):
         if pos_dim == 0:
             assert pos_loc == 0
 
+        width = 781
+        height = 602
+
         # Model entrance block
         self.inc = nn.Sequential()
         if pos_loc == 1:
             n_channels += pos_dim
-            self.inc.add_module('inc_pos', LearnablePosition(batch_size, pos_dim, 781, 602))
+            self.inc.add_module('inc_pos', LearnablePosition(batch_size, pos_dim, width, height))
         self.inc.add_module('inc', BasicConv(n_channels, start_channels))
 
         # Create down blocks
@@ -38,7 +41,7 @@ class UNet(nn.Module):
                 cur_in_ch_pos = cur_in_ch + pos_dim
                 down_with_pos = nn.Sequential()
                 down_with_pos.add_module('down{}_pos'.format(i),
-                                         LearnablePosition(batch_size, pos_dim, math.ceil(781 / (2 ** i)), math.ceil(602 / (2 ** i))))
+                                         LearnablePosition(batch_size, pos_dim, math.ceil(width / (2 ** i)), math.ceil(height / (2 ** i))))
                 down_with_pos.add_module('down{}'.format(i), Down(cur_in_ch_pos, cur_in_ch * 2))
 
                 self.down.append(down_with_pos)
@@ -51,7 +54,7 @@ class UNet(nn.Module):
         if pos_loc == n_blocks + 2:
             bridge_channels_pos = bridge_channels + pos_dim
             self.bridge.add_module('bridge_pos',
-                                   LearnablePosition(batch_size, pos_dim, math.ceil(781 / (2 ** n_blocks)), math.ceil(602 / (2 ** n_blocks))))
+                                   LearnablePosition(batch_size, pos_dim, math.ceil(width / (2 ** n_blocks)), math.ceil(height / (2 ** n_blocks))))
             self.bridge.add_module('bridge_conv', BasicConv(bridge_channels_pos, bridge_channels))
         else:
             self.bridge.add_module('bridge_conv', BasicConv(bridge_channels, bridge_channels))
@@ -65,8 +68,8 @@ class UNet(nn.Module):
                 self.up.append(Up(cur_in_ch_pos, (cur_in_ch // 2),
                                   learnable_pos=LearnablePosition(batch_size,
                                                                   pos_dim,
-                                                                  math.ceil(781 / (2 ** (i - 1))),
-                                                                  math.ceil(602 / (2 ** (i - 1)))),
+                                                                  math.ceil(width / (2 ** (i - 1))),
+                                                                  math.ceil(height / (2 ** (i - 1)))),
                                   bilinear=bilinear))
             else:
                 self.up.append(Up(cur_in_ch, (cur_in_ch // 2), bilinear=bilinear))
@@ -75,10 +78,10 @@ class UNet(nn.Module):
         self.outc = nn.Sequential()
         if pos_loc == pos_loc_max:
             start_channels_pos = start_channels + pos_dim
-            self.outc.add_module('out_pos', LearnablePosition(batch_size, pos_dim, 781, 602))
+            self.outc.add_module('out_pos', LearnablePosition(batch_size, pos_dim, width, height))
             self.outc.add_module('out_conv', OutConv(start_channels_pos, n_classes))
         elif use_lcn:
-            self.outc.add_module('out_lcn', LCN2DLayer(in_channels=start_channels, out_channels=n_classes, width=781, height=602))
+            self.outc.add_module('out_lcn', LCN2DLayer(in_channels=start_channels, out_channels=n_classes, width=width, height=height))
         else:
             self.outc.add_module('out_conv', OutConv(start_channels, n_classes))
 
