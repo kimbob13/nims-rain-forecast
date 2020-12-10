@@ -17,38 +17,6 @@ from datetime import datetime, timedelta
 
 MONTH_DAY = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 
-#########################################################
-# 1. Function for test setting part                     #
-#########################################################
-def create_test_date_list(date, experiment_name):
-    test_date_list = []
-    test_months = list(range(date['start_month'], date['end_month'] + 1))
-    for i, month in enumerate(test_months):
-        if i == 0:
-            start_day = date['start_day']
-            end_day = MONTH_DAY[month]
-        elif i == len(test_months) - 1:
-            start_day = 1
-            end_day = date['end_day']
-        else:
-            start_day = 1
-            end_day = MONTH_DAY[month]
-
-        current_test_date = '{:4d}{:02d}{:02d}-{:04d}{:02d}{:02d}'.format(date['year'], month, start_day,
-                                                                          date['year'], month, end_day)
-        current_test_path = os.path.join('./results', experiment_name, 'eval', current_test_date)
-        if args.eval_only:
-            assert os.path.isdir(current_test_path), \
-                   'You have to run test for this date range before running eval_only mode'
-        
-        if not os.path.isdir(current_test_path):
-            os.mkdir(current_test_path)
-
-        test_date_list.append(current_test_path)
-
-    return test_date_list
-
-
 if __name__ == '__main__':
     # Parsing command line arguments
     args = parse_args()
@@ -58,11 +26,17 @@ if __name__ == '__main__':
 
     # Specify trained model weight
     results_dir = os.path.join('./results')
-    experiment_name = 'unet'
+    experiment_name = 'unet-utc{:02d}'.format(args.model_utc)
     chosen_weight = torch.load(os.path.join(results_dir, experiment_name, 'trained_weight.pt'), map_location=device)
 
     # Select start and end date for train
-    date = select_date(test=True)
+    if "-" in  args.date:
+        date_str = "".join(args.date.split("-"))
+    else:
+        date_str = args.date
+ 
+    year, month, day = int(date_str[:4]), int(date_str[4:6]), int(date_str[6:])
+    date = {'year': year, 'start_month': month, 'start_day': day, 'end_month': month, 'end_day': day}   
 
     # Create output directory
     os.makedirs("./NC", exist_ok=True)
@@ -123,9 +97,11 @@ if __name__ == '__main__':
                              pin_memory=True)
     
     # Create directory for each month currently tested date for chosen weight
-    test_date_list = create_test_date_list(date, experiment_name)
+    test_date_list = [args.date]
 
     # Load trained model weight
+    if args.device == 'cpu':
+        chosen_weight['model'] = {k[7:]: v for k, v in chosen_weight['model'].items()}
     model.load_state_dict(chosen_weight['model'])
 
     # Start testing

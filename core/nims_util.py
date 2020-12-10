@@ -254,6 +254,9 @@ def parse_args():
     finetune.add_argument('--finetune_lr_ratio', default=0.1, type=float, help='the ratio of fine-tuning learning rate to the original learning rate')
     finetune.add_argument('--finetune_num_epochs', default=3, type=int, help='# of fine-tuning epochs')
     
+    nc_gen = parser.add_argument_group('nc_gen')
+    nc_gen.add_argument('--date', default=None, type=str, help='Date for netCDF file')
+    
     args = parser.parse_args()
 
     assert args.model_utc in [0, 6, 12, 18], \
