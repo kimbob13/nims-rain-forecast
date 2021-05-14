@@ -56,6 +56,7 @@ def create_results_dir(experiment_name):
 
 def select_date(test=False):
     format_str = '[{:<14s}] {:^25s} : '
+    MONTH_DAY = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 
     # Mode selection
     while True:
@@ -66,9 +67,6 @@ def select_date(test=False):
             if date_mode not in [MONTHLY_MODE, DAILY_MODE]:
                 print('You must enter value between 1 or 2')
                 continue
-            # elif test == True and date_mode == DAILY_MODE:
-            #     print('You must select [Monthly] mode for test')
-            #     continue
 
         except ValueError:
             print('You must enter integer only')
@@ -81,13 +79,9 @@ def select_date(test=False):
 
         break
 
-    VALID_MONTH = [6, 7, 8, 9]
-    MONTH_DAY   = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-    LEAP_YEAR   = (2020)
-
     def _check_valid_day(month, day):
         valid_day = MONTH_DAY[month]
-        if (month == 2) and (year in LEAP_YEAR):
+        if (month == 2) and (year % 4 == 0):
             valid_day = 29
 
         if (day < 1) or (day > valid_day):
@@ -106,19 +100,8 @@ def select_date(test=False):
         # Parse input
         start_date = start_date.split('-')
         start_year, start_month = map(int, start_date[:2])
-
-        # Year check
-        if start_year not in [2018, 2019, 2020]:
-            print("You must specify year 2018 or 2019 or 2020")
-            continue
-
-        # Month check
-        if start_month not in VALID_MONTH:
-            print("You must specify start month between {} to {}".format(VALID_MONTH[0], VALID_MONTH[-1]))
-            continue
         
         # Day check
-        start_day = 1
         if date_mode == DAILY_MODE:
             start_day = int(start_date[2])
             if not _check_valid_day(start_month, start_day):
@@ -139,23 +122,12 @@ def select_date(test=False):
         end_date = end_date.split('-')
         end_year, end_month = map(int, end_date[:2])
 
-        # Year check
-        if end_year != start_year:
-            print("You must specify same end year as start year")
-            continue
-
-        # Month check
-        if (end_month < start_month) or (end_month not in VALID_MONTH):
-            print("You must specify start month between {} to {}".format(start_month, VALID_MONTH[-1]))
-            continue
-        
         # Day check
-        end_day = MONTH_DAY[end_month]
         if date_mode == DAILY_MODE:
+            end_day = int(end_date[2])
             if not _check_valid_day(end_month, end_day):
                 print("You must specifiy valid day for month '{}'".format(end_month))
                 continue
-            end_day = int(end_date[-1])
         break
 
     print()
@@ -350,7 +322,6 @@ def set_model(sample, device, args, train=True,
         model.load_state_dict(checkpoint, strict=False)
 
     # model = DataParallel(model)
-    print ("hi")
     return model, criterion
 
 def set_optimizer(model, args):

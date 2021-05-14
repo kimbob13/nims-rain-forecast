@@ -9,6 +9,8 @@ import os
 
 __all__ = ['NIMSDataset', 'ToTensor']
 
+# TODO: missing data pre-process
+
 class NIMSDataset(Dataset):
     def __init__(self, model, reference, model_utc, window_size, root_dir, date,
                  lite=False, heavy_rain=False, train=True, transform=None):
@@ -156,8 +158,7 @@ class NIMSDataset(Dataset):
             
             # TODO: add pres_idx_list and unis_idx_list arguments using var_name
             _ldaps_input.append(self._merge_pres_unis(data_list=data_list,
-                                                      #pres_idx_list=[4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15],
-                                                      #unis_idx_list=[0, 2, 3, 5, 6, 7, 8, 9, 12, 14, 15, 16]))
+                                                      pres_idx_list=[2],
                                                       unis_idx_list=[2, 14, 17],
                                                       use_kindex=True))
         
@@ -180,23 +181,25 @@ class NIMSDataset(Dataset):
         if self.reference in ['aws', 'reanalysis']:
             # Get ground-truth based on train mode
             gt = self._get_gt_data(train_end_time)
-            
             return ldaps_input, gt, target_time_tensor
         else:
             return ldaps_input, target_time_tensor
 
     def _merge_pres_unis(self, data_list, pres_idx_list=None, unis_idx_list=None, use_kindex=True):
-        assert (pres_idx_list != None) or (unis_idx_list != None)
-
         if self.lite:
             u = data_list[0]
-            unis = np.load(u)
+            unis = np.load(u).reshape(512, 512, 3).transpose()
 
             return unis
         else:
             p, u = data_list
-            pres = np.load(p).reshape(602, 781, 3).transpose()
-            unis = np.load(u).reshape(602, 781, 5).transpose()
+            pres = np.load(p).reshape(512, 512, 20).transpose()
+            unis = np.load(u).reshape(512, 512, 20).transpose()
+            
+            if pres_idx_list is not None:
+                pres = pres[pres_idx_list,:,:]
+            if unis_idx_list is not None:
+                unis = unis[unis_idx_list,:,:]
             
             # LDAPS missing value pre-process
             missing_x, missing_y = np.where(unis[0] < 0)[0], np.where(unis[0] < 0)[1]
