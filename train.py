@@ -82,9 +82,9 @@ if __name__ == '__main__':
     # Get a sample for getting shape of each tensor
     LDAPS_sample, gt_sample, _ = nims_train_dataset[0]
 
-    # Create a model and criterion
+    # Create a model and criterion (need to modify)
     model, criterion = set_model(LDAPS_sample, device, args)
-
+    
     # Create dataloaders
     train_loader = DataLoader(nims_train_dataset, batch_size=args.batch_size,
                               shuffle=True, num_workers=args.num_workers,

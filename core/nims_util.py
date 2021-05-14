@@ -349,8 +349,8 @@ def set_model(sample, device, args, train=True,
         checkpoint = torch.load(model_path)
         model.load_state_dict(checkpoint, strict=False)
 
-    model = DataParallel(model)
-
+    # model = DataParallel(model)
+    print ("hi")
     return model, criterion
 
 def set_optimizer(model, args):

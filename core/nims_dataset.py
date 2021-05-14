@@ -9,11 +9,6 @@ import os
 
 __all__ = ['NIMSDataset', 'ToTensor']
 
-VALID_YEAR = [2018, 2019, 2020]
-VALID_MONTH = [5, 6, 7, 8]
-MONTH_DAY = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-
-
 class NIMSDataset(Dataset):
     def __init__(self, model, reference, model_utc, window_size, root_dir, date,
                  lite=False, heavy_rain=False, train=True, transform=None):
@@ -37,23 +32,19 @@ class NIMSDataset(Dataset):
     def __set_path(self):
         LDAPS_dir = os.path.join(self.root_dir, 'NIMS_LDPS')
         root, dirs, _ = next(os.walk(os.path.join(LDAPS_dir, str(self.date['year'])), topdown=True))
-        
-        # Make datetime object for start and end date
-        assert self.date['year']        in VALID_YEAR
-        assert self.date['start_month'] in VALID_MONTH
-        assert self.date['end_month']   in VALID_MONTH
 
         start_date = datetime(year=self.date['year'],
                               month=self.date['start_month'],
                               day=self.date['start_day'],
                               hour=0)
-        if self.date['year'] == 2019:
-            if self.date['start_month'] == 6 and self.date['start_day'] == 1:
-                start_date += timedelta(hours=self.window_size)
+        
+        # if self.date['year'] == 2019:
+        #     if self.date['start_month'] == 6 and self.date['start_day'] == 1:
+        #         start_date += timedelta(hours=self.window_size)
 
-        elif self.date['year'] == 2020:
-            if self.date['start_month'] == 5 and self.date['start_day'] == 1:
-                start_date += timedelta(hours=self.window_size)
+        # elif self.date['year'] == 2020:
+        #     if self.date['start_month'] == 5 and self.date['start_day'] == 1:
+        #         start_date += timedelta(hours=self.window_size)
                 
         end_date = datetime(year=self.date['year'],
                             month=self.date['end_month'],
@@ -142,7 +133,7 @@ class NIMSDataset(Dataset):
             u = self._data_path_list[idx]
         else:
             p, u = self._data_path_list[idx]
-        
+            
         # train_end_time is also target time for this x, y instance
         current_utc_date = u.split('/')[-1].split('_')
         from_h = int(current_utc_date[3][1:])
@@ -221,11 +212,11 @@ class NIMSDataset(Dataset):
     def _get_gt_data(self, train_end_time):
         gt_path = [p for p in self._gt_path \
                    if train_end_time.strftime("%Y%m%d%H") in p][0]
-        gt_base = torch.tensor(np.load(gt_path))
+        gt_base = torch.tensor(np.load(gt_path), dtype=torch.float32)
         
         # missing value (<0 in aws) or wrong value (<0 in reanlysis) pre-process
         if self.reference == 'aws':
-            gt_base = torch.where(gt_base < 0, -9999 * torch.ones(gt_base.shape), gt_base)    
+            gt_base = torch.where(gt_base < 0, -9999 * torch.ones(gt_base.shape), gt_base)
         elif self.reference == 'reanalysis':
             gt_base = torch.where(gt_base < 0, torch.zeros(gt_base.shape), gt_base)
         

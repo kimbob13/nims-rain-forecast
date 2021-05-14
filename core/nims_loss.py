@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.multiprocessing import Process, Queue
-from pytorch_lightning.metrics.functional.classification import confusion_matrix
+from pytorch_lightning.metrics.functional import confusion_matrix
 
 import numpy as np
 from sklearn.utils.class_weight import compute_class_weight
