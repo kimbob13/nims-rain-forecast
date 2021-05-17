@@ -9,15 +9,15 @@ from tqdm import tqdm
 
 from core.nims_util import select_date
 
-# codi_aws_df = pd.read_csv('./codi_ldps_aws/codi_ldps_aws_512.csv')
-codi_aws_df = pd.read_csv('./codi_ldps_aws/codi_ldps_aws_602_781.csv')
+codi_aws_df = pd.read_csv('./codi_ldps_aws/codi_ldps_aws_512.csv')
+# codi_aws_df = pd.read_csv('./codi_ldps_aws/codi_ldps_aws_602_781.csv')
 
 def get_station_coordinate(stn_id):
     stn_info = codi_aws_df[codi_aws_df['stn'] == stn_id]
     stn_dii = stn_info['dii'] - 1
 
-    # x, y = stn_dii // 512, stn_dii % 512
-    x, y = stn_dii // 602, stn_dii % 602
+    x, y = stn_dii // 512, stn_dii % 512
+#     x, y = stn_dii // 602, stn_dii % 602
 
     return x, y
 
@@ -39,8 +39,8 @@ if __name__ == '__main__':
     for obs_txt in pbar:
         pbar.set_description('[current_file] {}'.format(obs_txt))
 
-        # result_array = np.full([512, 512], -9999., dtype=np.float32)
-        result_array = np.full([781, 602], -9999., dtype=np.float32)
+        result_array = np.full([512, 512], -9999., dtype=np.float32)
+#         result_array = np.full([781, 602], -9999., dtype=np.float32)
         with open(os.path.join(obs_txt_dir, obs_txt), 'r', encoding='euc-kr') as f:
             for line in f:
                 if line.startswith('#'):

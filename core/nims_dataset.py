@@ -13,7 +13,7 @@ __all__ = ['NIMSDataset', 'ToTensor']
 
 class NIMSDataset(Dataset):
     def __init__(self, model, reference, model_utc, window_size, root_dir, date,
-                 lite=False, heavy_rain=False, train=True, transform=None):
+                 heavy_rain=False, train=True, transform=None):
         # assert window_size >= 6 and window_size <= 48, \
         #     'window_size must be in between 6 and 48'
 
@@ -23,9 +23,7 @@ class NIMSDataset(Dataset):
         self.window_size = window_size
         self.root_dir = root_dir
         self.date = date
-        self.lite = lite
-        # self.rain_threshold = 10 if heavy_rain else 0.1
-        self.rain_threshold = [0.1, 10]
+        self.rain_threshold = [0.1]
         self.train = train
         self.transform = transform
         
@@ -39,14 +37,6 @@ class NIMSDataset(Dataset):
                               month=self.date['start_month'],
                               day=self.date['start_day'],
                               hour=0)
-        
-        # if self.date['year'] == 2019:
-        #     if self.date['start_month'] == 6 and self.date['start_day'] == 1:
-        #         start_date += timedelta(hours=self.window_size)
-
-        # elif self.date['year'] == 2020:
-        #     if self.date['start_month'] == 5 and self.date['start_day'] == 1:
-        #         start_date += timedelta(hours=self.window_size)
                 
         end_date = datetime(year=self.date['year'],
                             month=self.date['end_month'],
@@ -77,13 +67,8 @@ class NIMSDataset(Dataset):
                                    if int(f.split('_')[4][8:10]) == self.model_utc]
             unis_data_path_list = sorted([f for f in curr_data_path_list \
                                           if 'unis' in f])
-            
-            if self.lite:
-                pres_data_path_list = unis_data_path_list
-            else:
-                pres_data_path_list = sorted([f for f in curr_data_path_list \
-                                              if 'pres' in f])
-                # assert len(pres_data_path_list) == len(unis_data_path_list)
+            pres_data_path_list = sorted([f for f in curr_data_path_list \
+                                          if 'pres' in f])
             
             for p, u in list(zip(pres_data_path_list, unis_data_path_list)):
                 # p name: ldps_pres_sp_h0xx_yyyymmddhh
@@ -103,10 +88,7 @@ class NIMSDataset(Dataset):
                     if curr_time > gt_end_date:
                         continue
                     else:
-                        if self.lite:
-                            data_path_list.append(os.path.join(data_dir, u))
-                        else:
-                            data_path_list.append((os.path.join(data_dir, p), os.path.join(data_dir, u)))
+                        data_path_list.append((os.path.join(data_dir, p), os.path.join(data_dir, u)))
         
         # Set target data list
         if self.reference == 'aws':
@@ -131,10 +113,7 @@ class NIMSDataset(Dataset):
         return len(self._data_path_list)
 
     def __getitem__(self, idx):
-        if self.lite:
-            u = self._data_path_list[idx]
-        else:
-            p, u = self._data_path_list[idx]
+        p, u = self._data_path_list[idx]
             
         # train_end_time is also target time for this x, y instance
         current_utc_date = u.split('/')[-1].split('_')
@@ -151,10 +130,10 @@ class NIMSDataset(Dataset):
             curr_u = u.replace('h{}'.format(str(from_h).zfill(3)),
                                'h{}'.format(str(from_h - self.window_size + t).zfill(3)))
             data_list = [curr_u]
-            if not self.lite:
-                curr_p = p.replace('h{}'.format(str(from_h).zfill(3)),
-                                   'h{}'.format(str(from_h - self.window_size + t).zfill(3)))
-                data_list.insert(0, curr_p)
+            
+            curr_p = p.replace('h{}'.format(str(from_h).zfill(3)),
+                               'h{}'.format(str(from_h - self.window_size + t).zfill(3)))
+            data_list.insert(0, curr_p)
             
             # TODO: add pres_idx_list and unis_idx_list arguments using var_name
             _ldaps_input.append(self._merge_pres_unis(data_list=data_list,
@@ -186,31 +165,25 @@ class NIMSDataset(Dataset):
             return ldaps_input, target_time_tensor
 
     def _merge_pres_unis(self, data_list, pres_idx_list=None, unis_idx_list=None, use_kindex=True):
-        if self.lite:
-            u = data_list[0]
-            unis = np.load(u).reshape(512, 512, 3).transpose()
+        p, u = data_list
+        pres = np.load(p).reshape(512, 512, 20).transpose()
+        unis = np.load(u).reshape(512, 512, 20).transpose()
 
-            return unis
-        else:
-            p, u = data_list
-            pres = np.load(p).reshape(512, 512, 20).transpose()
-            unis = np.load(u).reshape(512, 512, 20).transpose()
-            
-            if pres_idx_list is not None:
-                pres = pres[pres_idx_list,:,:]
-            if unis_idx_list is not None:
-                unis = unis[unis_idx_list,:,:]
-            
-            # LDAPS missing value pre-process
-            missing_x, missing_y = np.where(unis[0] < 0)[0], np.where(unis[0] < 0)[1]
-            unis[0][missing_x, missing_y] = 0.
-            unis[1][missing_x, missing_y] = 0.
-            unis[2][missing_x, missing_y] = 101300.
-            pres[0][missing_x, missing_y] = 273.15
-            
-            concat_list = [np.expand_dims(pres[0], axis=0), unis[:3, :, :]]
-            
-            return np.concatenate(concat_list, axis=0)
+        if pres_idx_list is not None:
+            pres = pres[pres_idx_list,:,:]
+        if unis_idx_list is not None:
+            unis = unis[unis_idx_list,:,:]
+
+        # LDAPS missing value pre-process
+        missing_x, missing_y = np.where(unis[0] < 0)[0], np.where(unis[0] < 0)[1]
+        unis[0][missing_x, missing_y] = 0.
+        unis[1][missing_x, missing_y] = 0.
+        unis[2][missing_x, missing_y] = 101300.
+        pres[0][missing_x, missing_y] = 273.15
+
+        concat_list = [np.expand_dims(pres[0], axis=0), unis[:3, :, :]]
+
+        return np.concatenate(concat_list, axis=0)
 
     def _get_gt_data(self, train_end_time):
         gt_path = [p for p in self._gt_path \

@@ -21,8 +21,11 @@ class NIMSLogger:
         latest_stat: Return straing of one "instance(batch)" stat
         """
         self.reference = reference
-        self.num_pixels = 781 * 602     # of pixels in training target data
+        self.num_lat = 512
+        self.num_lon = 512
+        self.num_pixels = self.num_lat * self.num_lon    # of pixels in training target data
         self.num_stn = len(stn_codi)    # of stations in testing target data
+        # TODO: remove missing points
         self.test_date_dict = dict()
 
         if test_date_list != None:

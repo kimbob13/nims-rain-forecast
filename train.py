@@ -35,7 +35,6 @@ if __name__ == '__main__':
                                      window_size=args.window_size,
                                      root_dir=args.dataset_dir,
                                      date=train_date,
-                                     lite=args.lite,
                                      heavy_rain=args.heavy_rain,
                                      train=True,
                                      transform=ToTensor())

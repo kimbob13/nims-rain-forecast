@@ -89,7 +89,7 @@ class ClassificationStat(nn.Module):
 
         pred_labels = pred_labels.squeeze(1).detach()
         target_labels = targets.data.detach()
-
+        
         correct = [0] * b
         hit = [0] * b
         miss = [0] * b
@@ -153,8 +153,7 @@ class NIMSCrossEntropyLoss(ClassificationStat):
 
         return torch.from_numpy(weights).type(torch.FloatTensor).to(self.device)
 
-    def forward(self, preds, targets, target_time, stn_codi, mode,
-                prev_preds=None, logger=None):
+    def forward(self, preds, targets, target_time, stn_codi, mode):
         """
         <Parameter>
         preds [torch.tensor]: NCHW format (N: batch size, C: class num)
@@ -169,71 +168,15 @@ class NIMSCrossEntropyLoss(ClassificationStat):
         if self.use_weights:
             self._get_class_weights(targets)
 
-        # print('[cross_entropy] preds shape:', preds.shape)
-        # print('[cross_entropy] targets shape:', targets.shape)
-
-        # Save preds plot in test mode
-        # if mode == 'test':
-        #     _preds_cpu = preds.detach().cpu().numpy()
-        #     self.preds_list.append((_preds_cpu, target_time))
-        #     if (len(self.preds_list) % self.num_preds_batch) == 0:
-        #         save_output_plot(self.preds_list, self.dataset_dir, self.experiment_name)
-        #         self.save_count = 0
-        #         self.preds_list = []
-
-        if self.reference == 'aws':
-            stn_codi = self.remove_missing_station(targets)
-            stn_targets = targets[:, stn_codi[:, 0], stn_codi[:, 1]]
-            
-        if prev_preds == None:
-            if self.reference == 'aws':
-                curr_preds = preds[:, :, stn_codi[:, 0], stn_codi[:, 1]]
-                curr_targets = stn_targets
-                final_preds = curr_preds
-            elif self.reference == 'reanalysis':
-                curr_preds = preds
-                curr_targets = targets
-                final_preds = curr_preds
-        else:
-            if self.reference == 'aws':
-                prev_preds = prev_preds[:, :, stn_codi[:, 0], stn_codi[:, 1]]
-                curr_preds = preds[:, :, stn_codi[:, 0], stn_codi[:, 1]]
-                
-                prev_preds_max_idx = torch.argmax(prev_preds, dim=1, keepdims=True)
-                prev_preds_min_idx = torch.argmin(prev_preds, dim=1, keepdims=True)
-                prev_preds[:, 0, :] = prev_preds[:, 0, :] + 20. # for calibration when testing
-                final_preds = prev_preds_min_idx * prev_preds + prev_preds_max_idx * curr_preds
-                
-                curr_codi = (prev_preds_max_idx.squeeze(1) == 1).nonzero().cpu().numpy()
-                curr_preds = curr_preds[:, :, curr_codi[:, 1]]
-                curr_targets = stn_targets[:, curr_codi[:, 1]]
-            elif self.reference == 'reanalysis':
-                raise NotImplementedError
+        stn_codi = self.remove_missing_station(targets)
+        stn_preds = preds[:, :, stn_codi[:, 0], stn_codi[:, 1]]
+        stn_targets = targets[:, stn_codi[:, 0], stn_codi[:, 1]]
         
-        if prev_preds != None and len(curr_codi) == 0:
-            loss = torch.tensor(0., device=self.device)
-            correct, hit, miss, fa, cn = self.get_stat(prev_preds, stn_targets, mode=mode)
-            if logger:
-                logger.update(loss=loss.item(), correct=correct,
-                              hit=hit, miss=miss, fa=fa, cn=cn,
-                              target_time=target_time, mode=mode)
-        else:
-            if self.reference == 'aws':
-                correct, hit, miss, fa, cn = self.get_stat(final_preds, stn_targets, mode=mode)
-            elif self.reference == 'reanalysis':
-                correct, hit, miss, fa, cn = self.get_stat(final_preds, targets, mode=mode)
+        correct, hit, miss, fa, cn = self.get_stat(stn_preds, stn_targets, mode=mode)
+        loss = F.cross_entropy(stn_preds, stn_targets, weight=class_weights, reduction='none')
+        loss = torch.mean(torch.mean(loss, dim=1))
 
-            loss = F.cross_entropy(curr_preds, curr_targets, weight=class_weights, reduction='none')
-            loss = torch.mean(torch.mean(loss, dim=1))
-
-            if logger:
-                logger.update(loss=loss.item(), correct=correct,
-                              hit=hit, miss=miss, fa=fa, cn=cn,
-                              target_time=target_time, mode=mode)
-
-        # print('[cross_entropy] loss: {}'.format(loss.item()))
-
-        return loss
+        return loss, hit, miss, fa, cn
 
 class BinaryDiceLoss(ClassificationStat):
     """Dice loss of binary class
