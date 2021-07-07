@@ -1,6 +1,7 @@
 # NIMS specific
 results*/
 *.png
+!image/*
 *.ipynb
 .vscode/
 three_comp/
